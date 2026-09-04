@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f7f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f1f1f5;
+  --foreground: #12131a;
+  --muted: #6b6f80;
+  --border: #e7e7ee;
+
+  --accent: #6366f1;
+  --accent-foreground: #ffffff;
+
+  --cat-school: #6366f1;
+  --cat-study: #8b5cf6;
+  --cat-gym: #f97316;
+  --cat-football: #22c55e;
+  --cat-exam: #ef4444;
+  --cat-task: #0ea5e9;
+  --cat-recovery: #64748b;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+.dark {
+  --background: #0b0c10;
+  --surface: #15161d;
+  --surface-muted: #1c1e27;
+  --foreground: #f2f2f6;
+  --muted: #9498a8;
+  --border: #26283333;
+  --border: #2a2c38;
+
+  --accent: #818cf8;
+  --accent-foreground: #0b0c10;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-cat-school: var(--cat-school);
+  --color-cat-study: var(--cat-study);
+  --color-cat-gym: var(--cat-gym);
+  --color-cat-football: var(--cat-football);
+  --color-cat-exam: var(--cat-exam);
+  --color-cat-task: var(--cat-task);
+  --color-cat-recovery: var(--cat-recovery);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
