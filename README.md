@@ -31,6 +31,20 @@ npm run dev
 
 Open http://localhost:3000, register an account, and walk through onboarding.
 
+## Testing
+
+A Playwright end-to-end test walks through the entire app on a disposable
+SQLite database (`prisma/test.db`, separate from your real `dev.db`): it
+registers an account, completes onboarding, then exercises School, Gym,
+Football, the AI Coach, Calendar, Tasks and Settings against a real running
+server.
+
+```bash
+npm run test:e2e
+```
+
+See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
+
 ## What's real vs. mock
 
 - **Real, working, and persisted**: authentication, timetable, subjects &
