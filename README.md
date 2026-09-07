@@ -47,12 +47,20 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
 
 ## What's real vs. mock
 
-- **Real, working, and persisted**: authentication, timetable, subjects &
+- **Real, working, and persisted**: authentication, a real-school-shaped
+  timetable (named periods, registration/lessons/breaks/study/clubs, a bulk
+  grid editor, and a diagram view that highlights exam subjects), subjects &
   topic progress, homework, exams, flashcards with spaced repetition, the
-  study planner, workout plans/logging/history with charts, football
-  profile/training/matches, manual league table entry with analysis, the
-  AI Coach's rule-based balance/workload engine and chat, calendar
-  (day/week/month), tasks, analytics, and settings.
+  study planner, a daily School checklist that suggests a concrete time
+  (a free/Study period today, or after training) for anything not done yet,
+  a rule-based AI Learning Assistant per topic (explain the approach, an
+  exam-relevance checklist, logging what went wrong, subject-wide weakness
+  summaries), baseline "where do you stand" self-assessments for School/Gym/
+  Football that feed the score engine until real activity data exists,
+  workout plans/logging/history with charts, football profile/training/
+  matches, manual league table entry with analysis, the AI Coach's
+  balance/workload engine and chat, calendar (day/week/month), tasks,
+  analytics, and settings.
 - **Explicitly interface-only (per the brief)**: official Cambridge syllabus
   content and official league/federation data are never fabricated. Both
   areas have clean data models and manual-entry UI (`MANUAL DATA MODE`)

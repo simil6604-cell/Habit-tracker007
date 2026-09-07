@@ -5,6 +5,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { SUBJECT_COLORS } from "@/lib/data/cambridge";
+import { FIXED_PERIOD_TYPES, inferCellPeriodType, type PeriodType } from "./timetable-grid";
 
 async function requireUserId() {
   const session = await auth();
@@ -24,6 +25,7 @@ export async function createSubject(formData: FormData) {
       name,
       teacher: String(formData.get("teacher") ?? "") || null,
       room: String(formData.get("room") ?? "") || null,
+      isExamSubject: formData.get("isExamSubject") === "on",
       color: SUBJECT_COLORS[count % SUBJECT_COLORS.length],
     },
   });
@@ -36,43 +38,13 @@ export async function deleteSubject(subjectId: string) {
   revalidatePath("/school");
 }
 
-const timetableSchema = z.object({
-  subjectId: z.string().optional(),
-  dayOfWeek: z.coerce.number().min(0).max(6),
-  startTime: z.string().min(1),
-  endTime: z.string().min(1),
-  label: z.string().optional(),
-  room: z.string().optional(),
-});
-
-export async function addTimetableSlot(formData: FormData) {
+export async function toggleExamSubject(subjectId: string) {
   const userId = await requireUserId();
-  const parsed = timetableSchema.safeParse({
-    subjectId: formData.get("subjectId") || undefined,
-    dayOfWeek: formData.get("dayOfWeek"),
-    startTime: formData.get("startTime"),
-    endTime: formData.get("endTime"),
-    label: formData.get("label") || undefined,
-    room: formData.get("room") || undefined,
-  });
-  if (!parsed.success) return;
-
-  const { subjectId, ...rest } = parsed.data;
-  await prisma.timetableSlot.create({
-    data: {
-      userId,
-      subjectId: subjectId || null,
-      isFree: !subjectId && !rest.label,
-      ...rest,
-    },
-  });
+  const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId } });
+  if (!subject) return;
+  await prisma.subject.update({ where: { id: subjectId }, data: { isExamSubject: !subject.isExamSubject } });
   revalidatePath("/school");
-}
-
-export async function deleteTimetableSlot(slotId: string) {
-  const userId = await requireUserId();
-  await prisma.timetableSlot.deleteMany({ where: { id: slotId, userId } });
-  revalidatePath("/school");
+  revalidatePath(`/school/subjects/${subjectId}`);
 }
 
 export async function addTopic(formData: FormData) {
@@ -157,4 +129,75 @@ export async function deleteExam(examId: string) {
   const userId = await requireUserId();
   await prisma.exam.deleteMany({ where: { id: examId, userId } });
   revalidatePath("/school");
+}
+
+const gridCellSchema = z.object({
+  day: z.number().min(0).max(4),
+  value: z.string(),
+  highlight: z.boolean().optional(),
+});
+
+const gridRowSchema = z.object({
+  periodName: z.string(),
+  startTime: z.string().min(1),
+  endTime: z.string().min(1),
+  periodType: z.string(),
+  cells: z.array(gridCellSchema),
+});
+
+/**
+ * Bulk-saves the weekly period grid (Mon-Fri). Only touches slots whose
+ * (startTime, endTime) matches a submitted period row — a one-off slot added
+ * elsewhere with a different time range is left alone.
+ *
+ * Each cell is free text: matched case-insensitively against the user's
+ * subjects (-> a real lesson linked to that subject), or inferred as
+ * Study/Free/Club, or fine as a plain label. This is what lets a single
+ * period slot (e.g. "P5") be a real lesson on one day and "Study" on
+ * another, matching how real school timetables actually work.
+ */
+export async function saveTimetableGrid(rows: unknown) {
+  const userId = await requireUserId();
+  const parsed = z.array(gridRowSchema).safeParse(rows);
+  if (!parsed.success) return;
+
+  const subjects = await prisma.subject.findMany({ where: { userId } });
+  const subjectByName = new Map(subjects.map((s) => [s.name.trim().toLowerCase(), s]));
+
+  await prisma.$transaction(async (tx) => {
+    for (const row of parsed.data) {
+      await tx.timetableSlot.deleteMany({
+        where: { userId, startTime: row.startTime, endTime: row.endTime, dayOfWeek: { lte: 4 } },
+      });
+
+      const rowType = row.periodType as PeriodType;
+      const fixed = FIXED_PERIOD_TYPES.includes(rowType);
+
+      for (const cell of row.cells) {
+        const text = cell.value.trim();
+        if (!text) continue;
+
+        const matchedSubject = subjectByName.get(text.toLowerCase());
+        const periodType = fixed ? rowType : inferCellPeriodType(rowType, text);
+
+        await tx.timetableSlot.create({
+          data: {
+            userId,
+            dayOfWeek: cell.day,
+            startTime: row.startTime,
+            endTime: row.endTime,
+            periodName: row.periodName || null,
+            periodType,
+            subjectId: matchedSubject && !fixed ? matchedSubject.id : null,
+            label: matchedSubject && !fixed ? null : text,
+            highlight: cell.highlight ?? false,
+            isFree: periodType === "FREE",
+          },
+        });
+      }
+    }
+  });
+
+  revalidatePath("/school");
+  revalidatePath("/school/timetable");
 }

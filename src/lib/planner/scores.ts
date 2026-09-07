@@ -9,6 +9,12 @@ export type DomainScores = {
   overall: number;
 };
 
+/** Falls back to the latest baseline self-assessment when there's not enough real activity yet. */
+async function getBaselineScore(userId: string, category: "SCHOOL" | "GYM" | "FOOTBALL"): Promise<number | null> {
+  const latest = await prisma.assessment.findFirst({ where: { userId, category }, orderBy: { createdAt: "desc" } });
+  return latest?.overallScore ?? null;
+}
+
 /**
  * School score blends: average subject progress, homework completion rate
  * (last 14 days), and exam-readiness (topics tagged HIGH exam relevance with
@@ -19,12 +25,18 @@ async function computeSchoolScore(userId: string): Promise<number> {
     where: { userId },
     include: { topics: true },
   });
-  if (subjects.length === 0) return 0;
+  if (subjects.length === 0) return (await getBaselineScore(userId, "SCHOOL")) ?? 0;
 
   const topics = subjects.flatMap((s) => s.topics);
-  const avgProgress = topics.length
-    ? topics.reduce((sum, t) => sum + t.progressPct, 0) / topics.length
-    : 50;
+  let avgProgress: number;
+  if (topics.length) {
+    avgProgress = topics.reduce((sum, t) => sum + t.progressPct, 0) / topics.length;
+  } else {
+    const confidences = subjects.map((s) => s.baselineConfidence).filter((v): v is number => v !== null);
+    avgProgress = confidences.length
+      ? confidences.reduce((a, b) => a + b, 0) / confidences.length
+      : (await getBaselineScore(userId, "SCHOOL")) ?? 50;
+  }
 
   const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const homework = await prisma.homework.findMany({
@@ -64,7 +76,7 @@ async function computeGymScore(userId: string): Promise<number> {
     }),
   ]);
 
-  if (plannedWorkouts === 0 && sessions.length === 0) return 0;
+  if (plannedWorkouts === 0 && sessions.length === 0) return (await getBaselineScore(userId, "GYM")) ?? 0;
 
   const targetPerWeek = Math.max(plannedWorkouts, 3);
   const completed = sessions.filter((s) => s.completed).length;
@@ -78,7 +90,7 @@ async function computeFootballScore(userId: string): Promise<number> {
     where: { userId },
     include: { trainings: true },
   });
-  if (!profile) return 0;
+  if (!profile) return (await getBaselineScore(userId, "FOOTBALL")) ?? 0;
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
@@ -88,7 +100,10 @@ async function computeFootballScore(userId: string): Promise<number> {
     return isWithinInterval(t.date, { start: weekStart, end: weekEnd });
   });
 
-  if (trainingsThisWeek.length === 0) return profile.trainings.length ? 40 : 0;
+  if (trainingsThisWeek.length === 0) {
+    if (profile.trainings.length) return 40;
+    return (await getBaselineScore(userId, "FOOTBALL")) ?? 0;
+  }
 
   const completed = trainingsThisWeek.filter((t) => t.completed).length;
   return Math.round((completed / trainingsThisWeek.length) * 100);

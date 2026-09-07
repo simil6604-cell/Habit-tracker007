@@ -4,10 +4,11 @@ import { prisma } from "@/lib/db/prisma";
 import { createSubject } from "@/lib/school/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TimetableGrid } from "@/components/school/timetable-grid";
-import { AddSlotForm } from "@/components/school/add-slot-form";
+import { TimetableDiagram } from "@/components/school/timetable-diagram";
 import { SubjectCard } from "@/components/school/subject-card";
 import { HomeworkPanel, ExamPanel } from "@/components/school/homework-exam-lists";
+import { DailyChecklist } from "@/components/school/daily-checklist";
+import { getTodaySchoolChecklist } from "@/lib/planner/day-review";
 
 export default async function SchoolPage() {
   const session = await auth();
@@ -15,11 +16,12 @@ export default async function SchoolPage() {
   const now = new Date();
   const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [subjects, slots, homework, exams] = await Promise.all([
+  const [subjects, slots, homework, exams, checklist] = await Promise.all([
     prisma.subject.findMany({ where: { userId }, include: { topics: true }, orderBy: { createdAt: "asc" } }),
     prisma.timetableSlot.findMany({ where: { userId }, include: { subject: true } }),
     prisma.homework.findMany({ where: { userId, status: "PENDING" }, include: { subject: true }, orderBy: { dueDate: "asc" }, take: 20 }),
     prisma.exam.findMany({ where: { userId, date: { gte: now, lte: in14 } }, include: { subject: true }, orderBy: { date: "asc" } }),
+    getTodaySchoolChecklist(userId),
   ]);
 
   const subjectCards = subjects.map((s) => ({
@@ -28,6 +30,7 @@ export default async function SchoolPage() {
     color: s.color,
     teacher: s.teacher,
     room: s.room,
+    isExamSubject: s.isExamSubject,
     topicCount: s.topics.length,
     avgProgress: s.topics.length ? Math.round(s.topics.reduce((a, t) => a + t.progressPct, 0) / s.topics.length) : 0,
   }));
@@ -47,11 +50,20 @@ export default async function SchoolPage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Timetable</CardTitle>
+          <CardTitle>Today</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <AddSlotForm subjects={subjects.map((s) => ({ id: s.id, name: s.name }))} />
-          <TimetableGrid slots={slots} />
+        <CardContent>
+          <DailyChecklist checklist={checklist} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Timetable</CardTitle>
+          <Link href="/school/timetable"><Button variant="outline" size="sm">Edit timetable</Button></Link>
+        </CardHeader>
+        <CardContent>
+          <TimetableDiagram slots={slots} />
         </CardContent>
       </Card>
 
@@ -60,10 +72,13 @@ export default async function SchoolPage() {
           <CardTitle>Subjects</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <form action={createSubject} className="flex flex-wrap gap-2">
+          <form action={createSubject} className="flex flex-wrap items-center gap-2">
             <input name="name" required placeholder="Subject name" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             <input name="teacher" placeholder="Teacher (optional)" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             <input name="room" placeholder="Room (optional)" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              <input type="checkbox" name="isExamSubject" /> Exam subject (e.g. IGCSE)
+            </label>
             <Button type="submit" size="sm" variant="secondary">Add subject</Button>
           </form>
 

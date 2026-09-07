@@ -21,12 +21,13 @@ export default async function HomePage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [user, scores, today, tomorrow, pendingRecs] = await Promise.all([
+  const [user, scores, today, tomorrow, pendingRecs, assessmentCount] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     computeDomainScores(userId),
     getAgendaForDay(userId, new Date()),
     getAgendaForDay(userId, new Date(Date.now() + 86400000)),
     prisma.aIRecommendation.count({ where: { userId, status: "PENDING" } }),
+    prisma.assessment.count({ where: { userId } }),
   ]);
 
   const schoolToday = today.filter((i) => i.category === "SCHOOL" || i.category === "EXAM");
@@ -50,6 +51,16 @@ export default async function HomePage() {
           </Link>
         )}
       </div>
+
+      {assessmentCount === 0 && (
+        <Link
+          href="/assessment"
+          className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-accent/40 bg-accent/5 px-4 py-3 text-sm"
+        >
+          <span>Not sure where you stand yet? Take a 2-minute baseline check for School, Gym and Football.</span>
+          <span className="font-medium text-accent">Start →</span>
+        </Link>
+      )}
 
       <div className="mt-6 flex flex-col gap-4 sm:flex-row">
         <DomainCard

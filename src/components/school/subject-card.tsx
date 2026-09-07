@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { Badge } from "@/components/ui/badge";
 
 export function SubjectCard({
   subject,
 }: {
-  subject: { id: string; name: string; color: string; teacher: string | null; room: string | null; avgProgress: number; topicCount: number };
+  subject: {
+    id: string;
+    name: string;
+    color: string;
+    teacher: string | null;
+    room: string | null;
+    avgProgress: number;
+    topicCount: number;
+    isExamSubject?: boolean;
+  };
 }) {
   return (
     <Link
@@ -14,6 +24,7 @@ export function SubjectCard({
       <div className="flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: subject.color }} />
         <p className="font-semibold">{subject.name}</p>
+        {subject.isExamSubject && <Badge variant="warning">Exam</Badge>}
       </div>
       {(subject.teacher || subject.room) && (
         <p className="text-xs text-muted">

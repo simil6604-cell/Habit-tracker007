@@ -47,6 +47,7 @@ model User {
   recommendations  AIRecommendation[]
   progressEntries  Progress[]
   chatMessages     ChatMessage[]
+  assessments      Assessment[]
 }
 
 model Account {
@@ -87,14 +88,16 @@ model School {
 }
 
 model Subject {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  color     String   @default("#6366f1")
-  teacher   String?
-  room      String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  color          String   @default("#6366f1")
+  teacher        String?
+  room           String?
+  isExamSubject  Boolean  @default(false) // e.g. IGCSE/A-Level subjects — highlighted on the timetable
+  baselineConfidence Int? // 0-100, from the initial "where do you stand" assessment
+  createdAt      DateTime @default(now())
 
   topics        Topic[]
   timetableSlots TimetableSlot[]
@@ -107,16 +110,19 @@ model Subject {
 }
 
 model TimetableSlot {
-  id        String   @id @default(cuid())
-  subjectId String?
-  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  userId    String
-  dayOfWeek Int      // 0=Monday .. 6=Sunday
-  startTime String   // "08:00"
-  endTime   String   // "09:00"
-  label     String?  // e.g. "Break", "Lunch", or free lesson note
-  room      String?
-  isFree    Boolean  @default(false)
+  id         String   @id @default(cuid())
+  subjectId  String?
+  subject    Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  userId     String
+  dayOfWeek  Int      // 0=Monday .. 6=Sunday
+  startTime  String   // "08:00"
+  endTime    String   // "09:00"
+  label      String?  // e.g. "Break", "Lunch", or free lesson note
+  room       String?
+  isFree     Boolean  @default(false)
+  periodName String?  // e.g. "P1", "AM Regs", "Lunch" — shown as the row header on the timetable diagram
+  periodType String   @default("LESSON") // REGISTRATION | LESSON | BREAK | LUNCH | STUDY | CLUB | FREE
+  highlight  Boolean  @default(false) // manual highlight override (e.g. for clubs with no subject)
 
   @@index([userId, dayOfWeek])
 }
@@ -418,6 +424,18 @@ model Progress {
   overallPct  Int    @default(0)
 
   @@unique([userId, date])
+}
+
+model Assessment {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     String   // SCHOOL | GYM | FOOTBALL
+  answers      String   // JSON-encoded {label, value}[] self-ratings
+  overallScore Int      // 0-100 summary used as the starting baseline
+  createdAt    DateTime @default(now())
+
+  @@index([userId, category, createdAt])
 }
 
 model ChatMessage {

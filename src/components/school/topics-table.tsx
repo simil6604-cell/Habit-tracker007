@@ -1,10 +1,12 @@
 "use client";
 
-import { useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { updateTopicProgress, deleteTopic } from "@/lib/school/actions";
-import { Trash2 } from "lucide-react";
+import { askExplainTopic, askExamChecklist, submitMistake } from "@/lib/school/learning-actions";
+import { Trash2, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 
 type Topic = {
@@ -25,12 +27,61 @@ function statusEmoji(pct: number) {
   return "🔴";
 }
 
+function TopicAssistant({ topicId }: { topicId: string }) {
+  const [response, setResponse] = useState<string | null>(null);
+  const [mistake, setMistake] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function ask(fn: (id: string) => Promise<string>) {
+    startTransition(async () => setResponse(await fn(topicId)));
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl bg-surface-muted p-4">
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => ask(askExplainTopic)}>
+          Explain this topic
+        </Button>
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => ask(askExamChecklist)}>
+          What do I need for the exam?
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={mistake}
+          onChange={(e) => setMistake(e.target.value)}
+          placeholder="What did you get wrong? e.g. &quot;mixed up two formulas&quot;"
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+        />
+        <Button
+          size="sm"
+          disabled={pending || !mistake.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              const res = await submitMistake(topicId, mistake);
+              setResponse(res);
+              setMistake("");
+            })
+          }
+        >
+          Log mistake
+        </Button>
+      </div>
+
+      {pending && <p className="text-xs text-muted">Thinking…</p>}
+      {response && <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{response}</p>}
+    </div>
+  );
+}
+
 export function TopicsTable({ subjectId, topics }: { subjectId: string; topics: Topic[] }) {
   const [, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
+      <table className="w-full min-w-[760px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs text-muted">
             <th className="py-2 pr-3">Topic</th>
@@ -45,45 +96,63 @@ export function TopicsTable({ subjectId, topics }: { subjectId: string; topics: 
         </thead>
         <tbody>
           {topics.map((t) => (
-            <tr key={t.id} className="border-b border-border/60 align-middle">
-              <td className="py-2.5 pr-3 font-medium">
-                {statusEmoji(t.progressPct)} {t.name}
-              </td>
-              <td className="w-40 py-2.5 pr-3">
-                <div className="flex items-center gap-2">
-                  <ProgressBar value={t.progressPct} className="w-24" colorClassName="bg-cat-school" />
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    defaultValue={t.progressPct}
-                    className="w-16 accent-[var(--accent)]"
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      startTransition(() => updateTopicProgress(t.id, subjectId, v));
-                    }}
-                  />
-                </div>
-              </td>
-              <td className="py-2.5 pr-3">
-                <Badge variant={t.priority === "HIGH" ? "danger" : t.priority === "LOW" ? "default" : "warning"}>{t.priority}</Badge>
-              </td>
-              <td className="py-2.5 pr-3">
-                <Badge variant={t.examRelevance === "HIGH" ? "danger" : "default"}>{t.examRelevance}</Badge>
-              </td>
-              <td className="py-2.5 pr-3 text-xs text-muted">
-                {t.plannedMinutes}m / {t.actualMinutes}m
-              </td>
-              <td className="py-2.5 pr-3 text-xs text-muted">{t.nextReview ? format(t.nextReview, "MMM d") : "—"}</td>
-              <td className="py-2.5 pr-3 text-xs text-muted">{t.weaknessNote ?? "—"}</td>
-              <td className="py-2.5 text-right">
-                <form action={deleteTopic.bind(null, t.id, subjectId)}>
-                  <button type="submit" className="text-muted hover:text-danger">
-                    <Trash2 size={14} />
-                  </button>
-                </form>
-              </td>
-            </tr>
+            <Fragment key={t.id}>
+              <tr className="border-b border-border/60 align-middle">
+                <td className="py-2.5 pr-3 font-medium">
+                  {statusEmoji(t.progressPct)} {t.name}
+                </td>
+                <td className="w-40 py-2.5 pr-3">
+                  <div className="flex items-center gap-2">
+                    <ProgressBar value={t.progressPct} className="w-24" colorClassName="bg-cat-school" />
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      defaultValue={t.progressPct}
+                      className="w-16 accent-[var(--accent)]"
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        startTransition(() => updateTopicProgress(t.id, subjectId, v));
+                      }}
+                    />
+                  </div>
+                </td>
+                <td className="py-2.5 pr-3">
+                  <Badge variant={t.priority === "HIGH" ? "danger" : t.priority === "LOW" ? "default" : "warning"}>{t.priority}</Badge>
+                </td>
+                <td className="py-2.5 pr-3">
+                  <Badge variant={t.examRelevance === "HIGH" ? "danger" : "default"}>{t.examRelevance}</Badge>
+                </td>
+                <td className="py-2.5 pr-3 text-xs text-muted">
+                  {t.plannedMinutes}m / {t.actualMinutes}m
+                </td>
+                <td className="py-2.5 pr-3 text-xs text-muted">{t.nextReview ? format(t.nextReview, "MMM d") : "—"}</td>
+                <td className="py-2.5 pr-3 text-xs text-muted">{t.weaknessNote ?? "—"}</td>
+                <td className="py-2.5 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setExpanded(expanded === t.id ? null : t.id)}
+                      className={expanded === t.id ? "text-accent" : "text-muted hover:text-accent"}
+                      title="AI Learning Assistant"
+                    >
+                      <Sparkles size={14} />
+                    </button>
+                    <form action={deleteTopic.bind(null, t.id, subjectId)}>
+                      <button type="submit" className="text-muted hover:text-danger">
+                        <Trash2 size={14} />
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {expanded === t.id && (
+                <tr>
+                  <td colSpan={8} className="pb-3">
+                    <TopicAssistant topicId={t.id} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
           {topics.length === 0 && (
             <tr>

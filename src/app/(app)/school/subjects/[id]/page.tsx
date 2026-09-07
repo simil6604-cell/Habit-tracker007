@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { addTopic, deleteSubject } from "@/lib/school/actions";
+import { addTopic, deleteSubject, toggleExamSubject } from "@/lib/school/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { TopicsTable } from "@/components/school/topics-table";
+import { SubjectWeaknesses } from "@/components/school/subject-weaknesses";
 
 export default async function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,10 +30,18 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
         <div className="flex items-center gap-3">
           <span className="h-4 w-4 rounded-full" style={{ backgroundColor: subject.color }} />
           <h1 className="text-2xl font-semibold tracking-tight">{subject.name}</h1>
+          {subject.isExamSubject && <Badge variant="warning">Exam subject</Badge>}
         </div>
-        <form action={deleteSubject.bind(null, subject.id)}>
-          <Button type="submit" variant="outline" size="sm">Delete subject</Button>
-        </form>
+        <div className="flex gap-2">
+          <form action={toggleExamSubject.bind(null, subject.id)}>
+            <Button type="submit" variant="outline" size="sm">
+              {subject.isExamSubject ? "Unmark exam subject" : "Mark as exam subject"}
+            </Button>
+          </form>
+          <form action={deleteSubject.bind(null, subject.id)}>
+            <Button type="submit" variant="outline" size="sm">Delete subject</Button>
+          </form>
+        </div>
       </div>
       {(subject.teacher || subject.room) && (
         <p className="mt-1 text-sm text-muted">
@@ -40,6 +50,15 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>AI Learning Assistant</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SubjectWeaknesses subjectId={subject.id} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
         <CardHeader>
           <CardTitle>Overall Progress</CardTitle>
           <span className="text-lg font-semibold">{avgProgress}%</span>

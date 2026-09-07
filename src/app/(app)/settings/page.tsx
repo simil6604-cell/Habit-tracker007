@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { updateProfileName, updateOptimizationDomains } from "@/lib/settings/actions";
@@ -40,6 +41,14 @@ export default async function SettingsPage() {
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeFootball" defaultChecked={user.optimizeFootball} /> ⚽ Football</label>
             <Button type="submit" size="sm" variant="secondary" className="self-start">Save</Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Baseline Assessments</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <p className="text-sm text-muted">See or retake your &quot;where do you stand&quot; self-assessment for each area.</p>
+          <Link href="/assessment"><Button variant="outline" size="sm">Open</Button></Link>
         </CardContent>
       </Card>
 
