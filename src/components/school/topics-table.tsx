@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateTopicProgress, deleteTopic } from "@/lib/school/actions";
 import { askExplainTopic, askExamChecklist, askTopicQuestion, submitMistake } from "@/lib/school/learning-actions";
+import { LearningLogAndQuiz } from "@/components/school/learning-log-quiz";
 import { Trash2, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 
@@ -95,6 +96,8 @@ function TopicAssistant({ topicId }: { topicId: string }) {
 
       {pending && <p className="text-xs text-muted">Thinking…</p>}
       {response && <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{response}</p>}
+
+      <LearningLogAndQuiz topicId={topicId} />
     </div>
   );
 }

@@ -58,6 +58,7 @@ model User {
   chatMessages     ChatMessage[]
   assessments      Assessment[]
   schoolHabits     SchoolHabit[]
+  learningLogEntries LearningLogEntry[]
 }
 
 model Account {
@@ -150,8 +151,25 @@ model Topic {
   actualMinutes  Int      @default(0)
   nextReview     DateTime?
   weaknessNote   String?
+  learningLog    LearningLogEntry[]
 
   @@index([subjectId])
+}
+
+// The student's own running log while learning a topic with the AI: what
+// they understand, what they don't, and what they're still asking about.
+// Feeds the end-of-session quiz so it targets the actual gaps.
+model LearningLogEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId   String
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  type      String   // UNDERSTOOD | CONFUSED | QUESTION
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([topicId, type])
 }
 
 model Homework {

@@ -63,7 +63,11 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   (a free/Study period today, or after training) for anything not done yet,
   a rule-based AI Learning Assistant per topic (explain the approach, an
   exam-relevance checklist, logging what went wrong, subject-wide weakness
-  summaries), a habit-tracker grid for your own recurring school habits
+  summaries) with a per-topic learning log (what you understand, what you
+  don't, and open questions — persisted, editable) and an end-of-session
+  quiz that targets those logged gaps and gives real AI-graded feedback
+  when a real AI is connected, a habit-tracker grid for your own recurring
+  school habits
   (fully custom rows, a 4-week checkbox grid with per-habit success rates
   and a daily-completion trend chart), baseline "where do you stand"
   self-assessments for School/Gym/Football that feed the score engine
@@ -110,6 +114,8 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   scanner needs outbound internet access to reach `openfoodfacts.org`; a
   locked-down network (e.g. a restrictive dev sandbox) will surface a clear
   "couldn't reach the product database" message instead of failing silently.
+  The topic quiz never invents questions, answers, or grading — without a
+  real AI connected it says so plainly instead of faking a quiz.
 - **AI Coach**: rule-based by default so the app works fully offline with
   zero API keys. It only ever reasons over what's actually in your
   database (real exams, real progress percentages, real training times) —
