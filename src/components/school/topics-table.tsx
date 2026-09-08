@@ -5,7 +5,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateTopicProgress, deleteTopic } from "@/lib/school/actions";
-import { askExplainTopic, askExamChecklist, submitMistake } from "@/lib/school/learning-actions";
+import { askExplainTopic, askExamChecklist, askTopicQuestion, submitMistake } from "@/lib/school/learning-actions";
 import { Trash2, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 
@@ -30,6 +30,7 @@ function statusEmoji(pct: number) {
 function TopicAssistant({ topicId }: { topicId: string }) {
   const [response, setResponse] = useState<string | null>(null);
   const [mistake, setMistake] = useState("");
+  const [question, setQuestion] = useState("");
   const [pending, startTransition] = useTransition();
 
   function ask(fn: (id: string) => Promise<string>) {
@@ -44,6 +45,29 @@ function TopicAssistant({ topicId }: { topicId: string }) {
         </Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => ask(askExamChecklist)}>
           What do I need for the exam?
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ask anything about this topic — IGCSE/A-Level level answers when a real AI is connected"
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending || !question.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              const res = await askTopicQuestion(topicId, question);
+              setResponse(res);
+              setQuestion("");
+            })
+          }
+        >
+          Ask
         </Button>
       </div>
 

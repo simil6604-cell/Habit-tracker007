@@ -3,6 +3,8 @@ import { format, addDays, startOfDay, endOfDay } from "date-fns";
 import { generateDayPlan } from "./schedule-generator";
 import { computeDomainScores } from "@/lib/planner/scores";
 import { runWeeklyBalanceCheck } from "./balance-engine";
+import { getAIProvider, isRealAIConfigured } from "./provider";
+import { buildAcademicSystemPrompt } from "./academic-prompt";
 
 const KEYWORDS = {
   exam: /\b(exam|test|klausur|pr[uü]fung)\b/i,
@@ -116,7 +118,29 @@ export async function generateCoachReply(userId: string, userMessage: string): P
     return `Looking at tomorrow: ${plan.reasons.join(" ") || "nothing heavy is scheduled yet."} ${plan.overloaded ? "It's shaping up to be a lot — consider lightening the load somewhere." : "It looks manageable."}`;
   }
 
-  // Generic fallback: summarize tomorrow.
+  // Generic fallback: ask a real AI if one's connected, else summarize tomorrow.
+  if (isRealAIConfigured) {
+    const [school, scores, exam] = await Promise.all([
+      prisma.school.findUnique({ where: { userId } }),
+      computeDomainScores(userId),
+      nearestExam(userId),
+    ]);
+    const daysUntil = exam ? Math.max(0, Math.round((exam.date.getTime() - Date.now()) / 86400000)) : null;
+    const system = [
+      "You are the AI Coach inside a personal School/Gym/Football optimization app, talking directly to the student.",
+      buildAcademicSystemPrompt(school?.educationSystem),
+      "You also help balance training, recovery and school workload. Reason honestly from the real data below — never invent numbers, results, or syllabus content.",
+      `Current scores — School ${scores.school}%, Gym ${scores.gym}%, Football ${scores.football}%, Recovery ${scores.recovery}%.`,
+      exam ? `Next exam: ${exam.subject?.name ?? exam.title} in ${daysUntil} day${daysUntil === 1 ? "" : "s"}.` : "No upcoming exam logged yet.",
+    ].join("\n");
+
+    try {
+      return await getAIProvider().generate(userMessage, { system });
+    } catch {
+      // Fall through to the rule-based summary below on any failure.
+    }
+  }
+
   const plan = await generateDayPlan(userId, addDays(new Date(), 1));
   const scores = await computeDomainScores(userId);
   return [

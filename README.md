@@ -15,8 +15,16 @@ balances all of them together.
 - A pluggable **AI provider interface** (`src/lib/ai/provider.ts`): ships
   with a fully offline, rule-based `MockAIProvider` that reasons only over
   your own stored data — no invented syllabus content, league results, or
-  medical advice, ever. Set `ANTHROPIC_API_KEY` to wire in a real LLM later
-  without changing any calling code.
+  medical advice, ever. Set `ANTHROPIC_API_KEY` to switch to a real
+  Claude-backed `AnthropicProvider` (`src/lib/ai/anthropic-provider.ts`) —
+  no other code changes needed. When it's on, the School AI Learning
+  Assistant (the free-text "Ask" box and "Explain this topic"/"Log
+  mistake") gets genuine subject tutoring framed for your Cambridge
+  IGCSE/AS/A-Level level (see `src/lib/ai/academic-prompt.ts`), and the AI
+  Coach chat gets real open-ended replies for anything its keyword shortcuts
+  don't already handle. Any real-AI call failure (bad key, network, rate
+  limit) falls back to the same honest rule-based response instead of
+  crashing or faking an answer.
 - PWA-ready (`manifest.json`, icons, "Add to Home Screen" on iOS/Android)
 
 ## Getting started

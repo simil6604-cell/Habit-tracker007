@@ -6,10 +6,17 @@
  * MockAIProvider is fully rule-based and deterministic: it only ever
  * reasons over data actually stored in the database. It never invents
  * facts (syllabus content, league results, medical claims).
+ *
+ * Setting ANTHROPIC_API_KEY switches the active provider to a real
+ * Claude-backed one (see anthropic-provider.ts) — call sites that want a
+ * real answer check isRealAIConfigured and fall back to their own
+ * rule-based logic when it's false, exactly as they did before.
  */
+import { AnthropicProvider } from "./anthropic-provider";
+
 export interface AIProvider {
   name: string;
-  generate(prompt: string, context: Record<string, unknown>): Promise<string>;
+  generate(prompt: string, context?: Record<string, unknown>): Promise<string>;
 }
 
 export class MockAIProvider implements AIProvider {
@@ -24,7 +31,9 @@ export class MockAIProvider implements AIProvider {
   }
 }
 
-let activeProvider: AIProvider = new MockAIProvider();
+export const isRealAIConfigured = Boolean(process.env.ANTHROPIC_API_KEY);
+
+let activeProvider: AIProvider = isRealAIConfigured ? new AnthropicProvider() : new MockAIProvider();
 
 export function getAIProvider(): AIProvider {
   return activeProvider;
@@ -33,5 +42,3 @@ export function getAIProvider(): AIProvider {
 export function setAIProvider(provider: AIProvider) {
   activeProvider = provider;
 }
-
-export const isRealAIConfigured = Boolean(process.env.ANTHROPIC_API_KEY);

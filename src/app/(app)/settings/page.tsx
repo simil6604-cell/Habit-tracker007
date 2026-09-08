@@ -94,8 +94,8 @@ export default async function SettingsPage() {
         <CardContent className="flex items-center justify-between">
           <p className="text-sm text-muted">
             {isRealAIConfigured
-              ? "Connected to a real LLM provider."
-              : "Running on the built-in rule-based coach — it only ever reasons over your own stored data."}
+              ? "Connected to a real Claude-backed AI — genuine subject tutoring in School (framed for your Cambridge IGCSE/AS/A-Level level) plus richer AI Coach chat replies."
+              : "Running on the built-in rule-based coach — it only ever reasons over your own stored data. Set ANTHROPIC_API_KEY in your .env to enable real subject tutoring and chat."}
           </p>
           <Badge variant={isRealAIConfigured ? "success" : "accent"}>{isRealAIConfigured ? "LLM connected" : "Rule-based"}</Badge>
         </CardContent>
