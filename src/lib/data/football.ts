@@ -44,6 +44,27 @@ export const POSITION_FOCUS: Record<FootballPosition, string[]> = {
   ST: ["Shooting", "First Touch", "Positioning", "Weak Foot"],
 };
 
+// Short cue reminders per drill/skill — general reference, not a substitute for a coach.
+export const DRILL_CUES: Record<string, string> = {
+  "Shot Stopping": "Set position, hands behind the ball, push don't punch when you can catch.",
+  Distribution: "Pick your head up before releasing — accuracy over power.",
+  Reflexes: "Stay on the balls of your feet, small adjustment steps.",
+  Tackling: "Time the tackle to when the ball is slightly away from their feet.",
+  Heading: "Attack the ball, eyes open, use your neck and upper body, not just your head.",
+  Positioning: "Think one pass ahead — where will the ball go next?",
+  Passing: "Open body shape, weight the pass for the receiver's next touch.",
+  Speed: "Short, quick first steps before reaching full stride.",
+  Crossing: "Look up before crossing, aim for the space, not just a player.",
+  Conditioning: "Consistent effort over the full session beats short bursts.",
+  "First Touch": "Cushion the ball into space away from pressure, don't just stop it dead.",
+  "Decision Making": "Scan before you receive — know your options before the ball arrives.",
+  Shooting: "Plant foot beside the ball, strike through the middle, follow through.",
+  Dribbling: "Small touches at speed, change of pace beats pure skill moves.",
+  "Weak Foot": "Start slow and controlled — speed comes after control, not before.",
+  Technique: "Quality reps over quantity — stay focused on clean execution.",
+  "Ball Control": "Keep the ball close, use both feet, eyes up between touches.",
+};
+
 export const GYM_GOALS = [
   "Improve strength",
   "Improve fitness",

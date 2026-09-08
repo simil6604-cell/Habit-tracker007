@@ -20,10 +20,15 @@ export function analyzeTable(standings: Standing[], myTeamName: string, weakness
   const goalDiff = mine.goalsFor - mine.goalsAgainst;
 
   const insights: string[] = [];
+  let winsToFirst: number | null = null;
   if (mine.rank === 1) {
     insights.push("You're currently top of the table — focus on maintaining consistency.");
   } else if (gap > 0) {
     insights.push(`You are ${gap} point${gap === 1 ? "" : "s"} behind ${leader.teamName} in 1st place.`);
+    winsToFirst = Math.ceil(gap / 3);
+    insights.push(
+      `Best case: winning your next ${winsToFirst} match${winsToFirst === 1 ? "" : "es"} in a row (3 points each) while ${leader.teamName} takes none would draw you level — a simplified scenario, not a prediction, since it ignores their own remaining results.`
+    );
   }
   if (goalDiff < 0) {
     insights.push("Your goal difference is negative — defensive solidity should be a priority.");
@@ -32,5 +37,5 @@ export function analyzeTable(standings: Standing[], myTeamName: string, weakness
     insights.push(`Your reported weaknesses (${weaknesses.join(", ")}) are a good place to focus individual training this week.`);
   }
 
-  return { mine, leader, gap, goalDiff, insights };
+  return { mine, leader, gap, goalDiff, winsToFirst, insights };
 }

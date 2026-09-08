@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { WorkoutPlanCard } from "@/components/gym/workout-plan-card";
 import { MealsPanel } from "@/components/gym/meals-panel";
+import { NutritionBalanceCard } from "@/components/gym/nutrition-balance-card";
 import { GoalsPanel } from "@/components/shared/goals-panel";
 import { GYM_GOALS } from "@/lib/data/football";
+import { getNutritionSummary } from "@/lib/gym/nutrition-summary";
 
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -24,9 +26,10 @@ export default async function GymPage() {
 
   const todayWorkout = workouts.find((w) => w.dayOfWeek === todayIdx);
 
-  const [meals, goals] = await Promise.all([
+  const [meals, goals, nutritionSummary] = await Promise.all([
     prisma.meal.findMany({ where: { userId }, orderBy: { date: "desc" }, take: 10 }),
     prisma.goal.findMany({ where: { userId, category: "GYM" }, orderBy: { createdAt: "asc" } }),
+    getNutritionSummary(userId),
   ]);
 
   return (
@@ -92,10 +95,17 @@ export default async function GymPage() {
         <Card>
           <CardHeader><CardTitle>Meals</CardTitle></CardHeader>
           <CardContent>
-            <MealsPanel meals={meals} />
+            <MealsPanel meals={meals} totalToday={nutritionSummary.consumedToday} />
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Calorie Balance Today</CardTitle></CardHeader>
+        <CardContent>
+          <NutritionBalanceCard summary={nutritionSummary} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

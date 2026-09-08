@@ -28,6 +28,9 @@ model User {
   optimizeFootball   Boolean @default(true)
   theme              String  @default("system") // light | dark | system
 
+  weightKg         Int? // used only to estimate calories burned; never shown as a target
+  dailyCalorieGoal Int? // optional, user-set; the app never invents this
+
   accounts Account[]
   sessions Session[]
 
@@ -232,6 +235,8 @@ model Exercise {
   targetReps Int      @default(10)
   targetWeight Float?
   order      Int      @default(0)
+  cueText    String?  // short "how to" reminder, from the curated library or your own
+  videoUrl   String?  // a video YOU save/paste — the app never invents or fetches one
   setLogs    SetLog[]
 }
 
@@ -245,7 +250,10 @@ model WorkoutSession {
   completed  Boolean  @default(false)
   durationMin Int?
   difficulty String?  // EASY | MODERATE | HARD
+  caloriesBurned Int? // rough MET-based estimate, computed at log time
   notes      String?
+  wentWell   String?  // training diary
+  toImprove  String?  // training diary
   setLogs    SetLog[]
 
   @@index([userId, date])
@@ -270,6 +278,7 @@ model Meal {
   date      DateTime @default(now())
   type      String   // BREAKFAST | LUNCH | DINNER | SNACK
   description String
+  kcal      Int?     // user-entered or picked from the common-foods list; always approximate
   notes     String?
 
   @@index([userId, date])
@@ -341,9 +350,11 @@ model FootballTraining {
   date        DateTime?
   durationMin Int      @default(60)
   focus       String   // e.g. "Technique", "Conditioning"
-  drills      String   // JSON-encoded list of {name, minutes}
+  drills      String   // JSON-encoded list of {name, minutes, cueText?, videoUrl?}
   isTeamSession Boolean @default(true)
   completed   Boolean  @default(false)
+  wentWell    String?  // training diary
+  toImprove   String?  // training diary
 
   @@index([profileId])
 }

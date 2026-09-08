@@ -4,6 +4,7 @@ import { deleteWorkoutSession } from "@/lib/gym/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConsistencyChart, VolumeChart } from "@/components/charts/gym-charts";
+import { generateWorkoutDiaryTip } from "@/lib/gym/diary-assistant";
 import { format, startOfWeek, subWeeks } from "date-fns";
 import { Trash2 } from "lucide-react";
 
@@ -34,6 +35,8 @@ export default async function GymHistoryPage() {
     .filter((d) => d.volume > 0)
     .slice(-20);
 
+  const totalCaloriesBurned = sessions.reduce((sum, s) => sum + (s.caloriesBurned ?? 0), 0);
+
   const personalBests = sessions
     .flatMap((s) => s.setLogs.filter((l) => l.isPB).map((l) => ({ ...l, date: s.date })))
     .sort((a, b) => b.date.getTime() - a.date.getTime())
@@ -61,6 +64,14 @@ export default async function GymHistoryPage() {
       </div>
 
       <Card className="mt-4">
+        <CardHeader><CardTitle>Calories Burned (estimate)</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-2xl font-semibold">{totalCaloriesBurned.toLocaleString()} kcal</p>
+          <p className="text-xs text-muted">Across all logged sessions — a rough MET-based estimate, not a medical measurement.</p>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
         <CardHeader><CardTitle>Personal Bests</CardTitle></CardHeader>
         <CardContent>
           {personalBests.length === 0 ? (
@@ -84,18 +95,38 @@ export default async function GymHistoryPage() {
           <ul className="flex flex-col divide-y divide-border">
             {sessions.length === 0 && <p className="py-2 text-sm text-muted">No sessions logged yet.</p>}
             {sessions.map((s) => (
-              <li key={s.id} className="flex items-center justify-between gap-2 py-2.5 text-sm">
-                <div>
-                  <p className="font-medium">{s.workout?.name ?? "Workout"}</p>
-                  <p className="text-xs text-muted">{format(s.date, "EEE, MMM d")} {s.durationMin ? `· ${s.durationMin}min` : ""}</p>
+              <li key={s.id} className="py-2.5 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{s.workout?.name ?? "Workout"}</p>
+                    <p className="text-xs text-muted">
+                      {format(s.date, "EEE, MMM d")} {s.durationMin ? `· ${s.durationMin}min` : ""}
+                      {s.caloriesBurned ? ` · ~${s.caloriesBurned} kcal` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {s.completed ? <Badge variant="success">Completed</Badge> : <Badge variant="warning">Skipped</Badge>}
+                    {s.difficulty && <Badge>{s.difficulty}</Badge>}
+                    <form action={deleteWorkoutSession.bind(null, s.id)}>
+                      <button type="submit" className="text-muted hover:text-danger"><Trash2 size={14} /></button>
+                    </form>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {s.completed ? <Badge variant="success">Completed</Badge> : <Badge variant="warning">Skipped</Badge>}
-                  {s.difficulty && <Badge>{s.difficulty}</Badge>}
-                  <form action={deleteWorkoutSession.bind(null, s.id)}>
-                    <button type="submit" className="text-muted hover:text-danger"><Trash2 size={14} /></button>
-                  </form>
-                </div>
+                {(s.wentWell || s.toImprove) && (
+                  <div className="mt-1.5 flex flex-col gap-0.5 pl-0 text-xs text-muted">
+                    {s.wentWell && <p>✅ Went well: {s.wentWell}</p>}
+                    {s.toImprove && <p>🎯 To improve: {s.toImprove}</p>}
+                  </div>
+                )}
+                {(() => {
+                  const tip = generateWorkoutDiaryTip({
+                    difficulty: s.difficulty,
+                    completed: s.completed,
+                    toImprove: s.toImprove,
+                    hasPB: s.setLogs.some((l) => l.isPB),
+                  });
+                  return tip ? <p className="mt-1.5 rounded-lg bg-surface-muted p-2 text-xs">🤖 {tip}</p> : null;
+                })()}
               </li>
             ))}
           </ul>

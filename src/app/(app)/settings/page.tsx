@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { updateProfileName, updateOptimizationDomains } from "@/lib/settings/actions";
+import { updateProfileName, updateOptimizationDomains, updateNutritionSettings } from "@/lib/settings/actions";
 import { isRealAIConfigured } from "@/lib/ai/provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,27 @@ export default async function SettingsPage() {
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeGym" defaultChecked={user.optimizeGym} /> 🏋️ Gym</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeFootball" defaultChecked={user.optimizeFootball} /> ⚽ Football</label>
             <Button type="submit" size="sm" variant="secondary" className="self-start">Save</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Nutrition & Calorie Estimates</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted">
+            Optional — used only to roughly estimate calories burned per workout and show a daily balance. Never a
+            diet target the app pushes on you.
+          </p>
+          <form action={updateNutritionSettings} className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted">Body weight (kg)</label>
+              <input name="weightKg" type="number" min={20} max={250} defaultValue={user.weightKg ?? ""} className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily calorie goal (optional, your own number)</label>
+              <input name="dailyCalorieGoal" type="number" min={0} defaultValue={user.dailyCalorieGoal ?? ""} className="w-40 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <Button type="submit" size="sm" variant="secondary">Save</Button>
           </form>
         </CardContent>
       </Card>

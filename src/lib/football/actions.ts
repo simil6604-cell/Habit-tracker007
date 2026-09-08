@@ -85,6 +85,42 @@ export async function toggleTrainingCompleted(trainingId: string) {
   revalidatePath("/football");
 }
 
+export async function attachDrillVideo(trainingId: string, drillIndex: number, formData: FormData) {
+  const userId = await requireUserId();
+  const training = await prisma.footballTraining.findFirst({ where: { id: trainingId, profile: { userId } } });
+  if (!training) return;
+
+  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  if (!videoUrl) return;
+
+  let drills: { name: string; minutes: number; cueText?: string; videoUrl?: string }[] = [];
+  try {
+    drills = JSON.parse(training.drills);
+  } catch {
+    return;
+  }
+  if (!drills[drillIndex]) return;
+  drills[drillIndex] = { ...drills[drillIndex], videoUrl };
+
+  await prisma.footballTraining.update({ where: { id: trainingId }, data: { drills: JSON.stringify(drills) } });
+  revalidatePath("/football");
+}
+
+export async function updateTrainingDiary(trainingId: string, formData: FormData) {
+  const userId = await requireUserId();
+  const training = await prisma.footballTraining.findFirst({ where: { id: trainingId, profile: { userId } } });
+  if (!training) return;
+
+  await prisma.footballTraining.update({
+    where: { id: trainingId },
+    data: {
+      wentWell: String(formData.get("wentWell") ?? "").trim() || null,
+      toImprove: String(formData.get("toImprove") ?? "").trim() || null,
+    },
+  });
+  revalidatePath("/football");
+}
+
 export async function deleteTraining(trainingId: string) {
   const userId = await requireUserId();
   await prisma.footballTraining.deleteMany({ where: { id: trainingId, profile: { userId } } });

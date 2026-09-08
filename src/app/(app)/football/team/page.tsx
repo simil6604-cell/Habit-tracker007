@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
+import { format } from "date-fns";
 
 export default async function FootballTeamPage() {
   const session = await auth();
@@ -18,6 +19,11 @@ export default async function FootballTeamPage() {
   });
   if (!profile?.team) redirect("/football");
 
+  const nextMatch = await prisma.footballMatch.findFirst({
+    where: { profileId: profile.id, date: { gte: new Date() } },
+    orderBy: { date: "asc" },
+  });
+
   const weaknesses = profile.weaknesses ? profile.weaknesses.split(",").filter(Boolean) : [];
   const analysis = analyzeTable(profile.team.standings, profile.team.name, weaknesses);
 
@@ -28,8 +34,22 @@ export default async function FootballTeamPage() {
         Manual data mode — no official league API is connected, so enter standings yourself. Nothing here is invented.
       </p>
 
+      <Card className="mt-6">
+        <CardHeader><CardTitle>Next Match</CardTitle></CardHeader>
+        <CardContent>
+          {nextMatch ? (
+            <p className="text-sm">
+              {nextMatch.isHome ? "vs" : "@"} <span className="font-medium">{nextMatch.opponent}</span> —{" "}
+              {format(nextMatch.date, "EEEE, MMM d 'at' HH:mm")}
+            </p>
+          ) : (
+            <p className="text-sm text-muted">No upcoming match scheduled — add one on the Football page.</p>
+          )}
+        </CardContent>
+      </Card>
+
       {analysis && (
-        <Card className="mt-6">
+        <Card className="mt-4">
           <CardHeader><CardTitle>AI Analysis</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-4 text-sm">

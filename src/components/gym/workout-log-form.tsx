@@ -53,6 +53,10 @@ export function WorkoutLogForm({ workoutId, exercises }: { workoutId: string; ex
         <input name="durationMin" type="number" placeholder="Duration (min)" className="w-36 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm" />
       </div>
       <input name="notes" placeholder="Notes (optional)" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <input name="wentWell" placeholder="What went well?" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+        <input name="toImprove" placeholder="What to improve next time?" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+      </div>
 
       <Button type="submit" size="sm">Save workout</Button>
     </form>

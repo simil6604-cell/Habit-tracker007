@@ -57,14 +57,25 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   exam-relevance checklist, logging what went wrong, subject-wide weakness
   summaries), baseline "where do you stand" self-assessments for School/Gym/
   Football that feed the score engine until real activity data exists,
-  workout plans/logging/history with charts, football profile/training/
-  matches, manual league table entry with analysis, the AI Coach's
-  balance/workload engine and chat, calendar (day/week/month), tasks,
-  analytics, and settings.
+  workout plans/logging/history with charts, an exercise library with form
+  cues and your own saved reference videos, a rough MET-based calorie-burn
+  estimate per session plus a daily calories-in-vs-out balance card, meal
+  logging with a common-foods autofill (always approximate, never a diet
+  push), training diaries with rule-based tips ("what went well / to
+  improve") for both gym and football, football profile/training/matches
+  with a drill library (cues + saved videos) and diary, manual league table
+  entry with analysis (points gap, a labeled best-case "path to 1st"
+  scenario, next-match callout), the AI Coach's balance/workload engine and
+  chat, calendar (day/week/month), tasks, analytics, and settings.
 - **Explicitly interface-only (per the brief)**: official Cambridge syllabus
   content and official league/federation data are never fabricated. Both
   areas have clean data models and manual-entry UI (`MANUAL DATA MODE`)
   ready for a real Cambridge document import or league API to be wired in.
+- **Deliberately not faked**: there's no real photo-based food/calorie
+  recognition and no real video motion analysis anywhere in the app — both
+  need a genuine multimodal AI provider. Food entries and calorie values are
+  always user-entered (with optional common-food autofill); exercise/drill
+  videos are links you paste and save yourself, never invented or fetched.
 - **AI Coach**: rule-based by default so the app works fully offline with
   zero API keys. It only ever reasons over what's actually in your
   database (real exams, real progress percentages, real training times) —

@@ -15,11 +15,13 @@ export async function createMeal(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   if (!description) return;
 
+  const kcalRaw = formData.get("kcal");
   await prisma.meal.create({
     data: {
       userId,
       type: String(formData.get("type") ?? "SNACK"),
       description,
+      kcal: kcalRaw ? Number(kcalRaw) : null,
     },
   });
   revalidatePath("/gym");

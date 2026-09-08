@@ -1,6 +1,6 @@
-import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
+import { POSITION_FOCUS, DRILL_CUES, type FootballPosition } from "@/lib/data/football";
 
-export type Drill = { name: string; minutes: number };
+export type Drill = { name: string; minutes: number; cueText?: string; videoUrl?: string };
 
 /**
  * Deterministic, position- and weakness-aware individual training generator.
@@ -18,10 +18,10 @@ export function generateIndividualTraining(position: FootballPosition, weaknesse
 
   // Weaknesses get more minutes since they're the priority; position focus fills the rest.
   const drills: Drill[] = [];
-  for (const w of weakFocus.slice(0, 2)) drills.push({ name: w, minutes: 10 });
+  for (const w of weakFocus.slice(0, 2)) drills.push({ name: w, minutes: 10, cueText: DRILL_CUES[w] });
   for (const f of positionFocus.slice(0, 3)) {
     if (drills.find((d) => d.name === f)) continue;
-    drills.push({ name: f, minutes: drills.length < 2 ? 10 : 5 });
+    drills.push({ name: f, minutes: drills.length < 2 ? 10 : 5, cueText: DRILL_CUES[f] });
   }
   if (drills.length === 0) drills.push({ name: "General Ball Mastery", minutes: 20 });
 

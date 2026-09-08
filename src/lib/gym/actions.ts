@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { estimateCaloriesBurned } from "./calories";
 
 async function requireUserId() {
   const session = await auth();
@@ -46,6 +47,8 @@ export async function addExercise(formData: FormData) {
       targetSets: Number(formData.get("targetSets") ?? 3),
       targetReps: Number(formData.get("targetReps") ?? 10),
       targetWeight: formData.get("targetWeight") ? Number(formData.get("targetWeight")) : null,
+      cueText: String(formData.get("cueText") ?? "").trim() || null,
+      videoUrl: String(formData.get("videoUrl") ?? "").trim() || null,
       order,
     },
   });
@@ -70,18 +73,26 @@ export async function logWorkoutSession(formData: FormData) {
   const completed = formData.get("completed") === "on";
   const difficulty = String(formData.get("difficulty") ?? "MODERATE");
   const notes = String(formData.get("notes") ?? "") || null;
+  const wentWell = String(formData.get("wentWell") ?? "") || null;
+  const toImprove = String(formData.get("toImprove") ?? "") || null;
   const durationMin = formData.get("durationMin") ? Number(formData.get("durationMin")) : null;
 
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const caloriesBurned = durationMin ? estimateCaloriesBurned(durationMin, difficulty, user?.weightKg ?? null) : null;
+
   const session = await prisma.workoutSession.create({
-    data: { userId, workoutId, completed, difficulty, notes, durationMin },
+    data: { userId, workoutId, completed, difficulty, notes, wentWell, toImprove, durationMin, caloriesBurned },
   });
 
   for (const exercise of workout.exercises) {
     // Find this exercise's best weight so far, to flag new personal bests.
+    // Tracked as a running value so multiple sets at the same weight within
+    // this same session only count the first one as a PB.
     const previousBest = await prisma.setLog.findFirst({
       where: { exerciseId: exercise.id },
       orderBy: { weight: "desc" },
     });
+    let bestWeightSoFar = previousBest?.weight ?? -Infinity;
 
     for (let setNumber = 1; setNumber <= exercise.targetSets; setNumber++) {
       const repsRaw = formData.get(`reps-${exercise.id}-${setNumber}`);
@@ -91,13 +102,11 @@ export async function logWorkoutSession(formData: FormData) {
       const weight = Number(weightRaw ?? 0);
       if (reps === 0 && weight === 0) continue;
 
-      const isPB = !previousBest || weight > previousBest.weight;
+      const isPB = weight > bestWeightSoFar;
+      if (isPB) bestWeightSoFar = weight;
       await prisma.setLog.create({
         data: { sessionId: session.id, exerciseId: exercise.id, setNumber, reps, weight, isPB },
       });
-      if (isPB) {
-        // keep comparing within this session too
-      }
     }
   }
 
