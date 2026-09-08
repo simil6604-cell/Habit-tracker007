@@ -1,9 +1,10 @@
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { deleteWorkoutSession } from "@/lib/gym/actions";
+import { deleteWorkoutSession, deleteBodyWeightLog } from "@/lib/gym/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ConsistencyChart, VolumeChart } from "@/components/charts/gym-charts";
+import { ConsistencyChart, VolumeChart, CaloriesChart } from "@/components/charts/gym-charts";
+import { WeightChart } from "@/components/charts/weight-chart";
 import { generateWorkoutDiaryTip } from "@/lib/gym/diary-assistant";
 import { format, startOfWeek, subWeeks } from "date-fns";
 import { Trash2 } from "lucide-react";
@@ -12,12 +13,18 @@ export default async function GymHistoryPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const sessions = await prisma.workoutSession.findMany({
-    where: { userId },
-    include: { workout: true, setLogs: { include: { exercise: true } } },
-    orderBy: { date: "desc" },
-    take: 100,
-  });
+  const [sessions, weightLogs, user] = await Promise.all([
+    prisma.workoutSession.findMany({
+      where: { userId },
+      include: { workout: true, setLogs: { include: { exercise: true } } },
+      orderBy: { date: "desc" },
+      take: 100,
+    }),
+    prisma.bodyWeightLog.findMany({ where: { userId }, orderBy: { date: "asc" }, take: 60 }),
+    prisma.user.findUnique({ where: { id: userId } }),
+  ]);
+
+  const weightChartData = weightLogs.map((w) => ({ date: format(w.date, "MMM d"), weightKg: w.weightKg }));
 
   const weeks = Array.from({ length: 8 }, (_, i) => startOfWeek(subWeeks(new Date(), 7 - i), { weekStartsOn: 1 }));
   const consistencyData = weeks.map((weekStart) => {
@@ -36,6 +43,12 @@ export default async function GymHistoryPage() {
     .slice(-20);
 
   const totalCaloriesBurned = sessions.reduce((sum, s) => sum + (s.caloriesBurned ?? 0), 0);
+
+  const caloriesData = [...sessions]
+    .reverse()
+    .filter((s) => s.caloriesBurned)
+    .map((s) => ({ date: format(s.date, "MMM d"), kcal: s.caloriesBurned! }))
+    .slice(-20);
 
   const personalBests = sessions
     .flatMap((s) => s.setLogs.filter((l) => l.isPB).map((l) => ({ ...l, date: s.date })))
@@ -63,13 +76,47 @@ export default async function GymHistoryPage() {
         </Card>
       </div>
 
-      <Card className="mt-4">
-        <CardHeader><CardTitle>Calories Burned (estimate)</CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-2xl font-semibold">{totalCaloriesBurned.toLocaleString()} kcal</p>
-          <p className="text-xs text-muted">Across all logged sessions — a rough MET-based estimate, not a medical measurement.</p>
-        </CardContent>
-      </Card>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Calories Burned (estimate)</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{totalCaloriesBurned.toLocaleString()} kcal</p>
+            <p className="mb-2 text-xs text-muted">Across all logged sessions — a rough MET-based estimate, not a medical measurement.</p>
+            {caloriesData.length > 0 && <CaloriesChart data={caloriesData} />}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Body Weight</CardTitle></CardHeader>
+          <CardContent>
+            {weightChartData.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted">Log your weight on the Gym page to see a trend here.</p>
+            ) : (
+              <WeightChart data={weightChartData} targetWeightKg={user?.targetWeightKg ?? null} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {weightLogs.length > 0 && (
+        <Card className="mt-4">
+          <CardHeader><CardTitle>Weight Log</CardTitle></CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y divide-border">
+              {[...weightLogs].reverse().slice(0, 10).map((w) => (
+                <li key={w.id} className="flex items-center justify-between py-2 text-sm">
+                  <span>{w.weightKg} kg</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted">{format(w.date, "MMM d, yyyy")}</span>
+                    <form action={deleteBodyWeightLog.bind(null, w.id)}>
+                      <button type="submit" className="text-muted hover:text-danger"><Trash2 size={14} /></button>
+                    </form>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mt-4">
         <CardHeader><CardTitle>Personal Bests</CardTitle></CardHeader>

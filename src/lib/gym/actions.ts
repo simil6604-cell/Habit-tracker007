@@ -11,6 +11,26 @@ async function requireUserId() {
   return session.user.id;
 }
 
+export async function logBodyWeight(formData: FormData) {
+  const userId = await requireUserId();
+  const weightKg = Number(formData.get("weightKg"));
+  if (!weightKg || weightKg <= 0) return;
+
+  await prisma.$transaction([
+    prisma.bodyWeightLog.create({ data: { userId, weightKg } }),
+    prisma.user.update({ where: { id: userId }, data: { weightKg: Math.round(weightKg) } }),
+  ]);
+
+  revalidatePath("/gym");
+  revalidatePath("/gym/history");
+}
+
+export async function deleteBodyWeightLog(logId: string) {
+  const userId = await requireUserId();
+  await prisma.bodyWeightLog.deleteMany({ where: { id: logId, userId } });
+  revalidatePath("/gym/history");
+}
+
 export async function createWorkout(formData: FormData) {
   const userId = await requireUserId();
   const name = String(formData.get("name") ?? "").trim();

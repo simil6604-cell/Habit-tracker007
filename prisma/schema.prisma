@@ -28,8 +28,11 @@ model User {
   optimizeFootball   Boolean @default(true)
   theme              String  @default("system") // light | dark | system
 
-  weightKg         Int? // used only to estimate calories burned; never shown as a target
+  weightKg         Int? // current weight; used to estimate calories burned
+  targetWeightKg   Int? // your own goal — the app never invents or suggests this
   dailyCalorieGoal Int? // optional, user-set; the app never invents this
+
+  weightLogs BodyWeightLog[]
 
   accounts Account[]
   sessions Session[]
@@ -280,6 +283,16 @@ model Meal {
   description String
   kcal      Int?     // user-entered or picked from the common-foods list; always approximate
   notes     String?
+
+  @@index([userId, date])
+}
+
+model BodyWeightLog {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date     DateTime @default(now())
+  weightKg Float
 
   @@index([userId, date])
 }

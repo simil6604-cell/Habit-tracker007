@@ -57,6 +57,10 @@ export default async function SettingsPage() {
               <input name="weightKg" type="number" min={20} max={250} defaultValue={user.weightKg ?? ""} className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             </div>
             <div>
+              <label className="mb-1 block text-xs text-muted">Target weight (kg, your own goal)</label>
+              <input name="targetWeightKg" type="number" min={20} max={250} defaultValue={user.targetWeightKg ?? ""} className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
               <label className="mb-1 block text-xs text-muted">Daily calorie goal (optional, your own number)</label>
               <input name="dailyCalorieGoal" type="number" min={0} defaultValue={user.dailyCalorieGoal ?? ""} className="w-40 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             </div>

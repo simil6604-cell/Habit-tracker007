@@ -65,8 +65,10 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   improve") for both gym and football, football profile/training/matches
   with a drill library (cues + saved videos) and diary, manual league table
   entry with analysis (points gap, a labeled best-case "path to 1st"
-  scenario, next-match callout), the AI Coach's balance/workload engine and
-  chat, calendar (day/week/month), tasks, analytics, and settings.
+  scenario, next-match callout), body-weight logging against a self-set
+  target weight with a progress chart, calories-burned and training-focus
+  charts, the AI Coach's balance/workload engine and chat, calendar
+  (day/week/month), tasks, analytics, and settings.
 - **Explicitly interface-only (per the brief)**: official Cambridge syllabus
   content and official league/federation data are never fabricated. Both
   areas have clean data models and manual-entry UI (`MANUAL DATA MODE`)

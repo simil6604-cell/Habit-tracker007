@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScoreRow } from "@/components/ui/progress-bar";
 import { ConsistencyChart } from "@/components/charts/gym-charts";
 import { SubjectProgressChart } from "@/components/charts/subject-progress-chart";
+import { FocusDistributionChart } from "@/components/charts/focus-distribution-chart";
 
 export default async function AnalyticsPage() {
   const session = await auth();
@@ -67,6 +68,25 @@ export default async function AnalyticsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>⚽ Training Consistency</CardTitle></CardHeader>
+          <CardContent>
+            <ConsistencyChart data={data.footballConsistencyData} color="var(--cat-football)" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>⚽ Training Focus Breakdown</CardTitle></CardHeader>
+          <CardContent>
+            {data.focusDistribution.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted">Log some trainings to see what you focus on most.</p>
+            ) : (
+              <FocusDistributionChart data={data.focusDistribution} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {data.goals.length > 0 && (
         <Card className="mt-4">

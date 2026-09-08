@@ -34,16 +34,19 @@ export async function updateOptimizationDomains(formData: FormData) {
 export async function updateNutritionSettings(formData: FormData) {
   const userId = await requireUserId();
   const weightRaw = formData.get("weightKg");
+  const targetRaw = formData.get("targetWeightKg");
   const goalRaw = formData.get("dailyCalorieGoal");
   await prisma.user.update({
     where: { id: userId },
     data: {
       weightKg: weightRaw ? Number(weightRaw) : null,
+      targetWeightKg: targetRaw ? Number(targetRaw) : null,
       dailyCalorieGoal: goalRaw ? Number(goalRaw) : null,
     },
   });
   revalidatePath("/settings");
   revalidatePath("/gym");
+  revalidatePath("/gym/history");
 }
 
 export async function deleteAccount() {

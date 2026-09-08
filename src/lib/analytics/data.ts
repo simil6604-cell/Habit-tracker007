@@ -33,6 +33,21 @@ export async function getAnalyticsData(userId: string) {
   const matchesPlayed = footballMatches.filter((m) => m.scoreFor !== null).length;
   const matchesWon = footballMatches.filter((m) => (m.scoreFor ?? 0) > (m.scoreAgainst ?? 0)).length;
 
+  const footballConsistencyData = weeks.map((weekStart) => {
+    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const count = footballTrainings.filter((t) => t.completed && t.date && t.date >= weekStart && t.date < weekEnd).length;
+    return { week: format(weekStart, "MMM d"), sessions: count };
+  });
+
+  const focusCounts = new Map<string, number>();
+  for (const t of footballTrainings) {
+    focusCounts.set(t.focus, (focusCounts.get(t.focus) ?? 0) + 1);
+  }
+  const focusDistribution = Array.from(focusCounts.entries())
+    .map(([focus, count]) => ({ focus, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
   const domainValues = [scores.school, scores.gym, scores.football].filter((v) => v > 0);
   const mean = domainValues.length ? domainValues.reduce((a, b) => a + b, 0) / domainValues.length : 0;
   const variance = domainValues.length ? domainValues.reduce((a, b) => a + (b - mean) ** 2, 0) / domainValues.length : 0;
@@ -54,6 +69,8 @@ export async function getAnalyticsData(userId: string) {
     trainingsTotal: footballTrainings.length,
     matchesPlayed,
     matchesWon,
+    footballConsistencyData,
+    focusDistribution,
     goals,
   };
 }
