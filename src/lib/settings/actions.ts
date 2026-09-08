@@ -36,17 +36,20 @@ export async function updateNutritionSettings(formData: FormData) {
   const weightRaw = formData.get("weightKg");
   const targetRaw = formData.get("targetWeightKg");
   const goalRaw = formData.get("dailyCalorieGoal");
+  const proteinGoalRaw = formData.get("dailyProteinGoalG");
   await prisma.user.update({
     where: { id: userId },
     data: {
       weightKg: weightRaw ? Number(weightRaw) : null,
       targetWeightKg: targetRaw ? Number(targetRaw) : null,
       dailyCalorieGoal: goalRaw ? Number(goalRaw) : null,
+      dailyProteinGoalG: proteinGoalRaw ? Number(proteinGoalRaw) : 150,
     },
   });
   revalidatePath("/settings");
   revalidatePath("/gym");
   revalidatePath("/gym/history");
+  revalidatePath("/gym/meal-plan");
 }
 
 export async function deleteAccount() {

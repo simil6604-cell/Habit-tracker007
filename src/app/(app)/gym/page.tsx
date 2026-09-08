@@ -95,9 +95,12 @@ export default async function GymPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Meals</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle>Meals</CardTitle>
+            <Link href="/gym/meal-plan"><Button size="sm" variant="outline">Weekly meal plan</Button></Link>
+          </CardHeader>
           <CardContent>
-            <MealsPanel meals={meals} totalToday={nutritionSummary.consumedToday} />
+            <MealsPanel meals={meals} totalToday={nutritionSummary.consumedToday} proteinToday={nutritionSummary.proteinToday} />
           </CardContent>
         </Card>
       </div>

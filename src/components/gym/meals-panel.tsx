@@ -9,17 +9,19 @@ import { Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { COMMON_FOODS } from "@/lib/data/nutrition";
 
-type Meal = { id: string; type: string; description: string; kcal: number | null; date: Date; imagePath: string | null };
+type Meal = { id: string; type: string; description: string; kcal: number | null; proteinG: number | null; date: Date; imagePath: string | null };
 
 const FOODS_DATALIST_ID = "common-foods";
 
-export function MealsPanel({ meals, totalToday }: { meals: Meal[]; totalToday: number }) {
+export function MealsPanel({ meals, totalToday, proteinToday }: { meals: Meal[]; totalToday: number; proteinToday: number }) {
   const kcalRef = useRef<HTMLInputElement>(null);
+  const proteinRef = useRef<HTMLInputElement>(null);
 
   function onDescriptionChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (kcalRef.current?.value) return; // don't override a value the user already typed
     const match = COMMON_FOODS.find((f) => f.name.toLowerCase() === e.target.value.toLowerCase());
-    if (match && kcalRef.current) kcalRef.current.value = String(match.kcal);
+    if (!match) return;
+    if (!kcalRef.current?.value) kcalRef.current!.value = String(match.kcal); // don't override a value the user already typed
+    if (!proteinRef.current?.value) proteinRef.current!.value = String(match.proteinG);
   }
 
   return (
@@ -51,7 +53,15 @@ export function MealsPanel({ meals, totalToday }: { meals: Meal[]; totalToday: n
           type="number"
           min={0}
           placeholder="kcal (approx.)"
-          className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+        />
+        <input
+          ref={proteinRef}
+          name="proteinG"
+          type="number"
+          min={0}
+          placeholder="protein g"
+          className="w-24 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
         />
         <input
           name="photo"
@@ -67,7 +77,7 @@ export function MealsPanel({ meals, totalToday }: { meals: Meal[]; totalToday: n
         visual log — nothing here analyzes food photos.
       </p>
 
-      <p className="text-sm font-medium">Today: {totalToday} kcal logged</p>
+      <p className="text-sm font-medium">Today: {totalToday} kcal · {proteinToday}g protein logged</p>
 
       <ul className="flex flex-col divide-y divide-border">
         {meals.length === 0 && <p className="py-2 text-sm text-muted">No meals logged yet.</p>}
@@ -80,6 +90,7 @@ export function MealsPanel({ meals, totalToday }: { meals: Meal[]; totalToday: n
               <Badge>{m.type}</Badge>
               <span>{m.description}</span>
               {m.kcal !== null && <span className="text-xs text-muted">~{m.kcal} kcal</span>}
+              {m.proteinG !== null && <span className="text-xs text-muted">~{m.proteinG}g protein</span>}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted">{format(m.date, "MMM d")}</span>

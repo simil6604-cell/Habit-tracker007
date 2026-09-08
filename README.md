@@ -60,8 +60,12 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   workout plans/logging/history with charts, an exercise library with form
   cues and your own saved reference videos, a rough MET-based calorie-burn
   estimate per session plus a daily calories-in-vs-out balance card, meal
-  logging with a common-foods autofill (always approximate, never a diet
-  push), training diaries with rule-based tips ("what went well / to
+  logging with a common-foods autofill for calories and protein (always
+  approximate, never a diet push), a daily protein progress bar against your
+  own goal (150g by default), a Monday–Friday lunch/dinner meal plan built
+  from real, widely-published food combos that balances protein and
+  calories evenly across the week (with a regenerate option), training
+  diaries with rule-based tips ("what went well / to
   improve") for both gym and football, football profile/training/matches
   with a drill library (cues + saved videos) and diary, manual league table
   entry with analysis (points gap, a labeled best-case "path to 1st"

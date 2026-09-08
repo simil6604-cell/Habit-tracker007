@@ -17,6 +17,7 @@ export async function createMeal(formData: FormData) {
   if (!description) return;
 
   const kcalRaw = formData.get("kcal");
+  const proteinRaw = formData.get("proteinG");
   const photo = formData.get("photo") as File | null;
   const imagePath = photo && photo.size > 0 ? await saveUploadedImage(photo, userId) : null;
 
@@ -26,6 +27,7 @@ export async function createMeal(formData: FormData) {
       type: String(formData.get("type") ?? "SNACK"),
       description,
       kcal: kcalRaw ? Number(kcalRaw) : null,
+      proteinG: proteinRaw ? Number(proteinRaw) : null,
       imagePath,
     },
   });

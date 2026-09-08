@@ -6,6 +6,9 @@ export type NutritionSummary = {
   burnedToday: number;
   dailyCalorieGoal: number | null;
   remaining: number | null;
+  proteinToday: number;
+  dailyProteinGoalG: number;
+  proteinRemaining: number;
 };
 
 export async function getNutritionSummary(userId: string): Promise<NutritionSummary> {
@@ -23,5 +26,9 @@ export async function getNutritionSummary(userId: string): Promise<NutritionSumm
   const dailyCalorieGoal = user?.dailyCalorieGoal ?? null;
   const remaining = dailyCalorieGoal !== null ? dailyCalorieGoal + burnedToday - consumedToday : null;
 
-  return { consumedToday, burnedToday, dailyCalorieGoal, remaining };
+  const proteinToday = meals.reduce((sum, m) => sum + (m.proteinG ?? 0), 0);
+  const dailyProteinGoalG = user?.dailyProteinGoalG ?? 150;
+  const proteinRemaining = Math.max(0, dailyProteinGoalG - proteinToday);
+
+  return { consumedToday, burnedToday, dailyCalorieGoal, remaining, proteinToday, dailyProteinGoalG, proteinRemaining };
 }
