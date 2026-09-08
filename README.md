@@ -58,7 +58,10 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
 - **Real, working, and persisted**: authentication, a real-school-shaped
   timetable (named periods, registration/lessons/breaks/study/clubs, a bulk
   grid editor, and a diagram view that highlights exam subjects), subjects &
-  topic progress, homework, exams, flashcards with spaced repetition, the
+  topic progress, homework, exams, flashcards with spaced repetition plus a
+  per-subject Quiz page (a flashcard carousel filtered to that subject, due
+  or full-deck practice mode, and a 6-question exam-style quiz spanning the
+  subject's topics — click "🧠 Quiz" on any subject card), the
   study planner, a daily School checklist that suggests a concrete time
   (a free/Study period today, or after training) for anything not done yet,
   a rule-based AI Learning Assistant per topic (explain the approach, an

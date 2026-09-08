@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { addTopic, deleteSubject, toggleExamSubject } from "@/lib/school/actions";
@@ -33,6 +34,9 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
           {subject.isExamSubject && <Badge variant="warning">Exam subject</Badge>}
         </div>
         <div className="flex gap-2">
+          <Link href={`/school/subjects/${subject.id}/quiz`}>
+            <Button variant="secondary" size="sm">🧠 Quiz</Button>
+          </Link>
           <form action={toggleExamSubject.bind(null, subject.id)}>
             <Button type="submit" variant="outline" size="sm">
               {subject.isExamSubject ? "Unmark exam subject" : "Mark as exam subject"}
