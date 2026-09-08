@@ -242,8 +242,12 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
                   {r.summary ? (
                     <p className="mt-1 whitespace-pre-wrap text-sm">{r.summary}</p>
                   ) : (
-                    <p className="mt-1 text-xs text-muted">Transcript saved — connect a real AI in Settings for a summary.</p>
+                    <p className="mt-1 text-xs text-muted">No AI summary yet — connect a real AI in Settings for one.</p>
                   )}
+                  <details className="mt-1.5">
+                    <summary className="cursor-pointer text-xs text-accent">View transcript</summary>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{r.transcript}</p>
+                  </details>
                 </li>
               ))}
             </ul>
