@@ -55,8 +55,11 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   (a free/Study period today, or after training) for anything not done yet,
   a rule-based AI Learning Assistant per topic (explain the approach, an
   exam-relevance checklist, logging what went wrong, subject-wide weakness
-  summaries), baseline "where do you stand" self-assessments for School/Gym/
-  Football that feed the score engine until real activity data exists,
+  summaries), a habit-tracker grid for your own recurring school habits
+  (fully custom rows, a 4-week checkbox grid with per-habit success rates
+  and a daily-completion trend chart), baseline "where do you stand"
+  self-assessments for School/Gym/Football that feed the score engine
+  until real activity data exists,
   workout plans/logging/history with charts, an exercise library with form
   cues and your own saved reference videos, a rough MET-based calorie-burn
   estimate per session plus a daily calories-in-vs-out balance card, meal

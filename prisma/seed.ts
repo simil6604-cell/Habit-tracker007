@@ -156,6 +156,37 @@ async function main() {
     });
   }
 
+  const habitDefs = [
+    { name: "Homework done", emoji: "📓" },
+    { name: "Reviewed today's lessons", emoji: "📖" },
+    { name: "No missed periods", emoji: "🕒" },
+  ];
+  const habits = [];
+  for (let i = 0; i < habitDefs.length; i++) {
+    const existing = await prisma.schoolHabit.findFirst({ where: { userId: user.id, name: habitDefs[i].name } });
+    habits.push(
+      existing ?? (await prisma.schoolHabit.create({ data: { userId: user.id, ...habitDefs[i], order: i } }))
+    );
+  }
+
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  for (let daysAgo = 0; daysAgo < 21; daysAgo++) {
+    const date = new Date(todayMidnight);
+    date.setDate(date.getDate() - daysAgo);
+    for (const habit of habits) {
+      // A plausible, varied-but-improving pattern — not real tracked history.
+      const chance = 0.5 + (21 - daysAgo) * 0.015;
+      if (Math.random() < chance) {
+        await prisma.schoolHabitLog.upsert({
+          where: { habitId_date: { habitId: habit.id, date } },
+          create: { habitId: habit.id, date },
+          update: {},
+        });
+      }
+    }
+  }
+
   console.log(`Seeded demo account: ${email} / password123`);
 }
 

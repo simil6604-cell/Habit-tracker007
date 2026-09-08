@@ -42,7 +42,8 @@ export default async function SchoolPage() {
           <h1 className="text-2xl font-semibold tracking-tight">🎓 School</h1>
           <p className="mt-1 text-muted">Timetable, subjects, homework and exams — all in one place.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/school/habits"><Button variant="outline">Habit tracker</Button></Link>
           <Link href="/school/planner"><Button variant="outline">Study planner</Button></Link>
           <Link href="/school/flashcards"><Button variant="secondary">Flashcards</Button></Link>
         </div>

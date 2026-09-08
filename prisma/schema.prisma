@@ -57,6 +57,7 @@ model User {
   progressEntries  Progress[]
   chatMessages     ChatMessage[]
   assessments      Assessment[]
+  schoolHabits     SchoolHabit[]
 }
 
 model Account {
@@ -195,6 +196,33 @@ model StudySession {
   aiGenerated Boolean  @default(false)
 
   @@index([userId, start])
+}
+
+// A daily habit tracker grid, like a classic habit-tracker app: fixed
+// recurring habits as rows, days as columns, checked off day by day.
+model SchoolHabit {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  emoji     String?
+  order     Int               @default(0)
+  createdAt DateTime          @default(now())
+  logs      SchoolHabitLog[]
+
+  @@index([userId])
+}
+
+// One row per day a habit was checked off. Absence of a row = not done that
+// day — no need to pre-fill "not done" rows for every day.
+model SchoolHabitLog {
+  id      String      @id @default(cuid())
+  habitId String
+  habit   SchoolHabit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date    DateTime // normalized to local midnight for that day
+
+  @@unique([habitId, date])
+  @@index([habitId, date])
 }
 
 model Flashcard {
