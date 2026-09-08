@@ -73,8 +73,12 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   target weight with a progress chart, calories-burned and training-focus
   charts, body progress photos (upload, gallery/timeline, oldest-vs-newest
   or pick-your-own before/after compare view) and optional photos attached
-  to meal log entries, the AI Coach's balance/workload engine and chat,
-  calendar (day/week/month), tasks, analytics, and settings.
+  to meal log entries, a barcode product scanner (camera or manual entry)
+  that looks products up against Open Food Facts — a real, free product
+  database — and shows a transparent 0–100 health score built from
+  Nutri-Score, processing level (NOVA) and additive count, the AI Coach's
+  balance/workload engine and chat, calendar (day/week/month), tasks,
+  analytics, and settings.
 - **Explicitly interface-only (per the brief)**: official Cambridge syllabus
   content and official league/federation data are never fabricated. Both
   areas have clean data models and manual-entry UI (`MANUAL DATA MODE`)
@@ -86,6 +90,15 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   videos are links you paste and save yourself, never invented or fetched.
   Body and meal photos are stored exactly as uploaded and shown back to you
   as a visual log — nothing analyzes, scores, or draws conclusions from them.
+  The product scanner's health score is this app's own transparent formula
+  (see `src/lib/gym/health-score.ts`) — not a reproduction of Yuka's or any
+  other app's proprietary algorithm, since those aren't published. It only
+  ever uses real fields Open Food Facts actually has for a product; a
+  missing field gets a neutral default rather than an invented value, and
+  the score's full breakdown is always shown alongside the number. The
+  scanner needs outbound internet access to reach `openfoodfacts.org`; a
+  locked-down network (e.g. a restrictive dev sandbox) will surface a clear
+  "couldn't reach the product database" message instead of failing silently.
 - **AI Coach**: rule-based by default so the app works fully offline with
   zero API keys. It only ever reasons over what's actually in your
   database (real exams, real progress percentages, real training times) —

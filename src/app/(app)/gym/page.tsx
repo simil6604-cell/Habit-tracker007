@@ -41,7 +41,10 @@ export default async function GymPage() {
           <h1 className="text-2xl font-semibold tracking-tight">🏋️ Gym</h1>
           <p className="mt-1 text-muted">Plans, logging and progress — built for consistency, not extremes.</p>
         </div>
-        <Link href="/gym/history"><Button variant="outline">History & progress</Button></Link>
+        <div className="flex gap-2">
+          <Link href="/gym/scanner"><Button variant="outline">📷 Scan a product</Button></Link>
+          <Link href="/gym/history"><Button variant="outline">History & progress</Button></Link>
+        </div>
       </div>
 
       <Card className="mt-6">

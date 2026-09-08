@@ -35,6 +35,7 @@ model User {
 
   weightLogs BodyWeightLog[]
   bodyPhotos BodyPhoto[]
+  scannedProducts ScannedProduct[]
 
   accounts Account[]
   sessions Session[]
@@ -300,6 +301,22 @@ model BodyPhoto {
   caption   String?
 
   @@index([userId, date])
+}
+
+model ScannedProduct {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  barcode     String
+  name        String?
+  brand       String?
+  imageUrl    String?  // hotlinked from Open Food Facts, not stored locally
+  nutriScore  String?  // a-e, straight from Open Food Facts when available
+  novaGroup   Int?     // 1-4 processing level, straight from Open Food Facts when available
+  healthScore Int      // our own 0-100 score, computed from the above — see lib/gym/health-score.ts
+  scannedAt   DateTime @default(now())
+
+  @@index([userId, scannedAt])
 }
 
 model BodyWeightLog {
