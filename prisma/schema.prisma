@@ -59,6 +59,8 @@ model User {
   assessments      Assessment[]
   schoolHabits     SchoolHabit[]
   learningLogEntries LearningLogEntry[]
+  notePhotos         NotePhoto[]
+  classRecordings    ClassRecording[]
 }
 
 model Account {
@@ -152,8 +154,43 @@ model Topic {
   nextReview     DateTime?
   weaknessNote   String?
   learningLog    LearningLogEntry[]
+  notePhotos     NotePhoto[]
+  classRecordings ClassRecording[]
 
   @@index([subjectId])
+}
+
+// A photo of handwritten/printed notes for a topic. imagePath is the photo
+// as uploaded, stored as-is; summary is a real AI transcription/summary of
+// it when a real AI is connected — null (not invented) otherwise.
+model NotePhoto {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId   String
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  imagePath String
+  summary   String?
+  createdAt DateTime @default(now())
+
+  @@index([topicId])
+}
+
+// A transcript captured live in class via the browser's own speech-to-text
+// (or pasted in by hand where that's unsupported), plus a real AI summary
+// once one's generated. The transcript itself is exactly what was
+// recognized/typed — never invented.
+model ClassRecording {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId    String
+  topic      Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  transcript String
+  summary    String?
+  createdAt  DateTime @default(now())
+
+  @@index([topicId])
 }
 
 // The student's own running log while learning a topic with the AI: what

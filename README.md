@@ -69,8 +69,13 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   summaries) with a per-topic learning log (what you understand, what you
   don't, and open questions — persisted, editable) and an end-of-session
   quiz that targets those logged gaps and gives real AI-graded feedback
-  when a real AI is connected, a habit-tracker grid for your own recurring
-  school habits
+  when a real AI is connected, a per-topic note-photo box (take or upload a
+  photo of your notes — stored as-is, transcribed and summarized by a real
+  AI when one's connected, illegible handwriting called out rather than
+  guessed) and a class recorder (live speech-to-text via the browser's own
+  engine where supported, or type/paste as a fallback, then a real AI
+  summary plus a quiz built only from what the transcript actually covers),
+  a habit-tracker grid for your own recurring school habits
   (fully custom rows, a 4-week checkbox grid with per-habit success rates
   and a daily-completion trend chart), baseline "where do you stand"
   self-assessments for School/Gym/Football that feed the score engine
@@ -118,7 +123,14 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   locked-down network (e.g. a restrictive dev sandbox) will surface a clear
   "couldn't reach the product database" message instead of failing silently.
   The topic quiz never invents questions, answers, or grading — without a
-  real AI connected it says so plainly instead of faking a quiz.
+  real AI connected it says so plainly instead of faking a quiz. Note-photo
+  summaries use Claude's real vision input (an actual multimodal API call on
+  the photo you took) — never OCR guesswork dressed up as AI, and never
+  generated without one. The class recorder's live transcript comes only
+  from the browser's own built-in speech-to-text (Chrome/Edge; typically
+  needs that browser's own online speech service) or what you type/paste —
+  never a fabricated transcript — and its summary/quiz are built strictly
+  from that transcript's actual content.
 - **AI Coach**: rule-based by default so the app works fully offline with
   zero API keys. It only ever reasons over what's actually in your
   database (real exams, real progress percentages, real training times) —

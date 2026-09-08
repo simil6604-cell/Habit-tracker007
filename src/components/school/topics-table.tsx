@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { updateTopicProgress, deleteTopic } from "@/lib/school/actions";
 import { askExplainTopic, askExamChecklist, askTopicQuestion, submitMistake } from "@/lib/school/learning-actions";
 import { LearningLogAndQuiz } from "@/components/school/learning-log-quiz";
+import { NotePhotoPanel } from "@/components/school/note-photo-panel";
+import { ClassRecorderPanel } from "@/components/school/class-recorder-panel";
 import { Trash2, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 
@@ -98,6 +100,14 @@ function TopicAssistant({ topicId }: { topicId: string }) {
       {response && <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{response}</p>}
 
       <LearningLogAndQuiz topicId={topicId} />
+
+      <div className="border-t border-border pt-3">
+        <NotePhotoPanel topicId={topicId} />
+      </div>
+
+      <div className="border-t border-border pt-3">
+        <ClassRecorderPanel topicId={topicId} />
+      </div>
     </div>
   );
 }

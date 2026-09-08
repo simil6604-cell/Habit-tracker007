@@ -25,6 +25,18 @@ export class AnthropicProvider implements AIProvider {
 
   async generate(prompt: string, context: Record<string, unknown> = {}): Promise<string> {
     const system = typeof context.system === "string" ? context.system : undefined;
+    const imageBase64 = typeof context.imageBase64 === "string" ? context.imageBase64 : undefined;
+    const imageMediaType =
+      typeof context.imageMediaType === "string"
+        ? (context.imageMediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp")
+        : "image/jpeg";
+
+    const content: Anthropic.MessageParam["content"] = imageBase64
+      ? [
+          { type: "image", source: { type: "base64", media_type: imageMediaType, data: imageBase64 } },
+          { type: "text", text: prompt },
+        ]
+      : prompt;
 
     let message;
     try {
@@ -32,7 +44,7 @@ export class AnthropicProvider implements AIProvider {
         model: this.model,
         max_tokens: 1024,
         system,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content }],
       });
     } catch (err) {
       throw new Error(friendlyAnthropicError(err));
