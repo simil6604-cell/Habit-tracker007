@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Image from "next/image";
 import { createMeal, deleteMeal } from "@/lib/nutrition/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { COMMON_FOODS } from "@/lib/data/nutrition";
 
-type Meal = { id: string; type: string; description: string; kcal: number | null; date: Date };
+type Meal = { id: string; type: string; description: string; kcal: number | null; date: Date; imagePath: string | null };
 
 const FOODS_DATALIST_ID = "common-foods";
 
@@ -52,11 +53,18 @@ export function MealsPanel({ meals, totalToday }: { meals: Meal[]; totalToday: n
           placeholder="kcal (approx.)"
           className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
         />
+        <input
+          name="photo"
+          type="file"
+          accept="image/*"
+          className="w-full text-xs text-muted file:mr-2 file:rounded-lg file:border-0 file:bg-surface-muted file:px-2 file:py-1.5 file:text-xs sm:w-auto"
+        />
         <Button type="submit" size="sm" variant="secondary">Log meal</Button>
       </form>
       <p className="text-xs text-muted">
         No calorie targets or crash diets here — just balanced energy for school, gym and football. Values are
-        always approximate; talk to a nutrition professional for anything precise.
+        always approximate; talk to a nutrition professional for anything precise. A photo is just stored as your own
+        visual log — nothing here analyzes food photos.
       </p>
 
       <p className="text-sm font-medium">Today: {totalToday} kcal logged</p>
@@ -66,6 +74,9 @@ export function MealsPanel({ meals, totalToday }: { meals: Meal[]; totalToday: n
         {meals.map((m) => (
           <li key={m.id} className="flex items-center justify-between gap-2 py-2 text-sm">
             <div className="flex items-center gap-2">
+              {m.imagePath && (
+                <Image src={m.imagePath} alt="" width={36} height={36} className="h-9 w-9 rounded-md object-cover" unoptimized />
+              )}
               <Badge>{m.type}</Badge>
               <span>{m.description}</span>
               {m.kcal !== null && <span className="text-xs text-muted">~{m.kcal} kcal</span>}

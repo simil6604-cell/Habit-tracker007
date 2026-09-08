@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConsistencyChart, VolumeChart, CaloriesChart } from "@/components/charts/gym-charts";
 import { WeightChart } from "@/components/charts/weight-chart";
+import { BodyPhotosPanel } from "@/components/gym/body-photos-panel";
 import { generateWorkoutDiaryTip } from "@/lib/gym/diary-assistant";
 import { format, startOfWeek, subWeeks } from "date-fns";
 import { Trash2 } from "lucide-react";
@@ -13,7 +14,7 @@ export default async function GymHistoryPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [sessions, weightLogs, user] = await Promise.all([
+  const [sessions, weightLogs, bodyPhotos, user] = await Promise.all([
     prisma.workoutSession.findMany({
       where: { userId },
       include: { workout: true, setLogs: { include: { exercise: true } } },
@@ -21,6 +22,7 @@ export default async function GymHistoryPage() {
       take: 100,
     }),
     prisma.bodyWeightLog.findMany({ where: { userId }, orderBy: { date: "asc" }, take: 60 }),
+    prisma.bodyPhoto.findMany({ where: { userId }, orderBy: { date: "desc" }, take: 60 }),
     prisma.user.findUnique({ where: { id: userId } }),
   ]);
 
@@ -96,6 +98,13 @@ export default async function GymHistoryPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Progress Photos</CardTitle></CardHeader>
+        <CardContent>
+          <BodyPhotosPanel photos={bodyPhotos} />
+        </CardContent>
+      </Card>
 
       {weightLogs.length > 0 && (
         <Card className="mt-4">

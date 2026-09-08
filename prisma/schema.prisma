@@ -33,6 +33,7 @@ model User {
   dailyCalorieGoal Int? // optional, user-set; the app never invents this
 
   weightLogs BodyWeightLog[]
+  bodyPhotos BodyPhoto[]
 
   accounts Account[]
   sessions Session[]
@@ -283,6 +284,18 @@ model Meal {
   description String
   kcal      Int?     // user-entered or picked from the common-foods list; always approximate
   notes     String?
+  imagePath String?  // a photo you took, stored as-is — never analyzed
+
+  @@index([userId, date])
+}
+
+model BodyPhoto {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  imagePath String
+  caption   String?
 
   @@index([userId, date])
 }
