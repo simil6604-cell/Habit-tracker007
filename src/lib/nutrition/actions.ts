@@ -18,6 +18,8 @@ export async function createMeal(formData: FormData) {
 
   const kcalRaw = formData.get("kcal");
   const proteinRaw = formData.get("proteinG");
+  const carbsRaw = formData.get("carbsG");
+  const fatRaw = formData.get("fatG");
   const photo = formData.get("photo") as File | null;
   const imagePath = photo && photo.size > 0 ? await saveUploadedImage(photo, userId) : null;
 
@@ -28,6 +30,8 @@ export async function createMeal(formData: FormData) {
       description,
       kcal: kcalRaw ? Number(kcalRaw) : null,
       proteinG: proteinRaw ? Number(proteinRaw) : null,
+      carbsG: carbsRaw ? Number(carbsRaw) : null,
+      fatG: fatRaw ? Number(fatRaw) : null,
       imagePath,
     },
   });

@@ -68,6 +68,18 @@ export default async function SettingsPage() {
               <label className="mb-1 block text-xs text-muted">Daily protein goal (g)</label>
               <input name="dailyProteinGoalG" type="number" min={0} defaultValue={user.dailyProteinGoalG} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily carbs goal (g)</label>
+              <input name="dailyCarbsGoalG" type="number" min={0} defaultValue={user.dailyCarbsGoalG} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily fat goal (g)</label>
+              <input name="dailyFatGoalG" type="number" min={0} defaultValue={user.dailyFatGoalG} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily water goal (ml)</label>
+              <input name="dailyWaterGoalMl" type="number" min={0} step={250} defaultValue={user.dailyWaterGoalMl} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
             <Button type="submit" size="sm" variant="secondary">Save</Button>
           </form>
         </CardContent>

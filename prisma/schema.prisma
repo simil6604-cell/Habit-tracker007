@@ -32,10 +32,14 @@ model User {
   targetWeightKg   Int? // your own goal — the app never invents or suggests this
   dailyCalorieGoal Int? // optional, user-set; the app never invents this
   dailyProteinGoalG Int @default(150) // your own goal; used by the weekly meal plan
+  dailyCarbsGoalG   Int @default(250) // your own goal
+  dailyFatGoalG     Int @default(70)  // your own goal
+  dailyWaterGoalMl  Int @default(2000) // your own goal
 
   weightLogs BodyWeightLog[]
   bodyPhotos BodyPhoto[]
   scannedProducts ScannedProduct[]
+  waterLogs  WaterLog[]
 
   accounts Account[]
   sessions Session[]
@@ -369,10 +373,25 @@ model Meal {
   description String
   kcal      Int?     // user-entered or picked from the common-foods list; always approximate
   proteinG  Int?     // user-entered or picked from the common-foods list; always approximate
+  carbsG    Int?     // user-entered or picked from the common-foods list; always approximate
+  fatG      Int?     // user-entered or picked from the common-foods list; always approximate
   notes     String?
   imagePath String?  // a photo you took, stored as-is — never analyzed
 
   @@index([userId, date])
+}
+
+// A single water log entry — tapping a glass logs a fixed amount, always
+// editable/removable. No estimated "water from food" — that would need a
+// real food-composition database this app doesn't have.
+model WaterLog {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountMl Int
+  loggedAt DateTime @default(now())
+
+  @@index([userId, loggedAt])
 }
 
 model BodyPhoto {

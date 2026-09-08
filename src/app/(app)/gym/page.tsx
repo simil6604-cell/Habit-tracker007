@@ -5,8 +5,9 @@ import { createWorkout } from "@/lib/gym/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { WorkoutPlanCard } from "@/components/gym/workout-plan-card";
-import { MealsPanel } from "@/components/gym/meals-panel";
+import { MealsByTypePanel } from "@/components/gym/meals-panel";
 import { NutritionBalanceCard } from "@/components/gym/nutrition-balance-card";
+import { WaterTrackerCard } from "@/components/gym/water-tracker-card";
 import { PhysiqueGoalCard } from "@/components/gym/physique-goal-card";
 import { GoalsPanel } from "@/components/shared/goals-panel";
 import { GYM_GOALS } from "@/lib/data/football";
@@ -103,7 +104,7 @@ export default async function GymPage() {
             <Link href="/gym/meal-plan"><Button size="sm" variant="outline">Weekly meal plan</Button></Link>
           </CardHeader>
           <CardContent>
-            <MealsPanel meals={meals} totalToday={nutritionSummary.consumedToday} proteinToday={nutritionSummary.proteinToday} />
+            <MealsByTypePanel meals={meals} breakdown={nutritionSummary.mealTypeBreakdown} />
           </CardContent>
         </Card>
       </div>
@@ -115,6 +116,15 @@ export default async function GymPage() {
             <NutritionBalanceCard summary={nutritionSummary} />
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader><CardTitle>Water</CardTitle></CardHeader>
+          <CardContent>
+            <WaterTrackerCard waterTodayMl={nutritionSummary.waterTodayMl} dailyWaterGoalMl={nutritionSummary.dailyWaterGoalMl} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4">
         <Card>
           <CardHeader><CardTitle>Physique Goal</CardTitle></CardHeader>
           <CardContent>

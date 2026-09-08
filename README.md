@@ -82,9 +82,17 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   until real activity data exists,
   workout plans/logging/history with charts, an exercise library with form
   cues and your own saved reference videos, a rough MET-based calorie-burn
-  estimate per session plus a daily calories-in-vs-out balance card, meal
-  logging with a common-foods autofill for calories and protein (always
-  approximate, never a diet push), a daily protein progress bar against your
+  estimate per session plus a daily calories-in-vs-out balance card with a
+  semi-circular "kcal left" gauge and carb/protein/fat progress bars against
+  your own goals, meal logging grouped by type (Breakfast/Lunch/Dinner/
+  Snacks, each with a ring-icon progress indicator) with a common-foods
+  autofill for calories, protein, carbs and fat (always approximate, never a
+  diet push — per-type targets are just a common rule-of-thumb 30/40/25/5%
+  split of your own daily goal, not measured or prescribed), a tap-to-log
+  water tracker (250ml glasses against your own daily goal, tap a filled
+  glass to undo — deliberately doesn't guess how much water your food
+  contained, since that would need a food-composition database this app
+  doesn't have), a daily protein progress bar against your
   own goal (150g by default), a Monday–Friday lunch/dinner meal plan built
   from real, widely-published food combos that balances protein and
   calories evenly across the week (with a regenerate option), training

@@ -37,6 +37,9 @@ export async function updateNutritionSettings(formData: FormData) {
   const targetRaw = formData.get("targetWeightKg");
   const goalRaw = formData.get("dailyCalorieGoal");
   const proteinGoalRaw = formData.get("dailyProteinGoalG");
+  const carbsGoalRaw = formData.get("dailyCarbsGoalG");
+  const fatGoalRaw = formData.get("dailyFatGoalG");
+  const waterGoalRaw = formData.get("dailyWaterGoalMl");
   await prisma.user.update({
     where: { id: userId },
     data: {
@@ -44,6 +47,9 @@ export async function updateNutritionSettings(formData: FormData) {
       targetWeightKg: targetRaw ? Number(targetRaw) : null,
       dailyCalorieGoal: goalRaw ? Number(goalRaw) : null,
       dailyProteinGoalG: proteinGoalRaw ? Number(proteinGoalRaw) : 150,
+      dailyCarbsGoalG: carbsGoalRaw ? Number(carbsGoalRaw) : 250,
+      dailyFatGoalG: fatGoalRaw ? Number(fatGoalRaw) : 70,
+      dailyWaterGoalMl: waterGoalRaw ? Number(waterGoalRaw) : 2000,
     },
   });
   revalidatePath("/settings");
