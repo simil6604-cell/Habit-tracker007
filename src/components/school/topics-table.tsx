@@ -5,7 +5,8 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateTopicProgress, deleteTopic } from "@/lib/school/actions";
-import { askExplainTopic, askExamChecklist, askTopicQuestion, submitMistake } from "@/lib/school/learning-actions";
+import { submitMistake } from "@/lib/school/learning-actions";
+import { TutorChatPanel } from "@/components/school/tutor-chat-panel";
 import { LearningLogAndQuiz } from "@/components/school/learning-log-quiz";
 import { NotePhotoPanel } from "@/components/school/note-photo-panel";
 import { ClassRecorderPanel } from "@/components/school/class-recorder-panel";
@@ -33,48 +34,13 @@ function statusEmoji(pct: number) {
 function TopicAssistant({ topicId }: { topicId: string }) {
   const [response, setResponse] = useState<string | null>(null);
   const [mistake, setMistake] = useState("");
-  const [question, setQuestion] = useState("");
   const [pending, startTransition] = useTransition();
-
-  function ask(fn: (id: string) => Promise<string>) {
-    startTransition(async () => setResponse(await fn(topicId)));
-  }
 
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-surface-muted p-4">
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => ask(askExplainTopic)}>
-          Explain this topic
-        </Button>
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => ask(askExamChecklist)}>
-          What do I need for the exam?
-        </Button>
-      </div>
+      <TutorChatPanel topicId={topicId} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask anything about this topic — IGCSE/A-Level level answers when a real AI is connected"
-          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending || !question.trim()}
-          onClick={() =>
-            startTransition(async () => {
-              const res = await askTopicQuestion(topicId, question);
-              setResponse(res);
-              setQuestion("");
-            })
-          }
-        >
-          Ask
-        </Button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <input
           value={mistake}
           onChange={(e) => setMistake(e.target.value)}

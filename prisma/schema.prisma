@@ -65,6 +65,7 @@ model User {
   learningLogEntries LearningLogEntry[]
   notePhotos         NotePhoto[]
   classRecordings    ClassRecording[]
+  tutorMessages      TutorMessage[]
 }
 
 model Account {
@@ -160,8 +161,25 @@ model Topic {
   learningLog    LearningLogEntry[]
   notePhotos     NotePhoto[]
   classRecordings ClassRecording[]
+  tutorMessages  TutorMessage[]
 
   @@index([subjectId])
+}
+
+// A real, persisted back-and-forth conversation with the AI tutor for one
+// topic — not a one-shot Q&A. Each turn is stored so the AI sees the whole
+// conversation so far, the way a real tutoring session builds on itself.
+model TutorMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId   String
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  role      String   // USER | ASSISTANT
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([topicId, createdAt])
 }
 
 // A photo of handwritten/printed notes for a topic. imagePath is the photo

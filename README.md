@@ -17,14 +17,17 @@ balances all of them together.
   your own stored data — no invented syllabus content, league results, or
   medical advice, ever. Set `ANTHROPIC_API_KEY` to switch to a real
   Claude-backed `AnthropicProvider` (`src/lib/ai/anthropic-provider.ts`) —
-  no other code changes needed. When it's on, the School AI Learning
-  Assistant (the free-text "Ask" box and "Explain this topic"/"Log
-  mistake") gets genuine subject tutoring framed for your Cambridge
-  IGCSE/AS/A-Level level (see `src/lib/ai/academic-prompt.ts`), and the AI
+  no other code changes needed. When it's on, the School AI Tutor becomes a
+  genuine persistent, back-and-forth conversation per topic — not one-shot
+  Q&A — that remembers what you've already discussed, framed for your
+  Cambridge IGCSE/AS/A-Level level (see `src/lib/ai/academic-prompt.ts`),
+  and draws a labeled diagram (a sanitized, AI-generated SVG — shapes,
+  graphs, number lines) inline whenever one would genuinely help, and the AI
   Coach chat gets real open-ended replies for anything its keyword shortcuts
-  don't already handle. Any real-AI call failure (bad key, network, rate
-  limit) falls back to the same honest rule-based response instead of
-  crashing or faking an answer.
+  don't already handle. Without a connected AI, the tutor chat says so
+  honestly instead of faking a conversation. Any real-AI call failure (bad
+  key, network, rate limit) falls back to the same honest response instead
+  of crashing or faking an answer.
 - PWA-ready (`manifest.json`, icons, "Add to Home Screen" on iOS/Android)
 
 ## Getting started
@@ -64,9 +67,13 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   subject's topics — click "🧠 Quiz" on any subject card), the
   study planner, a daily School checklist that suggests a concrete time
   (a free/Study period today, or after training) for anything not done yet,
-  a rule-based AI Learning Assistant per topic (explain the approach, an
-  exam-relevance checklist, logging what went wrong, subject-wide weakness
-  summaries) with a per-topic learning log (what you understand, what you
+  an AI Tutor per topic — a real persistent, multi-turn conversation (not
+  one-shot Q&A) that remembers earlier turns, answers follow-ups in
+  context, and draws a sanitized AI-generated SVG diagram inline when one
+  genuinely helps explain something, with quick-start prompts ("Explain
+  this topic" / "What do I need for the exam?"), free-text chat, and a
+  clear-conversation option — plus logging what went wrong and subject-wide
+  weakness summaries, with a per-topic learning log (what you understand, what you
   don't, and open questions — persisted, editable) and an end-of-session
   quiz that targets those logged gaps and gives real AI-graded feedback
   when a real AI is connected, a per-topic note-photo box (take or upload as
