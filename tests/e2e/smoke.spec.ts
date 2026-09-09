@@ -104,7 +104,7 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText("Pack football boots")).toBeVisible();
   });
 
-  test("settings: toggle theme and sign out", async () => {
+  test("settings: sign out", async () => {
     await page.goto("/settings");
     await expect(page.getByText(email)).toBeVisible();
 

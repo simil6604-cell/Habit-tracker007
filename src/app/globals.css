@@ -1,32 +1,7 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
+/* Dark is the only theme — these are the app's colors, not a "dark mode". */
 :root {
-  --background: #f7f7f9;
-  --surface: #ffffff;
-  --surface-muted: #f1f1f5;
-  --foreground: #12131a;
-  --muted: #6b6f80;
-  --border: #e7e7ee;
-
-  --accent: #6366f1;
-  --accent-foreground: #ffffff;
-
-  --cat-school: #6366f1;
-  --cat-study: #8b5cf6;
-  --cat-gym: #f97316;
-  --cat-football: #22c55e;
-  --cat-exam: #ef4444;
-  --cat-task: #0ea5e9;
-  --cat-recovery: #64748b;
-
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-}
-
-.dark {
   --background: #050506;
   --surface: #0e0f13;
   --surface-muted: #16171e;
@@ -81,9 +56,6 @@
 }
 
 html {
-  color-scheme: light;
-}
-html.dark {
   color-scheme: dark;
 }
 

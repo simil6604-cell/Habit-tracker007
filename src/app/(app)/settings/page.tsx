@@ -5,7 +5,6 @@ import { updateProfileName, updateOptimizationDomains, updateNutritionSettings }
 import { isRealAIConfigured } from "@/lib/ai/provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { DeleteAccountButton } from "@/components/settings/danger-zone";
 import { Badge } from "@/components/ui/badge";
 
@@ -93,13 +92,6 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4">
-        <CardHeader><CardTitle>Appearance</CardTitle></CardHeader>
-        <CardContent className="flex items-center justify-between">
-          <p className="text-sm text-muted">Light / dark mode</p>
-          <ThemeToggle />
-        </CardContent>
-      </Card>
 
       <Card className="mt-4">
         <CardHeader><CardTitle>AI Coach</CardTitle></CardHeader>

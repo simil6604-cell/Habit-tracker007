@@ -7,7 +7,6 @@ import { NAV_ITEMS } from "./nav-items";
 import { NavIcon } from "./nav-icon";
 import { Logo } from "./logo";
 import { StatusPill } from "./status-pill";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "./sign-out-button";
 
 export function Sidebar({ overallScore }: { overallScore: number }) {
@@ -44,8 +43,7 @@ export function Sidebar({ overallScore }: { overallScore: number }) {
         })}
       </nav>
 
-      <div className="flex items-center justify-between border-t border-border pt-3">
-        <ThemeToggle />
+      <div className="flex items-center border-t border-border pt-3">
         <SignOutButton />
       </div>
     </aside>
