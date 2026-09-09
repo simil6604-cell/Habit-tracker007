@@ -103,9 +103,12 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   improve") for both gym and football, football profile/training/matches
   with a browsable Drill Library (all 16 skills, each with a coaching cue
   and one real, verified example YouTube video — a starting point, never a
-  replacement for a coach) plus saved videos and diary, manual league table
-  entry with analysis (points gap, a labeled best-case "path to 1st"
-  scenario, next-match callout), body-weight logging against a self-set
+  replacement for a coach) plus saved videos and diary, a league table you
+  can either enter manually or sync by pasting your league's own table page
+  URL (fetches the real page and has the connected AI read off the actual
+  standings — never invented; falls back to manual entry if the page can't
+  be reached or read) with analysis (points gap, a labeled best-case
+  "path to 1st" scenario, next-match callout), body-weight logging against a self-set
   target weight with a progress chart, calories-burned and training-focus
   charts, a weekly time-split donut chart on Analytics (School vs Gym vs
   Football, built from completed study sessions/workouts/trainings actually

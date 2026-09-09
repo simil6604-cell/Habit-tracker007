@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { generateIndividualTraining } from "./training-generator";
+import { fetchAndParseStandings } from "./standings-import";
 import type { FootballPosition } from "@/lib/data/football";
 
 async function requireUserId() {
@@ -193,4 +194,29 @@ export async function deleteStanding(standingId: string) {
   const userId = await requireUserId();
   await prisma.teamStanding.deleteMany({ where: { id: standingId, team: { profiles: { some: { userId } } } } });
   revalidatePath("/football/team");
+}
+
+export async function importStandingsFromLink(url: string): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const userId = await requireUserId();
+  const profile = await prisma.footballProfile.findUnique({ where: { userId } });
+  if (!profile?.teamId) return { ok: false, error: "Save your team name in the Football profile first." };
+
+  const trimmedUrl = url.trim();
+  if (!trimmedUrl) return { ok: false, error: "Paste a link first." };
+
+  const result = await fetchAndParseStandings(trimmedUrl);
+  if (!result.ok) return result;
+
+  const teamId = profile.teamId;
+  await prisma.$transaction([
+    prisma.teamStanding.deleteMany({ where: { teamId } }),
+    prisma.teamStanding.createMany({ data: result.data.map((s) => ({ ...s, teamId })) }),
+    prisma.footballTeam.update({
+      where: { id: teamId },
+      data: { dataSource: "API", sourceUrl: trimmedUrl, lastSyncedAt: new Date() },
+    }),
+  ]);
+
+  revalidatePath("/football/team");
+  return { ok: true, count: result.data.length };
 }

@@ -25,6 +25,7 @@ export class AnthropicProvider implements AIProvider {
 
   async generate(prompt: string, context: Record<string, unknown> = {}): Promise<string> {
     const system = typeof context.system === "string" ? context.system : undefined;
+    const maxTokens = typeof context.maxTokens === "number" ? context.maxTokens : 1024;
     const imageBase64 = typeof context.imageBase64 === "string" ? context.imageBase64 : undefined;
     const imageMediaType =
       typeof context.imageMediaType === "string"
@@ -42,7 +43,7 @@ export class AnthropicProvider implements AIProvider {
     try {
       message = await this.client.messages.create({
         model: this.model,
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system,
         messages: [{ role: "user", content }],
       });

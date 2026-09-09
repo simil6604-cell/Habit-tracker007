@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { addStanding, deleteStanding } from "@/lib/football/actions";
 import { analyzeTable } from "@/lib/football/table-analysis";
+import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,9 @@ export default async function FootballTeamPage() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-semibold tracking-tight">{profile.team.name}</h1>
       <p className="mt-1 text-muted">
-        Manual data mode — no official league API is connected, so enter standings yourself. Nothing here is invented.
+        {profile.team.dataSource === "API"
+          ? "Synced from your league's own table page — refresh it any time results change."
+          : "Paste a link to your league's table below to sync it automatically, or enter standings yourself. Nothing here is invented."}
       </p>
 
       <Card className="mt-6">
@@ -69,6 +72,8 @@ export default async function FootballTeamPage() {
       <Card className="mt-4">
         <CardHeader><CardTitle>League Table</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
+          <StandingsSyncPanel initialUrl={profile.team.sourceUrl} lastSyncedAt={profile.team.lastSyncedAt} />
+
           <form action={addStanding} className="grid grid-cols-2 gap-2 sm:grid-cols-9">
             <input name="rank" type="number" placeholder="#" required className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm" />
             <input name="teamName" placeholder="Team" required className="col-span-2 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm" />

@@ -461,12 +461,14 @@ model FootballProfile {
 }
 
 model FootballTeam {
-  id        String   @id @default(cuid())
-  name      String
-  league    String?
-  dataSource String  @default("MANUAL") // MANUAL | API
-  profiles  FootballProfile[]
-  standings TeamStanding[]
+  id           String    @id @default(cuid())
+  name         String
+  league       String?
+  dataSource   String    @default("MANUAL") // MANUAL | API
+  sourceUrl    String?   // pasted league-table page, when dataSource is API
+  lastSyncedAt DateTime?
+  profiles     FootballProfile[]
+  standings    TeamStanding[]
 }
 
 model TeamStanding {
