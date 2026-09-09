@@ -69,10 +69,11 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   summaries) with a per-topic learning log (what you understand, what you
   don't, and open questions — persisted, editable) and an end-of-session
   quiz that targets those logged gaps and gives real AI-graded feedback
-  when a real AI is connected, a per-topic note-photo box (take or upload a
-  photo of your notes — stored as-is, transcribed and summarized by a real
-  AI when one's connected, illegible handwriting called out rather than
-  guessed) and a class recorder (live speech-to-text via the browser's own
+  when a real AI is connected, a per-topic note-photo box (take or upload as
+  many photos of your notes/papers as you like in one go — no cap, with live
+  "adding N of M" progress on a big batch — each stored as-is and
+  transcribed/summarized individually by a real AI when one's connected,
+  illegible handwriting called out rather than guessed) and a class recorder (live speech-to-text via the browser's own
   engine where supported, or type/paste as a fallback, then a real AI
   summary plus a quiz built only from what the transcript actually covers),
   a habit-tracker grid for your own recurring school habits

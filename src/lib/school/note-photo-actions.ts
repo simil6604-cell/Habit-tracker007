@@ -49,27 +49,32 @@ export async function getNotePhotos(topicId: string): Promise<NotePhotoEntry[]> 
   return photos.map((p) => ({ id: p.id, imagePath: p.imagePath, summary: p.summary, createdAt: p.createdAt }));
 }
 
-export async function addNotePhoto(topicId: string, formData: FormData): Promise<NotePhotoEntry[] | { error: string }> {
+/**
+ * Saves one photo. No cap on how many a student can add to a topic overall —
+ * the panel calls this once per selected file so a large batch still shows
+ * live progress instead of one long silent wait.
+ */
+export async function addNotePhoto(topicId: string, formData: FormData): Promise<{ photos: NotePhotoEntry[]; error?: string }> {
   const userId = await requireUserId();
   const topic = await prisma.topic.findFirst({ where: { id: topicId, subject: { userId } }, include: { subject: true } });
-  if (!topic) return { error: "Topic not found." };
+  if (!topic) return { photos: await getNotePhotos(topicId), error: "Topic not found." };
 
   const file = formData.get("photo") as File | null;
-  if (!file || file.size === 0) return { error: "Choose a photo first." };
+  if (!file || file.size === 0) return { photos: await getNotePhotos(topicId), error: "Choose a photo first." };
 
   let imagePath: string | null;
   try {
     imagePath = await saveUploadedImage(file, userId);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Couldn't save that photo." };
+    return { photos: await getNotePhotos(topicId), error: err instanceof Error ? err.message : "Couldn't save that photo." };
   }
-  if (!imagePath) return { error: "Couldn't save that photo." };
+  if (!imagePath) return { photos: await getNotePhotos(topicId), error: "Couldn't save that photo." };
 
   const summary = await summarizeNotePhoto(userId, imagePath, topic.subject.name, topic.name);
 
   await prisma.notePhoto.create({ data: { userId, topicId, imagePath, summary } });
   revalidatePath(`/school/subjects/${topic.subjectId}`);
-  return getNotePhotos(topicId);
+  return { photos: await getNotePhotos(topicId) };
 }
 
 export async function regenerateNoteSummary(topicId: string, photoId: string): Promise<NotePhotoEntry[]> {

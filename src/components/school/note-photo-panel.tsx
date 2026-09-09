@@ -17,6 +17,7 @@ export function NotePhotoPanel({ topicId }: { topicId: string }) {
   const [photos, setPhotos] = useState<NotePhotoEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -27,14 +28,25 @@ export function NotePhotoPanel({ topicId }: { topicId: string }) {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!fileInputRef.current?.files?.length) return;
-    const formData = new FormData(e.currentTarget);
+    const files = fileInputRef.current?.files;
+    if (!files?.length) return;
+    const fileList = Array.from(files);
     setError(null);
+    formRef.current?.reset();
     startTransition(async () => {
-      const res = await addNotePhoto(topicId, formData);
-      if ("error" in res) setError(res.error);
-      else setPhotos(res);
-      formRef.current?.reset();
+      const failures: string[] = [];
+      for (let i = 0; i < fileList.length; i++) {
+        setProgress({ done: i, total: fileList.length });
+        const fd = new FormData();
+        fd.set("photo", fileList[i]);
+        const res = await addNotePhoto(topicId, fd);
+        setPhotos(res.photos);
+        if (res.error) failures.push(`${fileList[i].name}: ${res.error}`);
+      }
+      setProgress(null);
+      if (failures.length > 0) {
+        setError(`${failures.length} of ${fileList.length} photo${fileList.length === 1 ? "" : "s"} didn't save: ${failures.join(" ")}`);
+      }
     });
   }
 
@@ -60,16 +72,18 @@ export function NotePhotoPanel({ topicId }: { topicId: string }) {
           type="file"
           accept="image/*"
           capture="environment"
+          multiple
           required
           className="text-xs text-muted file:mr-2 file:rounded-lg file:border-0 file:bg-surface-muted file:px-2 file:py-1.5 file:text-xs"
         />
         <Button type="submit" size="sm" variant="outline" disabled={pending}>
-          {pending ? "Working…" : "Add photo"}
+          {progress ? `Adding ${progress.done + 1} of ${progress.total}…` : pending ? "Working…" : "Add photos"}
         </Button>
       </form>
       <p className="text-xs text-muted">
-        Take or upload a photo of your notes — stored as-is, and summarized by a real AI when one&apos;s connected
-        (see Settings). Illegible handwriting is called out honestly, never guessed.
+        Take or upload as many photos of your notes/papers as you like in one go — no limit — stored as-is, and each
+        summarized by a real AI when one&apos;s connected (see Settings). Illegible handwriting is called out
+        honestly, never guessed.
       </p>
       {error && <p className="text-xs text-danger">{error}</p>}
 
