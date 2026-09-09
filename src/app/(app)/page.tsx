@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { computeDomainScores } from "@/lib/planner/scores";
 import { getAgendaForDay } from "@/lib/planner/agenda";
+import { pickPriorityReminder } from "@/lib/planner/priority-reminder";
 import { DomainCard } from "@/components/home/domain-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScoreRow } from "@/components/ui/progress-bar";
@@ -33,6 +34,7 @@ export default async function HomePage() {
   const schoolToday = today.filter((i) => i.category === "SCHOOL" || i.category === "EXAM");
   const gymToday = today.find((i) => i.category === "GYM");
   const footballToday = today.find((i) => i.category === "FOOTBALL");
+  const reminder = pickPriorityReminder(today, tomorrow);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -50,6 +52,16 @@ export default async function HomePage() {
             </Badge>
           </Link>
         )}
+      </div>
+
+      <div className="mt-4 flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/10 px-4 py-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/20 text-lg">
+          {reminder.icon}
+        </span>
+        <div className="flex-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-accent">AI Coach — before you dive in</p>
+          <p className="mt-0.5 text-sm">{reminder.text}</p>
+        </div>
       </div>
 
       {assessmentCount === 0 && (

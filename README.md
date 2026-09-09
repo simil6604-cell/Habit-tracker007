@@ -79,7 +79,10 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   (fully custom rows, a 4-week checkbox grid with per-habit success rates
   and a daily-completion trend chart), baseline "where do you stand"
   self-assessments for School/Gym/Football that feed the score engine
-  until real activity data exists,
+  until real activity data exists, an "AI Coach — before you dive in" banner
+  at the top of the home page that picks the single most important thing to
+  know today (an exam, a match, homework due, a scheduled session) by
+  reasoning only over your own real agenda data — never a generic tip,
   workout plans/logging/history with charts, an exercise library with form
   cues and your own saved reference videos, a rough MET-based calorie-burn
   estimate per session plus a daily calories-in-vs-out balance card with a
@@ -98,7 +101,9 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   calories evenly across the week (with a regenerate option), training
   diaries with rule-based tips ("what went well / to
   improve") for both gym and football, football profile/training/matches
-  with a drill library (cues + saved videos) and diary, manual league table
+  with a browsable Drill Library (all 16 skills, each with a coaching cue
+  and one real, verified example YouTube video — a starting point, never a
+  replacement for a coach) plus saved videos and diary, manual league table
   entry with analysis (points gap, a labeled best-case "path to 1st"
   scenario, next-match callout), body-weight logging against a self-set
   target weight with a progress chart, calories-burned and training-focus

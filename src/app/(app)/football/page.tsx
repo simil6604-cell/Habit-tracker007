@@ -8,8 +8,10 @@ import { ProfileForm } from "@/components/football/profile-form";
 import { TrainingList } from "@/components/football/training-list";
 import { MatchList } from "@/components/football/match-list";
 import { GoalsPanel } from "@/components/shared/goals-panel";
+import { DrillLibraryPanel } from "@/components/football/drill-library-panel";
 import { Sparkles } from "lucide-react";
 import { DomainHero } from "@/components/layout/domain-hero";
+import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
 
 export default async function FootballPage() {
   const session = await auth();
@@ -25,6 +27,10 @@ export default async function FootballPage() {
   const now = new Date();
   const upcomingTrainings = profile?.trainings.filter((t) => !t.date || t.date >= now) ?? [];
   const upcomingMatches = profile?.matches.filter((m) => m.date >= now) ?? [];
+
+  const focusSkills = profile
+    ? [...new Set([...(POSITION_FOCUS[profile.position as FootballPosition] ?? []), ...(profile.weaknesses?.split(",").filter(Boolean) ?? [])])]
+    : [];
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -67,6 +73,13 @@ export default async function FootballPage() {
                 <Button type="submit" size="sm" variant="secondary">Add session</Button>
               </form>
               <TrainingList trainings={upcomingTrainings} />
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader><CardTitle>Drill Library</CardTitle></CardHeader>
+            <CardContent>
+              <DrillLibraryPanel focusSkills={focusSkills} />
             </CardContent>
           </Card>
 

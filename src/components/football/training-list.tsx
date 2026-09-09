@@ -4,6 +4,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { toggleTrainingCompleted, deleteTraining, updateTrainingDiary, attachDrillVideo } from "@/lib/football/actions";
 import { generateTrainingDiaryTip } from "@/lib/football/diary-assistant";
+import { DRILL_VIDEOS } from "@/lib/data/football";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VideoReference } from "@/components/shared/video-reference";
@@ -73,11 +74,18 @@ export function TrainingList({ trainings }: { trainings: Training[] }) {
                     {d.cueText && <p className="mt-0.5">💡 {d.cueText}</p>}
                     {d.videoUrl ? (
                       <div className="mt-1">
+                        <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Your saved reference</p>
                         <VideoReference url={d.videoUrl} />
                       </div>
-                    ) : (
+                    ) : DRILL_VIDEOS[d.name] ? (
+                      <div className="mt-1">
+                        <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Example drill video</p>
+                        <VideoReference url={DRILL_VIDEOS[d.name]} />
+                      </div>
+                    ) : null}
+                    {!d.videoUrl && (
                       <form action={attachDrillVideo.bind(null, t.id, i)} className="mt-1 flex gap-1">
-                        <input name="videoUrl" placeholder="Save a video link…" className="w-32 rounded border border-border bg-surface px-1.5 py-1 text-xs" />
+                        <input name="videoUrl" placeholder="Save your own link…" className="w-32 rounded border border-border bg-surface px-1.5 py-1 text-xs" />
                         <button type="submit" className="text-accent">Save</button>
                       </form>
                     )}
