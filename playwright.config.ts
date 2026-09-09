@@ -33,10 +33,14 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "npm run dev -- --port 3100",
+    // A dev server compiles each route on first visit and can force a full
+    // page reload mid-navigation while doing so (Fast Refresh), racing with
+    // whatever the test just clicked or filled. Testing against a production
+    // build sidesteps that entirely — no on-demand compilation, no HMR.
+    command: "npm run build && npm run start -- --port 3100",
     url: `http://localhost:${PORT}/login`,
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    timeout: 180_000,
     env: {
       DATABASE_URL: `file:${testDbPath}`,
       // Auth redirects are built from this — must match the test server's

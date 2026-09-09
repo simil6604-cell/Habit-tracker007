@@ -3,8 +3,8 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 /**
  * End-to-end smoke test for the whole app: registers a fresh account, runs
  * onboarding, then exercises the core flow of every domain (School, Gym,
- * Football, AI Coach, Calendar, Tasks, Settings) against a real dev server
- * and a disposable SQLite test database (see global-setup.ts).
+ * Football, AI Coach, Calendar, Tasks, Settings) against a real production
+ * build and a disposable SQLite test database (see global-setup.ts).
  *
  * Run with: npm run test:e2e
  */
