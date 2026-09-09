@@ -5,7 +5,7 @@ import { ScoreRow } from "@/components/ui/progress-bar";
 import { ConsistencyChart } from "@/components/charts/gym-charts";
 import { SubjectProgressChart } from "@/components/charts/subject-progress-chart";
 import { FocusDistributionChart } from "@/components/charts/focus-distribution-chart";
-import { WeeklyTimeSplitChart } from "@/components/charts/weekly-time-split-chart-client";
+import { WeeklyTimeSplitCard } from "@/components/analytics/weekly-time-split-card";
 
 export default async function AnalyticsPage() {
   const session = await auth();
@@ -29,21 +29,13 @@ export default async function AnalyticsPage() {
       </Card>
 
       <Card className="mt-4">
-        <CardHeader><CardTitle>This Week — Time Split</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Time Split</CardTitle></CardHeader>
         <CardContent>
-          {data.weeklyTimeSplit.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">
-              No completed study sessions, workouts or trainings logged this week yet.
-            </p>
-          ) : (
-            <>
-              <WeeklyTimeSplitChart data={data.weeklyTimeSplit} />
-              <p className="mt-3 text-xs text-muted">
-                Based on completed study sessions, workouts and training sessions logged this week — not a target,
-                just where your real time went.
-              </p>
-            </>
-          )}
+          <WeeklyTimeSplitCard
+            initialWeekOffset={data.weeklyTimeSplit.weekOffset}
+            initialWeekLabel={data.weeklyTimeSplit.weekLabel}
+            initialData={data.weeklyTimeSplit.data}
+          />
         </CardContent>
       </Card>
 
