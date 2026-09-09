@@ -2,13 +2,13 @@
 
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
 
-// Validated categorical dark-mode triad (blue / orange / aqua-green) — passes
-// lightness band, CVD separation and contrast-vs-surface checks together as a
-// set (see the dataviz skill's palette reference, slots 1–3).
+// Same category colors used everywhere else in the app (sidebar, domain
+// cards, hero banners) rather than a separate chart-only palette, via the
+// theme's CSS variables so light/dark both stay consistent automatically.
 const COLORS: Record<string, string> = {
-  School: "#3987e5",
-  Gym: "#d95926",
-  Football: "#199e70",
+  School: "var(--cat-school)",
+  Gym: "var(--cat-gym)",
+  Football: "var(--cat-football)",
 };
 
 export function WeeklyTimeSplitChart({ data }: { data: { name: string; minutes: number }[] }) {
