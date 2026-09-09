@@ -107,7 +107,9 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   entry with analysis (points gap, a labeled best-case "path to 1st"
   scenario, next-match callout), body-weight logging against a self-set
   target weight with a progress chart, calories-burned and training-focus
-  charts, body progress photos (upload, gallery/timeline, oldest-vs-newest
+  charts, a weekly time-split donut chart on Analytics (School vs Gym vs
+  Football, built from completed study sessions/workouts/trainings actually
+  logged that week, not a target), body progress photos (upload, gallery/timeline, oldest-vs-newest
   or pick-your-own before/after compare view) and optional photos attached
   to meal log entries, a barcode product scanner (camera or manual entry)
   that looks products up against Open Food Facts — a real, free product

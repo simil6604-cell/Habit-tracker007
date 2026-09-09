@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { subWeeks, startOfWeek, format } from "date-fns";
+import { subWeeks, startOfWeek, endOfWeek, format } from "date-fns";
 import { computeDomainScores } from "@/lib/planner/scores";
 
 export async function getAnalyticsData(userId: string) {
@@ -12,6 +12,30 @@ export async function getAnalyticsData(userId: string) {
     prisma.footballMatch.findMany({ where: { profile: { userId } } }),
     prisma.goal.findMany({ where: { userId } }),
   ]);
+
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
+  const inThisWeek = (d: Date | null) => d !== null && d >= weekStart && d <= weekEnd;
+
+  const studySessionsThisWeek = await prisma.studySession.findMany({
+    where: { userId, completed: true, start: { gte: weekStart, lte: weekEnd } },
+  });
+  const schoolMinutesThisWeek = studySessionsThisWeek.reduce(
+    (sum, s) => sum + Math.max(0, (s.end.getTime() - s.start.getTime()) / 60000),
+    0
+  );
+  const gymMinutesThisWeek = gymSessions
+    .filter((s) => inThisWeek(s.date))
+    .reduce((sum, s) => sum + (s.durationMin ?? 0), 0);
+  const footballMinutesThisWeek = footballTrainings
+    .filter((t) => t.completed && inThisWeek(t.date))
+    .reduce((sum, t) => sum + (t.durationMin ?? 0), 0);
+
+  const weeklyTimeSplit = [
+    { name: "School", minutes: Math.round(schoolMinutesThisWeek) },
+    { name: "Gym", minutes: Math.round(gymMinutesThisWeek) },
+    { name: "Football", minutes: Math.round(footballMinutesThisWeek) },
+  ].filter((d) => d.minutes > 0);
 
   const subjectProgress = subjects.map((s) => ({
     name: s.name,
@@ -59,6 +83,7 @@ export async function getAnalyticsData(userId: string) {
 
   return {
     scores,
+    weeklyTimeSplit,
     balance,
     consistency: Math.min(100, consistency),
     subjectProgress,
