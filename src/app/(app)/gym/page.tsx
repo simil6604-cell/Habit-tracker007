@@ -12,6 +12,7 @@ import { PhysiqueGoalCard } from "@/components/gym/physique-goal-card";
 import { GoalsPanel } from "@/components/shared/goals-panel";
 import { GYM_GOALS } from "@/lib/data/football";
 import { getNutritionSummary } from "@/lib/gym/nutrition-summary";
+import { DomainHero } from "@/components/layout/domain-hero";
 
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -37,16 +38,18 @@ export default async function GymPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">🏋️ Gym</h1>
-          <p className="mt-1 text-muted">Plans, logging and progress — built for consistency, not extremes.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/gym/scanner"><Button variant="outline">📷 Scan a product</Button></Link>
-          <Link href="/gym/history"><Button variant="outline">History & progress</Button></Link>
-        </div>
-      </div>
+      <DomainHero
+        domain="gym"
+        emoji="🏋️"
+        title="Gym"
+        subtitle="Plans, logging and progress — built for consistency, not extremes."
+        actions={
+          <>
+            <Link href="/gym/scanner"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">📷 Scan a product</Button></Link>
+            <Link href="/gym/history"><Button className="bg-white text-orange-700 hover:opacity-90">History & progress</Button></Link>
+          </>
+        }
+      />
 
       <Card className="mt-6">
         <CardHeader>

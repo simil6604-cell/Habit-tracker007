@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/layout/logo";
 import type { FormState } from "@/lib/auth/actions";
 
 export function AuthForm({
@@ -17,8 +18,8 @@ export function AuthForm({
   return (
     <div className="w-full max-w-sm animate-fade-in-up">
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-2xl text-accent-foreground">
-          🔥
+        <div className="mx-auto mb-4">
+          <Logo size={48} />
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {mode === "login" ? "Welcome back" : "Create your account"}

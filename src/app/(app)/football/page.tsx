@@ -9,6 +9,7 @@ import { TrainingList } from "@/components/football/training-list";
 import { MatchList } from "@/components/football/match-list";
 import { GoalsPanel } from "@/components/shared/goals-panel";
 import { Sparkles } from "lucide-react";
+import { DomainHero } from "@/components/layout/domain-hero";
 
 export default async function FootballPage() {
   const session = await auth();
@@ -27,13 +28,19 @@ export default async function FootballPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">⚽ Football</h1>
-          <p className="mt-1 text-muted">Position-specific training, matches and team performance.</p>
-        </div>
-        {profile?.team && <Link href="/football/team"><Button variant="outline">Team & table</Button></Link>}
-      </div>
+      <DomainHero
+        domain="football"
+        emoji="⚽"
+        title="Football"
+        subtitle="Position-specific training, matches and team performance."
+        actions={
+          profile?.team && (
+            <Link href="/football/team">
+              <Button className="bg-white text-emerald-700 hover:opacity-90">Team & table</Button>
+            </Link>
+          )
+        }
+      />
 
       <Card className="mt-6">
         <CardHeader><CardTitle>Profile</CardTitle></CardHeader>

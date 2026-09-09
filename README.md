@@ -1,4 +1,4 @@
-# Optimize — School, Gym & Football
+# Momentum — School, Gym & Football
 
 An all-in-one personal optimization app that connects three areas of life —
 🎓 **School**, 🏋️ **Gym**, and ⚽ **Football** — behind a single AI Coach that

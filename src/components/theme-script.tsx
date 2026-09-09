@@ -3,7 +3,7 @@ const THEME_SCRIPT = `
 (function () {
   try {
     var stored = localStorage.getItem("theme");
-    var isDark = stored === "dark" || (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var isDark = stored !== "light";
     document.documentElement.classList.toggle("dark", isDark);
   } catch (e) {}
 })();

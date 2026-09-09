@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Optimize — School, Gym & Football",
+  title: "Momentum — School, Gym & Football",
   description: "Your all-in-one personal optimization coach for school, gym and football.",
   manifest: "/manifest.json",
   icons: {
@@ -26,15 +26,15 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
-    title: "Optimize",
+    statusBarStyle: "black-translucent",
+    title: "Momentum",
   },
 };
 
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f7f7f9" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0c10" },
+    { media: "(prefers-color-scheme: dark)", color: "#050506" },
   ],
   width: "device-width",
   initialScale: 1,

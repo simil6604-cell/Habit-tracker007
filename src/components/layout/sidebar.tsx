@@ -5,19 +5,22 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
 import { NavIcon } from "./nav-icon";
+import { Logo } from "./logo";
+import { StatusPill } from "./status-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "./sign-out-button";
 
-export function Sidebar() {
+export function Sidebar({ overallScore }: { overallScore: number }) {
   const pathname = usePathname();
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface p-4 lg:flex">
-      <div className="flex items-center gap-2 px-2 py-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-lg text-accent-foreground">
-          🔥
+      <div className="flex flex-col gap-2.5 px-2 py-3">
+        <div className="flex items-center gap-2.5">
+          <Logo size={36} />
+          <span className="text-lg font-semibold tracking-tight">Momentum</span>
         </div>
-        <span className="text-lg font-semibold tracking-tight">Optimize</span>
+        <StatusPill score={overallScore} className="self-start" />
       </div>
 
       <nav className="mt-4 flex flex-1 flex-col gap-1">

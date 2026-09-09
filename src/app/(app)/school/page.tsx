@@ -9,6 +9,7 @@ import { SubjectCard } from "@/components/school/subject-card";
 import { HomeworkPanel, ExamPanel } from "@/components/school/homework-exam-lists";
 import { DailyChecklist } from "@/components/school/daily-checklist";
 import { getTodaySchoolChecklist } from "@/lib/planner/day-review";
+import { DomainHero } from "@/components/layout/domain-hero";
 
 export default async function SchoolPage() {
   const session = await auth();
@@ -37,17 +38,19 @@ export default async function SchoolPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">🎓 School</h1>
-          <p className="mt-1 text-muted">Timetable, subjects, homework and exams — all in one place.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/school/habits"><Button variant="outline">Habit tracker</Button></Link>
-          <Link href="/school/planner"><Button variant="outline">Study planner</Button></Link>
-          <Link href="/school/flashcards"><Button variant="secondary">Flashcards</Button></Link>
-        </div>
-      </div>
+      <DomainHero
+        domain="school"
+        emoji="🎓"
+        title="School"
+        subtitle="Timetable, subjects, homework and exams — all in one place."
+        actions={
+          <>
+            <Link href="/school/habits"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Habit tracker</Button></Link>
+            <Link href="/school/planner"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Study planner</Button></Link>
+            <Link href="/school/flashcards"><Button className="bg-white text-indigo-700 hover:opacity-90">Flashcards</Button></Link>
+          </>
+        }
+      />
 
       <Card className="mt-6">
         <CardHeader>
