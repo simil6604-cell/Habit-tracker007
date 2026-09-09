@@ -1,0 +1,608 @@
+// Personal Optimization App — data model
+// Dev uses SQLite (file-based, zero external setup). Swapping to Postgres for
+// production is a one-line change: set provider = "postgresql" and DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Auth / User ----------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  passwordHash  String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  onboardingComplete Boolean @default(false)
+  optimizeSchool     Boolean @default(true)
+  optimizeGym        Boolean @default(true)
+  optimizeFootball   Boolean @default(true)
+  theme              String  @default("system") // light | dark | system
+
+  weightKg         Int? // current weight; used to estimate calories burned
+  targetWeightKg   Int? // your own goal — the app never invents or suggests this
+  dailyCalorieGoal Int? // optional, user-set; the app never invents this
+  dailyProteinGoalG Int @default(150) // your own goal; used by the weekly meal plan
+  dailyCarbsGoalG   Int @default(250) // your own goal
+  dailyFatGoalG     Int @default(70)  // your own goal
+  dailyWaterGoalMl  Int @default(2000) // your own goal
+
+  weightLogs BodyWeightLog[]
+  bodyPhotos BodyPhoto[]
+  scannedProducts ScannedProduct[]
+  waterLogs  WaterLog[]
+
+  accounts Account[]
+  sessions Session[]
+
+  school           School?
+  subjects         Subject[]
+  homework         Homework[]
+  exams            Exam[]
+  studySessions    StudySession[]
+  flashcards       Flashcard[]
+  workouts         Workout[]
+  workoutSessions  WorkoutSession[]
+  meals            Meal[]
+  footballProfile  FootballProfile?
+  goals            Goal[]
+  tasks            Task[]
+  calendarEvents   CalendarEvent[]
+  recommendations  AIRecommendation[]
+  progressEntries  Progress[]
+  chatMessages     ChatMessage[]
+  assessments      Assessment[]
+  schoolHabits     SchoolHabit[]
+  learningLogEntries LearningLogEntry[]
+  notePhotos         NotePhoto[]
+  classRecordings    ClassRecording[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- School ----------
+
+model School {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  educationSystem String // IGCSE | AS_LEVEL | A_LEVEL | OTHER
+  yearGroup      String?
+}
+
+model Subject {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  color          String   @default("#6366f1")
+  teacher        String?
+  room           String?
+  isExamSubject  Boolean  @default(false) // e.g. IGCSE/A-Level subjects — highlighted on the timetable
+  baselineConfidence Int? // 0-100, from the initial "where do you stand" assessment
+  createdAt      DateTime @default(now())
+
+  topics        Topic[]
+  timetableSlots TimetableSlot[]
+  homework      Homework[]
+  exams         Exam[]
+  studySessions StudySession[]
+  flashcards    Flashcard[]
+
+  @@index([userId])
+}
+
+model TimetableSlot {
+  id         String   @id @default(cuid())
+  subjectId  String?
+  subject    Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  userId     String
+  dayOfWeek  Int      // 0=Monday .. 6=Sunday
+  startTime  String   // "08:00"
+  endTime    String   // "09:00"
+  label      String?  // e.g. "Break", "Lunch", or free lesson note
+  room       String?
+  isFree     Boolean  @default(false)
+  periodName String?  // e.g. "P1", "AM Regs", "Lunch" — shown as the row header on the timetable diagram
+  periodType String   @default("LESSON") // REGISTRATION | LESSON | BREAK | LUNCH | STUDY | CLUB | FREE
+  highlight  Boolean  @default(false) // manual highlight override (e.g. for clubs with no subject)
+
+  @@index([userId, dayOfWeek])
+}
+
+model Topic {
+  id             String   @id @default(cuid())
+  subjectId      String
+  subject        Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  name           String
+  parentTopic    String?  // subtopic grouping label
+  progressPct    Int      @default(0)
+  priority       String   @default("MEDIUM") // LOW | MEDIUM | HIGH
+  examRelevance  String   @default("MEDIUM")
+  plannedMinutes Int      @default(0)
+  actualMinutes  Int      @default(0)
+  nextReview     DateTime?
+  weaknessNote   String?
+  learningLog    LearningLogEntry[]
+  notePhotos     NotePhoto[]
+  classRecordings ClassRecording[]
+
+  @@index([subjectId])
+}
+
+// A photo of handwritten/printed notes for a topic. imagePath is the photo
+// as uploaded, stored as-is; summary is a real AI transcription/summary of
+// it when a real AI is connected — null (not invented) otherwise.
+model NotePhoto {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId   String
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  imagePath String
+  summary   String?
+  createdAt DateTime @default(now())
+
+  @@index([topicId])
+}
+
+// A transcript captured live in class via the browser's own speech-to-text
+// (or pasted in by hand where that's unsupported), plus a real AI summary
+// once one's generated. The transcript itself is exactly what was
+// recognized/typed — never invented.
+model ClassRecording {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId    String
+  topic      Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  transcript String
+  summary    String?
+  createdAt  DateTime @default(now())
+
+  @@index([topicId])
+}
+
+// The student's own running log while learning a topic with the AI: what
+// they understand, what they don't, and what they're still asking about.
+// Feeds the end-of-session quiz so it targets the actual gaps.
+model LearningLogEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId   String
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  type      String   // UNDERSTOOD | CONFUSED | QUESTION
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([topicId, type])
+}
+
+model Homework {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId   String?
+  subject     Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  dueDate     DateTime
+  status      String    @default("PENDING") // PENDING | DONE | MISSED
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, dueDate])
+}
+
+model Exam {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId   String?
+  subject     Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  title       String
+  date        DateTime
+  weight      String   @default("MEDIUM") // importance
+  notes       String?
+
+  @@index([userId, date])
+}
+
+model StudySession {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId  String?
+  subject    Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  topicLabel String?
+  start      DateTime
+  end        DateTime
+  completed  Boolean   @default(false)
+  aiGenerated Boolean  @default(false)
+
+  @@index([userId, start])
+}
+
+// A daily habit tracker grid, like a classic habit-tracker app: fixed
+// recurring habits as rows, days as columns, checked off day by day.
+model SchoolHabit {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  emoji     String?
+  order     Int               @default(0)
+  createdAt DateTime          @default(now())
+  logs      SchoolHabitLog[]
+
+  @@index([userId])
+}
+
+// One row per day a habit was checked off. Absence of a row = not done that
+// day — no need to pre-fill "not done" rows for every day.
+model SchoolHabitLog {
+  id      String      @id @default(cuid())
+  habitId String
+  habit   SchoolHabit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date    DateTime // normalized to local midnight for that day
+
+  @@unique([habitId, date])
+  @@index([habitId, date])
+}
+
+model Flashcard {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId    String?
+  subject      Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  topic        String?
+  front        String
+  back         String
+  // Simple SM-2-style spaced repetition state
+  interval     Int       @default(1)     // days
+  easeFactor   Float     @default(2.5)
+  repetitions  Int       @default(0)
+  dueDate      DateTime  @default(now())
+  lastResult   String?   // AGAIN | HARD | GOOD | EASY
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, dueDate])
+}
+
+// ---------- Gym ----------
+
+model Workout {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "Upper Body"
+  dayOfWeek Int?
+  exercises Exercise[]
+  sessions  WorkoutSession[]
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Exercise {
+  id         String   @id @default(cuid())
+  workoutId  String
+  workout    Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  name       String
+  targetSets Int      @default(3)
+  targetReps Int      @default(10)
+  targetWeight Float?
+  order      Int      @default(0)
+  cueText    String?  // short "how to" reminder, from the curated library or your own
+  videoUrl   String?  // a video YOU save/paste — the app never invents or fetches one
+  setLogs    SetLog[]
+}
+
+model WorkoutSession {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutId  String?
+  workout    Workout? @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+  date       DateTime @default(now())
+  completed  Boolean  @default(false)
+  durationMin Int?
+  difficulty String?  // EASY | MODERATE | HARD
+  caloriesBurned Int? // rough MET-based estimate, computed at log time
+  notes      String?
+  wentWell   String?  // training diary
+  toImprove  String?  // training diary
+  setLogs    SetLog[]
+
+  @@index([userId, date])
+}
+
+model SetLog {
+  id          String          @id @default(cuid())
+  sessionId   String
+  session     WorkoutSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  setNumber   Int
+  reps        Int
+  weight      Float
+  isPB        Boolean         @default(false)
+}
+
+model Meal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  type      String   // BREAKFAST | LUNCH | DINNER | SNACK
+  description String
+  kcal      Int?     // user-entered or picked from the common-foods list; always approximate
+  proteinG  Int?     // user-entered or picked from the common-foods list; always approximate
+  carbsG    Int?     // user-entered or picked from the common-foods list; always approximate
+  fatG      Int?     // user-entered or picked from the common-foods list; always approximate
+  notes     String?
+  imagePath String?  // a photo you took, stored as-is — never analyzed
+
+  @@index([userId, date])
+}
+
+// A single water log entry — tapping a glass logs a fixed amount, always
+// editable/removable. No estimated "water from food" — that would need a
+// real food-composition database this app doesn't have.
+model WaterLog {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountMl Int
+  loggedAt DateTime @default(now())
+
+  @@index([userId, loggedAt])
+}
+
+model BodyPhoto {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  imagePath String
+  caption   String?
+
+  @@index([userId, date])
+}
+
+model ScannedProduct {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  barcode     String
+  name        String?
+  brand       String?
+  imageUrl    String?  // hotlinked from Open Food Facts, not stored locally
+  nutriScore  String?  // a-e, straight from Open Food Facts when available
+  novaGroup   Int?     // 1-4 processing level, straight from Open Food Facts when available
+  healthScore Int      // our own 0-100 score, computed from the above — see lib/gym/health-score.ts
+  scannedAt   DateTime @default(now())
+
+  @@index([userId, scannedAt])
+}
+
+model BodyWeightLog {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date     DateTime @default(now())
+  weightKg Float
+
+  @@index([userId, date])
+}
+
+model Goal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  String   // SCHOOL | GYM | FOOTBALL
+  title     String
+  targetDate DateTime?
+  progressPct Int     @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------- Football ----------
+
+model FootballProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position     String   // GK, CB, LB, RB, CM, CDM, CAM, LW, RW, ST
+  strengths    String?  // comma separated
+  weaknesses   String?  // comma separated
+  teamId       String?
+  team         FootballTeam? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  trainings FootballTraining[]
+  matches   FootballMatch[]
+}
+
+model FootballTeam {
+  id        String   @id @default(cuid())
+  name      String
+  league    String?
+  dataSource String  @default("MANUAL") // MANUAL | API
+  profiles  FootballProfile[]
+  standings TeamStanding[]
+}
+
+model TeamStanding {
+  id          String       @id @default(cuid())
+  teamId      String
+  team        FootballTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  season      String       @default("current")
+  rank        Int
+  teamName    String
+  played      Int
+  won         Int
+  drawn       Int
+  lost        Int
+  goalsFor    Int
+  goalsAgainst Int
+  points      Int
+  updatedAt   DateTime     @updatedAt
+
+  @@index([teamId, season])
+}
+
+model FootballTraining {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     FootballProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  dayOfWeek   Int?
+  date        DateTime?
+  durationMin Int      @default(60)
+  focus       String   // e.g. "Technique", "Conditioning"
+  drills      String   // JSON-encoded list of {name, minutes, cueText?, videoUrl?}
+  isTeamSession Boolean @default(true)
+  completed   Boolean  @default(false)
+  wentWell    String?  // training diary
+  toImprove   String?  // training diary
+
+  @@index([profileId])
+}
+
+model FootballMatch {
+  id         String   @id @default(cuid())
+  profileId  String
+  profile    FootballProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  opponent   String
+  date       DateTime
+  isHome     Boolean  @default(true)
+  scoreFor   Int?
+  scoreAgainst Int?
+  notes      String?
+
+  @@index([profileId, date])
+}
+
+// ---------- Cross-cutting ----------
+
+model Task {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  category     String    // SCHOOL | GYM | FOOTBALL | GENERAL
+  subjectLabel String?
+  priority     String    @default("MEDIUM") // LOW | MEDIUM | HIGH
+  estimatedMin Int?
+  status       String    @default("TODO") // TODO | IN_PROGRESS | DONE | MISSED
+  dueDate      DateTime?
+  recurrence   String?   // NONE | DAILY | WEEKLY
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, status])
+}
+
+model CalendarEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  category  String   // SCHOOL | STUDY | GYM | FOOTBALL | EXAM | TASK | RECOVERY
+  start     DateTime
+  end       DateTime
+  allDay    Boolean  @default(false)
+  sourceType String? // e.g. "Homework", "Workout", "FootballTraining"
+  sourceId   String?
+
+  @@index([userId, start])
+}
+
+model AIRecommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // BALANCE_WARNING | STUDY_PLAN | SCHEDULE_CHANGE | NUTRITION | FOOTBALL_DRILL
+  title       String
+  message     String
+  reasoning   String   // JSON-encoded list of reason strings ("Why?")
+  proposedChange String? // JSON-encoded diff, null if purely informational
+  status      String   @default("PENDING") // PENDING | ACCEPTED | DECLINED | INFO
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Progress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  schoolPct Int      @default(0)
+  gymPct    Int      @default(0)
+  footballPct Int    @default(0)
+  recoveryPct Int    @default(0)
+  overallPct  Int    @default(0)
+
+  @@unique([userId, date])
+}
+
+model Assessment {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     String   // SCHOOL | GYM | FOOTBALL
+  answers      String   // JSON-encoded {label, value}[] self-ratings
+  overallScore Int      // 0-100 summary used as the starting baseline
+  createdAt    DateTime @default(now())
+
+  @@index([userId, category, createdAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // USER | ASSISTANT
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
