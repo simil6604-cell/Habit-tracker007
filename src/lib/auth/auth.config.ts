@@ -2,6 +2,10 @@ import type { NextAuthConfig } from "next-auth";
 
 // Edge-safe config (no Prisma/adapter here) — used by middleware.
 export const authConfig = {
+  // Hosting platforms (Render, Fly, Railway…) terminate TLS at a proxy and
+  // forward the original host in X-Forwarded-Host; without this Auth.js
+  // rejects every request as UntrustedHost.
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
