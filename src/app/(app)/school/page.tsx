@@ -13,6 +13,11 @@ import { DomainHero } from "@/components/layout/domain-hero";
 import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
 import { NotesOverviewPanel } from "@/components/school/notes-overview-panel";
 import { getSchoolNotesOverview } from "@/lib/school/notes-overview";
+import { WeekView } from "@/components/calendar/week-view";
+import { getCalendarItems } from "@/lib/calendar/items";
+import { SubjectProgressChart } from "@/components/charts/subject-progress-chart";
+import { getAnalyticsData } from "@/lib/analytics/data";
+import { addDays, startOfDay } from "date-fns";
 
 export default async function SchoolPage() {
   const session = await auth();
@@ -36,6 +41,14 @@ export default async function SchoolPage() {
     }),
     getSchoolNotesOverview(userId),
   ]);
+
+  // Next seven days, narrowed to what actually belongs to school.
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(now), i));
+  const [weekItems, analytics] = await Promise.all([
+    getCalendarItems(userId, weekDays[0], addDays(weekDays[6], 1)),
+    getAnalyticsData(userId),
+  ]);
+  const schoolWeekItems = weekItems.filter((i) => ["SCHOOL", "STUDY", "EXAM"].includes(i.category));
 
   const subjectCards = subjects.map((s) => ({
     id: s.id,
@@ -81,6 +94,23 @@ export default async function SchoolPage() {
         </CardHeader>
         <CardContent>
           <TimetableDiagram slots={slots} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>This school week</CardTitle>
+          <Link href="/calendar"><Button variant="outline" size="sm">Full calendar</Button></Link>
+        </CardHeader>
+        <CardContent>
+          {schoolWeekItems.length === 0 ? (
+            <p className="text-sm text-muted">
+              Nothing school-related scheduled in the next 7 days — add homework, an exam or a school task and it
+              shows up here.
+            </p>
+          ) : (
+            <WeekView days={weekDays} items={schoolWeekItems} />
+          )}
         </CardContent>
       </Card>
 
@@ -140,6 +170,26 @@ export default async function SchoolPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>School analytics</CardTitle>
+            <Link href="/analytics"><Button variant="outline" size="sm">Full analytics</Button></Link>
+          </CardHeader>
+          <CardContent>
+            {analytics.subjectProgress.length === 0 ? (
+              <p className="text-sm text-muted">Add subjects and topics to see progress here.</p>
+            ) : (
+              <SubjectProgressChart data={analytics.subjectProgress} />
+            )}
+            <div className="mt-3 flex justify-between text-sm text-muted">
+              <span>{Math.round(analytics.totalStudyMinutes / 60)}h logged study time</span>
+              <span>{analytics.homeworkRate}% homework completion</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>My notes &amp; recordings</CardTitle>
