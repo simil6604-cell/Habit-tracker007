@@ -40,6 +40,19 @@ async function nearestExam(userId: string) {
   });
 }
 
+function describeMainFocus(focus: string | null | undefined) {
+  switch (focus) {
+    case "school":
+      return "The student's stated main focus is school — when the three compete for the same hours, protect study and exam prep first.";
+    case "gym":
+      return "The student's stated main focus is the gym — when the three compete for the same hours, protect training and recovery first.";
+    case "football":
+      return "The student's stated main focus is football — when the three compete for the same hours, protect training, matches and recovery first.";
+    default:
+      return "The student wants all three kept roughly balanced — don't systematically favour one over the others.";
+  }
+}
+
 export async function generateCoachReply(userId: string, userMessage: string): Promise<string> {
   if (KEYWORDS.optimizeWeek.test(userMessage)) {
     await runWeeklyBalanceCheck(userId);
@@ -120,10 +133,11 @@ export async function generateCoachReply(userId: string, userMessage: string): P
 
   // Generic fallback: ask a real AI if one's connected, else summarize tomorrow.
   if (isRealAIConfigured) {
-    const [school, scores, exam] = await Promise.all([
+    const [school, scores, exam, user] = await Promise.all([
       prisma.school.findUnique({ where: { userId } }),
       computeDomainScores(userId),
       nearestExam(userId),
+      prisma.user.findUnique({ where: { id: userId }, select: { mainFocus: true } }),
     ]);
     const daysUntil = exam ? Math.max(0, Math.round((exam.date.getTime() - Date.now()) / 86400000)) : null;
     const system = [
@@ -132,6 +146,7 @@ export async function generateCoachReply(userId: string, userMessage: string): P
       "You also help balance training, recovery and school workload. Reason honestly from the real data below — never invent numbers, results, or syllabus content.",
       `Current scores — School ${scores.school}%, Gym ${scores.gym}%, Football ${scores.football}%, Recovery ${scores.recovery}%.`,
       exam ? `Next exam: ${exam.subject?.name ?? exam.title} in ${daysUntil} day${daysUntil === 1 ? "" : "s"}.` : "No upcoming exam logged yet.",
+      describeMainFocus(user?.mainFocus),
     ].join("\n");
 
     try {

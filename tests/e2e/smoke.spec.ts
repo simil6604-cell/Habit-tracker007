@@ -31,6 +31,12 @@ test.describe.serial("full app walkthrough", () => {
     await page.waitForURL("**/onboarding");
 
     await page.click('button:has-text("Continue")'); // domains step
+
+    // main-focus step: only shown when more than one domain is on
+    await expect(page.getByText("Where does most of your effort go?")).toBeVisible();
+    await page.click('button:has-text("School")');
+    await page.click('button:has-text("Continue")'); // focus step
+
     await page.fill('input[placeholder*="Riverside"]', "Test School");
     await page.click('button:has-text("Continue")'); // school step
     await page.click('button:has-text("Continue")'); // gym step

@@ -39,6 +39,25 @@ export default async function SettingsPage() {
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeSchool" defaultChecked={user.optimizeSchool} /> 🎓 School</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeGym" defaultChecked={user.optimizeGym} /> 🏋️ Gym</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeFootball" defaultChecked={user.optimizeFootball} /> ⚽ Football</label>
+            <div className="mt-2 border-t border-border pt-3">
+              <label className="mb-1.5 block text-xs font-medium text-muted" htmlFor="mainFocus">
+                Main focus — where most of your effort goes
+              </label>
+              <select
+                id="mainFocus"
+                name="mainFocus"
+                defaultValue={user.mainFocus}
+                className="w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              >
+                <option value="balanced">⚖️ Balanced — keep all equal</option>
+                <option value="school">🎓 School</option>
+                <option value="gym">🏋️ Gym</option>
+                <option value="football">⚽ Football</option>
+              </select>
+              <p className="mt-1.5 text-xs text-muted">
+                The AI Coach leans this way when school, gym and football want the same hours.
+              </p>
+            </div>
             <Button type="submit" size="sm" variant="secondary" className="self-start">Save</Button>
           </form>
         </CardContent>

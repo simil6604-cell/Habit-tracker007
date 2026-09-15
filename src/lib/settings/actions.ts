@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 
+const VALID_MAIN_FOCUS = ["school", "gym", "football", "balanced"];
+
 async function requireUserId() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -26,6 +28,9 @@ export async function updateOptimizationDomains(formData: FormData) {
       optimizeSchool: formData.get("optimizeSchool") === "on",
       optimizeGym: formData.get("optimizeGym") === "on",
       optimizeFootball: formData.get("optimizeFootball") === "on",
+      mainFocus: VALID_MAIN_FOCUS.includes(String(formData.get("mainFocus")))
+        ? String(formData.get("mainFocus"))
+        : "balanced",
     },
   });
   revalidatePath("/settings");

@@ -26,6 +26,9 @@ model User {
   optimizeSchool     Boolean @default(true)
   optimizeGym        Boolean @default(true)
   optimizeFootball   Boolean @default(true)
+  // Where the user puts most of their effort right now — the coach leans this
+  // way when the three areas compete for the same hours.
+  mainFocus          String  @default("balanced") // school | gym | football | balanced
   theme              String  @default("system") // light | dark | system
 
   weightKg         Int? // current weight; used to estimate calories burned

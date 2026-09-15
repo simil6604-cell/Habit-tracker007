@@ -10,6 +10,7 @@ const payloadSchema = z.object({
   optimizeSchool: z.boolean(),
   optimizeGym: z.boolean(),
   optimizeFootball: z.boolean(),
+  mainFocus: z.enum(["school", "gym", "football", "balanced"]).default("balanced"),
 
   schoolName: z.string().optional(),
   educationSystem: z.string().optional(),
@@ -40,6 +41,7 @@ export async function completeOnboarding(raw: OnboardingPayload) {
         optimizeSchool: data.optimizeSchool,
         optimizeGym: data.optimizeGym,
         optimizeFootball: data.optimizeFootball,
+        mainFocus: data.mainFocus,
       },
     });
 

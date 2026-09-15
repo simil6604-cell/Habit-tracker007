@@ -9,6 +9,7 @@ import { FOOTBALL_POSITIONS, FOOTBALL_SKILLS, GYM_GOALS } from "@/lib/data/footb
 import { completeOnboarding, type OnboardingPayload } from "@/lib/onboarding/actions";
 
 type Domain = "optimizeSchool" | "optimizeGym" | "optimizeFootball";
+type MainFocus = "school" | "gym" | "football" | "balanced";
 
 const DOMAIN_CARDS: { key: Domain; emoji: string; title: string; desc: string }[] = [
   { key: "optimizeSchool", emoji: "🎓", title: "School", desc: "Timetable, exams, study plans" },
@@ -73,6 +74,23 @@ export function OnboardingWizard() {
     optimizeGym: true,
     optimizeFootball: true,
   });
+  const [mainFocus, setMainFocus] = useState<MainFocus>("balanced");
+
+  const selectedCount = Object.values(domains).filter(Boolean).length;
+  const allSelected = selectedCount === 3;
+
+  const focusOptions = useMemo(() => {
+    const opts = DOMAIN_CARDS.filter((d) => domains[d.key]).map((d) => ({
+      value: d.key.replace("optimize", "").toLowerCase() as MainFocus,
+      emoji: d.emoji,
+      title: d.title,
+      desc: `${d.title} comes first when there isn't time for everything`,
+    }));
+    return [
+      ...opts,
+      { value: "balanced" as MainFocus, emoji: "⚖️", title: "Balanced", desc: "Keep all of them roughly equal" },
+    ];
+  }, [domains]);
 
   const [schoolName, setSchoolName] = useState("");
   const [educationSystem, setEducationSystem] = useState("IGCSE");
@@ -87,17 +105,26 @@ export function OnboardingWizard() {
 
   const steps = useMemo(() => {
     const s = ["intro"];
+    // Only worth asking which area leads when more than one is in play.
+    if (selectedCount > 1) s.push("focus");
     if (domains.optimizeSchool) s.push("school");
     if (domains.optimizeGym) s.push("gym");
     if (domains.optimizeFootball) s.push("football");
     s.push("review");
     return s;
-  }, [domains]);
+  }, [domains, selectedCount]);
 
   const current = steps[step];
 
   function toggleDomain(key: Domain) {
-    setDomains((d) => ({ ...d, [key]: !d[key] }));
+    setDomains((d) => {
+      const nextDomains = { ...d, [key]: !d[key] };
+      // Turning off the area you'd named as your focus makes that answer stale.
+      if (!nextDomains[key] && mainFocus === key.replace("optimize", "").toLowerCase()) {
+        setMainFocus("balanced");
+      }
+      return nextDomains;
+    });
   }
   function toggleFromList(list: string[], set: (v: string[]) => void, value: string) {
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -115,6 +142,7 @@ export function OnboardingWizard() {
       optimizeSchool: domains.optimizeSchool,
       optimizeGym: domains.optimizeGym,
       optimizeFootball: domains.optimizeFootball,
+      mainFocus,
       schoolName: schoolName || "My School",
       educationSystem,
       yearGroup,
@@ -147,10 +175,64 @@ export function OnboardingWizard() {
       {current === "intro" && (
         <div className="animate-fade-in-up">
           <h1 className="text-2xl font-semibold tracking-tight">What do you want to optimize?</h1>
-          <p className="mt-1 text-sm text-muted">Pick everything that applies. You can change this later in Settings.</p>
+          <p className="mt-1 text-sm text-muted">
+            Pick everything that applies — you can have all three on at once. You can change this later in Settings.
+          </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             {DOMAIN_CARDS.map((d) => (
               <Toggle key={d.key} selected={domains[d.key]} onClick={() => toggleDomain(d.key)} emoji={d.emoji} title={d.title} desc={d.desc} />
+            ))}
+          </div>
+          {!allSelected && (
+            <button
+              type="button"
+              onClick={() => setDomains({ optimizeSchool: true, optimizeGym: true, optimizeFootball: true })}
+              className="mt-3 text-xs font-medium text-accent hover:underline"
+            >
+              Select all three
+            </button>
+          )}
+          {selectedCount === 0 && (
+            <p className="mt-3 text-xs text-danger">Pick at least one to continue.</p>
+          )}
+        </div>
+      )}
+
+      {current === "focus" && (
+        <div className="animate-fade-in-up">
+          <h1 className="text-2xl font-semibold tracking-tight">Where does most of your effort go?</h1>
+          <p className="mt-1 text-sm text-muted">
+            When school, training and gym want the same hours, the coach leans toward your main focus. Pick
+            &ldquo;Balanced&rdquo; if none of them comes first.
+          </p>
+          <div className="mt-6 flex flex-col gap-2">
+            {focusOptions.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setMainFocus(o.value)}
+                aria-pressed={mainFocus === o.value}
+                className={cn(
+                  "flex items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition",
+                  mainFocus === o.value
+                    ? "border-accent bg-accent/20 ring-2 ring-accent/40"
+                    : "border-border bg-surface opacity-60 hover:opacity-90 hover:bg-surface-muted"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
+                    mainFocus === o.value ? "border-accent bg-accent text-accent-foreground" : "border-border"
+                  )}
+                >
+                  {mainFocus === o.value && <Check size={14} strokeWidth={3} />}
+                </span>
+                <span className="text-2xl">{o.emoji}</span>
+                <span className="flex flex-col">
+                  <span className="font-semibold">{o.title}</span>
+                  <span className="text-xs text-muted">{o.desc}</span>
+                </span>
+              </button>
             ))}
           </div>
         </div>
@@ -279,7 +361,7 @@ export function OnboardingWizard() {
             {pending ? "Creating your plan…" : "Finish setup"}
           </Button>
         ) : (
-          <Button onClick={next} disabled={pending}>
+          <Button onClick={next} disabled={pending || (current === "intro" && selectedCount === 0)}>
             Continue
           </Button>
         )}
