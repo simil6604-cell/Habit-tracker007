@@ -76,6 +76,57 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText("Leg Day", { exact: true }).first()).toBeVisible();
   });
 
+  test("gym: example days hit the protein goal with real listed food", async () => {
+    await page.goto("/gym/meal-plan");
+
+    const heading = await page.getByRole("heading", { name: "Example days" }).textContent();
+    expect(heading).toBe("Example days");
+
+    // The page is built around whatever protein goal this account has, not a
+    // hardcoded number, so read it back and check everything against it.
+    const intro = await page.locator("main p").first().textContent();
+    const goal = Number(intro?.match(/around your (\d+)g protein goal/)?.[1]);
+    expect(Number.isFinite(goal)).toBe(true);
+
+    for (const day of ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]) {
+      await expect(page.getByRole("heading", { name: day, exact: true })).toBeVisible();
+    }
+    await expect(page.getByText("Day total", { exact: true })).toHaveCount(5);
+
+    // Each day runs breakfast first and dinner last, with macros on every meal.
+    const cards = page.locator("div.rounded-2xl").filter({ hasText: "Day total" });
+    await expect(cards).toHaveCount(5);
+    for (let i = 0; i < 5; i++) {
+      const meals = cards.nth(i).locator("li");
+      await expect(meals.first()).toContainText("Breakfast");
+      await expect(meals.last()).toContainText("Dinner");
+      await expect(meals.first()).toContainText(/P \d+g/);
+      await expect(meals.first()).toContainText(/C \d+g/);
+      await expect(meals.first()).toContainText(/F \d+g/);
+    }
+
+    // Each day's badge states its protein against the goal, and the arithmetic
+    // has to agree with the goal the page just told us about.
+    const body = (await page.locator("main").textContent()) ?? "";
+    const badges = [...body.matchAll(/(\d+)g protein — (?:exactly on goal|(\d+)g (over|short of) (\d+)g)/g)];
+    expect(badges).toHaveLength(5);
+    for (const [, total, delta, direction, against] of badges) {
+      if (delta === undefined) {
+        expect(Number(total)).toBe(goal);
+      } else {
+        expect(Number(against)).toBe(goal);
+        expect(direction === "over" ? Number(total) - goal : goal - Number(total)).toBe(Number(delta));
+      }
+    }
+
+    // Regenerating has to actually produce a different plan.
+    const before = await cards.first().textContent();
+    await page.click('a[href*="variant="]');
+    await expect(page.getByRole("heading", { name: "Example days" })).toBeVisible();
+    const after = await page.locator("div.rounded-2xl").filter({ hasText: "Day total" }).first().textContent();
+    expect(after).not.toBe(before);
+  });
+
   test("football: save profile and generate training", async () => {
     await page.goto("/football");
     await page.selectOption('select[name="position"]', "ST");

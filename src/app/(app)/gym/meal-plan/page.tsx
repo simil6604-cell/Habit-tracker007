@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { generateWeeklyMealPlan } from "@/lib/gym/meal-plan";
+import { generateFullDayPlans } from "@/lib/gym/meal-plan";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DayPlanCard } from "@/components/gym/day-plan-card";
 
 export default async function MealPlanPage({
   searchParams,
@@ -20,23 +21,21 @@ export default async function MealPlanPage({
   const proteinGoalG = user.dailyProteinGoalG;
   const calorieGoal = user.dailyCalorieGoal;
 
-  const plan = generateWeeklyMealPlan(variant);
-  const weekKcal = plan.reduce((sum, d) => sum + d.totalKcal, 0);
-  const weekProtein = plan.reduce((sum, d) => sum + d.totalProteinG, 0);
-  const avgDayKcal = Math.round(weekKcal / plan.length);
-  const avgDayProtein = Math.round(weekProtein / plan.length);
-
-  // Lunch + dinner is treated as roughly two-thirds of the day's food —
-  // breakfast and snacks (logged separately on the Gym page) make up the rest.
-  const targetProteinLunchDinner = Math.round(proteinGoalG * 0.65);
-  const targetKcalLunchDinner = calorieGoal ? Math.round(calorieGoal * 0.55) : null;
+  const days = generateFullDayPlans(variant, proteinGoalG);
+  const avgKcal = Math.round(days.reduce((s, d) => s + d.totals.kcal, 0) / days.length);
+  const avgProtein = Math.round(days.reduce((s, d) => s + d.totals.proteinG, 0) / days.length);
+  const avgCarbs = Math.round(days.reduce((s, d) => s + d.totals.carbsG, 0) / days.length);
+  const avgFat = Math.round(days.reduce((s, d) => s + d.totals.fatG, 0) / days.length);
+  const daysOnTarget = days.filter((d) => Math.abs(d.proteinVsGoal) <= 10).length;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Weekly Meal Plan</h1>
-          <p className="mt-1 text-muted">Lunch & dinner ideas for Monday–Friday, built to keep protein and calories steady day to day.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Example days</h1>
+          <p className="mt-1 text-muted">
+            Five full days, breakfast through dinner, built around your {proteinGoalG}g protein goal.
+          </p>
         </div>
         <div className="flex gap-2">
           <Link href="/gym"><Button variant="outline">Back to Gym</Button></Link>
@@ -45,89 +44,55 @@ export default async function MealPlanPage({
       </div>
 
       <Card className="mt-6">
-        <CardHeader><CardTitle>Your goals</CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-sm">
-            Protein goal: <span className="font-medium">{proteinGoalG}g/day</span> — this plan aims for about{" "}
-            <span className="font-medium">{targetProteinLunchDinner}g</span> from lunch + dinner combined, leaving
-            the rest for breakfast and snacks.
-          </p>
-          {calorieGoal ? (
-            <p className="mt-1 text-sm">
-              Calorie goal: <span className="font-medium">{calorieGoal} kcal/day</span> — lunch + dinner target is
-              roughly <span className="font-medium">{targetKcalLunchDinner} kcal</span>.
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-muted">
-              No daily calorie goal set — <Link href="/settings" className="text-accent">set one in Settings</Link>{" "}
-              to also see how this plan compares to a calorie target.
-            </p>
-          )}
-          <p className="mt-2 text-xs text-muted">
-            These are widely-published approximate values for typical portions, not a measured or personalized
-            nutrition plan — swap any meal for something you actually have, and adjust portions to your own needs.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="mt-4">
-        <CardHeader><CardTitle>Week overview</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader><CardTitle>How these days are built</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-xl border border-border p-3 text-center">
-              <p className="text-xl font-semibold">{avgDayKcal}</p>
-              <p className="text-xs text-muted">avg kcal/day (lunch+dinner)</p>
+              <p className="text-xl font-semibold">{avgProtein}g</p>
+              <p className="text-xs text-muted">avg protein/day (goal {proteinGoalG}g)</p>
             </div>
             <div className="rounded-xl border border-border p-3 text-center">
-              <p className="text-xl font-semibold">{avgDayProtein}g</p>
-              <p className="text-xs text-muted">avg protein/day (lunch+dinner)</p>
+              <p className="text-xl font-semibold">{avgKcal}</p>
+              <p className="text-xs text-muted">
+                avg kcal/day{calorieGoal ? ` (goal ${calorieGoal})` : ""}
+              </p>
             </div>
             <div className="rounded-xl border border-border p-3 text-center">
-              <p className="text-xl font-semibold">{weekKcal.toLocaleString()}</p>
-              <p className="text-xs text-muted">total kcal this week</p>
+              <p className="text-xl font-semibold">{avgCarbs}g / {avgFat}g</p>
+              <p className="text-xs text-muted">avg carbs / fat per day</p>
             </div>
             <div className="rounded-xl border border-border p-3 text-center">
-              <p className="text-xl font-semibold">{weekProtein}g</p>
-              <p className="text-xs text-muted">total protein this week</p>
+              <p className="text-xl font-semibold">{daysOnTarget}/{days.length}</p>
+              <p className="text-xs text-muted">days within 10g of the goal</p>
             </div>
           </div>
+
+          <p className="text-sm text-muted">
+            Breakfast and a balanced lunch/dinner pair are set first, then up to two snacks are picked as whichever
+            listed combination lands the day closest to {proteinGoalG}g. If a day is still more than 10g short, one of
+            its main meals is swapped for a bigger one rather than piling on another snack. Every gram comes from a
+            listed portion — nothing is scaled or invented to make the number work — and any day that still lands
+            short or over says so on its badge.
+          </p>
+          {!calorieGoal && (
+            <p className="text-sm text-muted">
+              No daily calorie goal set — <Link href="/settings" className="text-accent">set one in Settings</Link> to
+              see how these days compare to a calorie target too.
+            </p>
+          )}
+          <p className="text-xs text-muted">
+            Widely-published approximate values for typical portions, not a measured or personalised nutrition plan.
+            Swap any meal for something you actually have and adjust portions to your own needs — and log what you
+            really ate on the Gym page, where you can also photograph a meal and have the AI estimate it.
+          </p>
         </CardContent>
       </Card>
 
-      <Card className="mt-4">
-        <CardHeader><CardTitle>Monday – Friday</CardTitle></CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted">
-                <th className="py-2 pr-3">Day</th>
-                <th className="py-2 pr-3">Lunch</th>
-                <th className="py-2 pr-3">Dinner</th>
-                <th className="py-2 pr-3 text-right">Day total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plan.map((d) => (
-                <tr key={d.day} className="border-b border-border align-top">
-                  <td className="py-3 pr-3 font-medium">{d.day}</td>
-                  <td className="py-3 pr-3">
-                    <p>{d.lunch.name}</p>
-                    <p className="text-xs text-muted">{d.lunch.kcal} kcal · {d.lunch.proteinG}g protein</p>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <p>{d.dinner.name}</p>
-                    <p className="text-xs text-muted">{d.dinner.kcal} kcal · {d.dinner.proteinG}g protein</p>
-                  </td>
-                  <td className="py-3 pr-3 text-right">
-                    <p className="font-medium">{d.totalKcal} kcal</p>
-                    <p className="text-xs text-muted">{d.totalProteinG}g protein</p>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {days.map((d) => (
+          <DayPlanCard key={d.day} plan={d} />
+        ))}
+      </div>
     </div>
   );
 }

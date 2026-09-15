@@ -129,7 +129,7 @@ export default async function GymPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Meals</CardTitle>
-            <Link href="/gym/meal-plan"><Button size="sm" variant="outline">Weekly meal plan</Button></Link>
+            <Link href="/gym/meal-plan"><Button size="sm" variant="outline">Example days</Button></Link>
           </CardHeader>
           <CardContent>
             <MealsByTypePanel meals={meals} breakdown={nutritionSummary.mealTypeBreakdown} />
