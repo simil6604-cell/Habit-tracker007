@@ -24,7 +24,12 @@ const MEDIA_TYPE_BY_EXT: Record<string, "image/jpeg" | "image/png" | "image/webp
   webp: "image/webp",
 };
 
-async function summarizeNotePhoto(userId: string, imagePath: string, subjectName: string, topicName: string): Promise<string | null> {
+async function summarizeNotePhoto(
+  userId: string,
+  imagePath: string,
+  subject: { name: string; level?: string | null },
+  topicName: string
+): Promise<string | null> {
   if (!isRealAIConfigured) return null;
 
   const ext = imagePath.split(".").pop()?.toLowerCase() ?? "jpg";
@@ -35,8 +40,8 @@ async function summarizeNotePhoto(userId: string, imagePath: string, subjectName
     const buffer = await readFile(path.join(process.cwd(), "public", imagePath));
     const imageBase64 = buffer.toString("base64");
     const school = await prisma.school.findUnique({ where: { userId } });
-    const system = buildAcademicSystemPrompt(school?.educationSystem);
-    const prompt = `Subject: ${subjectName}\nTopic: ${topicName}\n\nThis is a photo of the student's own notes. Transcribe the key content and turn it into a clear, well-organized summary to help them revise. If any part is illegible, say so plainly instead of guessing.`;
+    const system = buildAcademicSystemPrompt(school?.educationSystem, subject);
+    const prompt = `Subject: ${subject.name}\nTopic: ${topicName}\n\nThis is a photo of the student's own notes. Transcribe the key content and turn it into a clear, well-organized summary to help them revise. If any part is illegible, say so plainly instead of guessing.`;
     return await getAIProvider().generate(prompt, { system, imageBase64, imageMediaType: mediaType });
   } catch {
     return null;
@@ -70,7 +75,7 @@ export async function addNotePhoto(topicId: string, formData: FormData): Promise
   }
   if (!imagePath) return { photos: await getNotePhotos(topicId), error: "Couldn't save that photo." };
 
-  const summary = await summarizeNotePhoto(userId, imagePath, topic.subject.name, topic.name);
+  const summary = await summarizeNotePhoto(userId, imagePath, topic.subject, topic.name);
 
   await prisma.notePhoto.create({ data: { userId, topicId, imagePath, summary } });
   revalidatePath(`/school/subjects/${topic.subjectId}`);
@@ -81,7 +86,7 @@ export async function regenerateNoteSummary(topicId: string, photoId: string): P
   const userId = await requireUserId();
   const photo = await prisma.notePhoto.findFirst({ where: { id: photoId, userId }, include: { topic: { include: { subject: true } } } });
   if (photo) {
-    const summary = await summarizeNotePhoto(userId, photo.imagePath, photo.topic.subject.name, photo.topic.name);
+    const summary = await summarizeNotePhoto(userId, photo.imagePath, photo.topic.subject, photo.topic.name);
     if (summary) await prisma.notePhoto.update({ where: { id: photo.id }, data: { summary } });
   }
   return getNotePhotos(topicId);

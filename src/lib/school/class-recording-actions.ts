@@ -21,9 +21,12 @@ async function loadTopic(topicId: string, userId: string) {
   return prisma.topic.findFirst({ where: { id: topicId, subject: { userId } }, include: { subject: true } });
 }
 
-async function academicSystemPromptFor(userId: string): Promise<string> {
+async function academicSystemPromptFor(
+  userId: string,
+  subject?: { name: string; level?: string | null } | null
+): Promise<string> {
   const school = await prisma.school.findUnique({ where: { userId } });
-  return buildAcademicSystemPrompt(school?.educationSystem);
+  return buildAcademicSystemPrompt(school?.educationSystem, subject);
 }
 
 export async function getClassRecordings(topicId: string): Promise<ClassRecordingEntry[]> {
@@ -41,7 +44,7 @@ export async function saveClassRecording(topicId: string, transcript: string): P
 
   let summary: string | null = null;
   if (isRealAIConfigured) {
-    const system = await academicSystemPromptFor(userId);
+    const system = await academicSystemPromptFor(userId, topic.subject);
     const prompt = `Subject: ${topic.subject.name}\nTopic: ${topic.name}\n\nHere is a transcript captured live during class (from speech-to-text, so it may contain recognition errors):\n\n${trimmed}\n\nSummarize what the teacher covered into clear, organized key points for revision. Note plainly if any part looks garbled by transcription rather than guessing what was meant.`;
     try {
       summary = await getAIProvider().generate(prompt, { system });
@@ -87,7 +90,7 @@ export async function generateClassQuiz(topicId: string, transcript: string): Pr
   if (!transcript.trim()) return { error: "Nothing was captured yet — record or type something first." };
   if (!isRealAIConfigured) return { error: NO_AI_MESSAGE };
 
-  const system = await academicSystemPromptFor(userId);
+  const system = await academicSystemPromptFor(userId, topic.subject);
   const prompt = `Subject: ${topic.subject.name}\nTopic: ${topic.name}\n\nHere is a transcript captured live during class:\n\n${transcript.trim()}\n\nWrite exactly 4 short quiz questions based ONLY on what's actually covered in this transcript, to check whether the student understood what the teacher explained. Respond with ONLY a JSON array of 4 question strings — no answers, no other text.`;
 
   try {
@@ -110,7 +113,7 @@ export async function gradeClassQuiz(
   if (!topic) return "Topic not found.";
   if (!isRealAIConfigured) return NO_AI_MESSAGE;
 
-  const system = await academicSystemPromptFor(userId);
+  const system = await academicSystemPromptFor(userId, topic.subject);
   const qa = answers
     .map((a, i) => `Q${i + 1}: ${a.question}\nStudent's answer: ${a.answer.trim() || "(left blank)"}`)
     .join("\n\n");

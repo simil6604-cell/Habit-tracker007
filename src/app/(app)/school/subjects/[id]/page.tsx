@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TopicsTable } from "@/components/school/topics-table";
 import { SubjectWeaknesses } from "@/components/school/subject-weaknesses";
+import { SubjectLevelPicker } from "@/components/school/subject-level-picker";
+import { parseEducationSystems } from "@/lib/ai/academic-prompt";
 
 export default async function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,6 +23,9 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
   });
   if (!subject) notFound();
 
+  const school = await prisma.school.findUnique({ where: { userId } });
+  const systems = parseEducationSystems(school?.educationSystem);
+
   const avgProgress = subject.topics.length
     ? Math.round(subject.topics.reduce((a, t) => a + t.progressPct, 0) / subject.topics.length)
     : 0;
@@ -32,6 +37,7 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
           <span className="h-4 w-4 rounded-full" style={{ backgroundColor: subject.color }} />
           <h1 className="text-2xl font-semibold tracking-tight">{subject.name}</h1>
           {subject.isExamSubject && <Badge variant="warning">Exam subject</Badge>}
+          <SubjectLevelPicker subjectId={subject.id} level={subject.level} systems={systems} />
         </div>
         <div className="flex gap-2">
           <Link href={`/school/subjects/${subject.id}/quiz`}>

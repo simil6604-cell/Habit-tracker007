@@ -13,6 +13,28 @@ export const EDUCATION_SYSTEMS = [
 
 export type EducationSystem = (typeof EDUCATION_SYSTEMS)[number]["value"];
 
+/**
+ * The level an individual subject is sat at. IGCSE splits into Core and
+ * Extended tiers, which cap at different grades and cover different content,
+ * so the AI has to know which tier a subject is on, not just "IGCSE".
+ * `system` ties each level back to the education systems the student ticked.
+ */
+export const SUBJECT_LEVELS = [
+  { value: "IGCSE_CORE", label: "IGCSE — Core", short: "Core", system: "IGCSE" },
+  { value: "IGCSE_EXTENDED", label: "IGCSE — Extended", short: "Extended", system: "IGCSE" },
+  { value: "AS_LEVEL", label: "AS Level", short: "AS", system: "AS_LEVEL" },
+  { value: "A_LEVEL", label: "A Level", short: "A Level", system: "A_LEVEL" },
+  { value: "OTHER", label: "Other", short: "Other", system: "OTHER" },
+] as const;
+
+export type SubjectLevel = (typeof SUBJECT_LEVELS)[number]["value"];
+
+/** The levels worth offering, given which education systems the student ticked. */
+export function levelsForSystems(systems: string[]) {
+  const active = SUBJECT_LEVELS.filter((l) => systems.includes(l.system));
+  return active.length ? active : SUBJECT_LEVELS;
+}
+
 export const CAMBRIDGE_SUBJECTS = [
   "Mathematics",
   "Additional Mathematics",

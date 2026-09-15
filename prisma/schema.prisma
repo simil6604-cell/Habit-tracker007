@@ -117,6 +117,9 @@ model Subject {
   teacher        String?
   room           String?
   isExamSubject  Boolean  @default(false) // e.g. IGCSE/A-Level subjects — highlighted on the timetable
+  // Per-subject qualification level: a student can sit IGCSE Core Maths and
+  // A Level Economics side by side, and the AI must pitch each accordingly.
+  level          String?  // IGCSE_CORE | IGCSE_EXTENDED | AS_LEVEL | A_LEVEL | OTHER
   baselineConfidence Int? // 0-100, from the initial "where do you stand" assessment
   createdAt      DateTime @default(now())
 

@@ -21,9 +21,12 @@ async function loadTopicAndLog(topicId: string, userId: string) {
   return { topic, log };
 }
 
-async function academicSystemPromptFor(userId: string): Promise<string> {
+async function academicSystemPromptFor(
+  userId: string,
+  subject?: { name: string; level?: string | null } | null
+): Promise<string> {
   const school = await prisma.school.findUnique({ where: { userId } });
-  return buildAcademicSystemPrompt(school?.educationSystem);
+  return buildAcademicSystemPrompt(school?.educationSystem, subject);
 }
 
 function parseQuestionArray(raw: string): string[] {
@@ -56,7 +59,7 @@ export async function generateTopicQuiz(topicId: string): Promise<{ questions: s
   const confused = log.filter((l) => l.type === "CONFUSED").map((l) => l.content);
   const questions = log.filter((l) => l.type === "QUESTION").map((l) => l.content);
 
-  const system = await academicSystemPromptFor(userId);
+  const system = await academicSystemPromptFor(userId, topic.subject);
   const prompt = [
     `Subject: ${topic.subject.name}`,
     `Topic: ${topic.name}`,
@@ -86,7 +89,7 @@ export async function gradeTopicQuiz(topicId: string, answers: { question: strin
   if (!isRealAIConfigured) return NO_AI_QUIZ_MESSAGE;
 
   const { topic } = loaded;
-  const system = await academicSystemPromptFor(userId);
+  const system = await academicSystemPromptFor(userId, topic.subject);
   const qa = answers
     .map((a, i) => `Q${i + 1}: ${a.question}\nStudent's answer: ${a.answer.trim() || "(left blank)"}`)
     .join("\n\n");

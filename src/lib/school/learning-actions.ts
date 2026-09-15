@@ -13,7 +13,10 @@ async function requireUserId() {
   return session.user.id;
 }
 
-async function loadTopicContext(topicId: string, userId: string): Promise<{ ctx: TopicContext; subjectId: string } | null> {
+async function loadTopicContext(
+  topicId: string,
+  userId: string
+): Promise<{ ctx: TopicContext; subjectId: string; subject: { name: string; level: string | null } } | null> {
   const topic = await prisma.topic.findFirst({
     where: { id: topicId, subject: { userId } },
     include: { subject: true },
@@ -31,6 +34,7 @@ async function loadTopicContext(topicId: string, userId: string): Promise<{ ctx:
 
   return {
     subjectId: topic.subjectId,
+    subject: { name: topic.subject.name, level: topic.subject.level },
     ctx: {
       topicName: topic.name,
       subjectName: topic.subject.name,
@@ -43,9 +47,12 @@ async function loadTopicContext(topicId: string, userId: string): Promise<{ ctx:
   };
 }
 
-async function academicSystemPromptFor(userId: string): Promise<string> {
+async function academicSystemPromptFor(
+  userId: string,
+  subject?: { name: string; level?: string | null } | null
+): Promise<string> {
   const school = await prisma.school.findUnique({ where: { userId } });
-  return buildAcademicSystemPrompt(school?.educationSystem);
+  return buildAcademicSystemPrompt(school?.educationSystem, subject);
 }
 
 const NO_REAL_AI_MESSAGE =
@@ -58,7 +65,7 @@ export async function askExplainTopic(topicId: string): Promise<string> {
 
   if (!isRealAIConfigured) return explainApproach(loaded.ctx);
 
-  const system = await academicSystemPromptFor(userId);
+  const system = await academicSystemPromptFor(userId, loaded.subject);
   const prompt = `Subject: ${loaded.ctx.subjectName}\nTopic: ${loaded.ctx.topicName}\nStudent's current self-rated progress: ${loaded.ctx.progressPct}%\n\nExplain this topic's core approach the way a good teacher would introduce it, then give one worked-style example.`;
   try {
     return await getAIProvider().generate(prompt, { system });
@@ -82,7 +89,7 @@ export async function askTopicQuestion(topicId: string, question: string): Promi
 
   if (!isRealAIConfigured) return NO_REAL_AI_MESSAGE;
 
-  const system = await academicSystemPromptFor(userId);
+  const system = await academicSystemPromptFor(userId, loaded.subject);
   const prompt = `Subject: ${loaded.ctx.subjectName}\nTopic: ${loaded.ctx.topicName}\nStudent's current self-rated progress on this topic: ${loaded.ctx.progressPct}%\n\nStudent's question:\n${question.trim()}`;
   try {
     return await getAIProvider().generate(prompt, { system });
@@ -99,7 +106,7 @@ export async function submitMistake(topicId: string, mistakeText: string): Promi
 
   let response: string;
   if (isRealAIConfigured) {
-    const system = await academicSystemPromptFor(userId);
+    const system = await academicSystemPromptFor(userId, loaded.subject);
     const prompt = `Subject: ${loaded.ctx.subjectName}\nTopic: ${loaded.ctx.topicName}\n\nThe student describes what went wrong like this: "${mistakeText.trim()}"\n\nDiagnose the likely underlying mistake and explain, at the right level, exactly what to do differently next time.`;
     try {
       response = await getAIProvider().generate(prompt, { system });

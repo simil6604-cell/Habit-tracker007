@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS } from "@/lib/data/cambridge";
+import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS, levelsForSystems } from "@/lib/data/cambridge";
 import { FOOTBALL_POSITIONS, FOOTBALL_SKILLS, GYM_GOALS } from "@/lib/data/football";
 import { completeOnboarding, type OnboardingPayload } from "@/lib/onboarding/actions";
 
@@ -94,6 +94,9 @@ export function OnboardingWizard() {
 
   const [schoolName, setSchoolName] = useState("");
   const [educationSystems, setEducationSystems] = useState<string[]>(["IGCSE"]);
+  const [subjectLevels, setSubjectLevels] = useState<Record<string, string>>({});
+
+  const availableLevels = useMemo(() => levelsForSystems(educationSystems), [educationSystems]);
   const [yearGroup, setYearGroup] = useState("");
   const [subjects, setSubjects] = useState<string[]>(["Mathematics", "Physics", "English Language"]);
 
@@ -147,6 +150,9 @@ export function OnboardingWizard() {
       educationSystem: educationSystems.join(","),
       yearGroup,
       subjects,
+      subjectLevels: Object.fromEntries(
+        subjects.map((name) => [name, subjectLevels[name] ?? availableLevels[0].value])
+      ),
       gymGoals,
       footballPosition,
       footballTeamName,
@@ -291,6 +297,36 @@ export function OnboardingWizard() {
                 ))}
               </div>
             </div>
+
+            {subjects.length > 0 && (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted">
+                  What level is each subject at?
+                </label>
+                <div className="flex flex-col gap-2">
+                  {subjects.map((name) => (
+                    <div key={name} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
+                      <span className="min-w-32 flex-1 text-sm font-medium">{name}</span>
+                      <select
+                        value={subjectLevels[name] ?? availableLevels[0].value}
+                        onChange={(e) => setSubjectLevels((prev) => ({ ...prev, [name]: e.target.value }))}
+                        className="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-sm"
+                      >
+                        {availableLevels.map((l) => (
+                          <option key={l.value} value={l.value}>
+                            {l.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-muted">
+                  IGCSE Core and Extended cover different content and cap at different grades — the AI pitches every
+                  answer to the level you set here, per subject.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

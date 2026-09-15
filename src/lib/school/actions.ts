@@ -47,6 +47,20 @@ export async function toggleExamSubject(subjectId: string) {
   revalidatePath(`/school/subjects/${subjectId}`);
 }
 
+const VALID_SUBJECT_LEVELS = ["IGCSE_CORE", "IGCSE_EXTENDED", "AS_LEVEL", "A_LEVEL", "OTHER"];
+
+export async function updateSubjectLevel(subjectId: string, level: string) {
+  const userId = await requireUserId();
+  const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId } });
+  if (!subject) return;
+  await prisma.subject.update({
+    where: { id: subjectId },
+    data: { level: VALID_SUBJECT_LEVELS.includes(level) ? level : null },
+  });
+  revalidatePath("/school");
+  revalidatePath(`/school/subjects/${subjectId}`);
+}
+
 export async function addTopic(formData: FormData) {
   const userId = await requireUserId();
   const subjectId = String(formData.get("subjectId") ?? "");
