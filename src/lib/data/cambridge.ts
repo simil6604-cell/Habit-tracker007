@@ -30,7 +30,9 @@ export const IGCSE_TIERED_SUBJECTS = [
   "Chemistry",
   "Biology",
   "Combined Science",
-  "Second Language",
+  // The modern-language syllabuses (German, French…) aren't tiered; English as
+  // a Second Language is.
+  "English as a Second Language",
 ];
 
 export const SUBJECT_LEVELS = [
@@ -71,7 +73,13 @@ export const CAMBRIDGE_SUBJECTS = [
   "Sociology",
   "Art & Design",
   "Physical Education",
-  "Second Language",
+  "German",
+  "French",
+  "Spanish",
+  "Italian",
+  "Latin",
+  "Mandarin Chinese",
+  "English as a Second Language",
 ];
 
 export const SUBJECT_COLORS = [
