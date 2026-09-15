@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
-import { Sparkles, Trash2 } from "lucide-react";
+import { Sparkles, Trash2, HelpCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getTutorMessages,
   sendTutorMessage,
   startTutorTopic,
   clearTutorChat,
+  getNotUnderstoodQuestions,
+  markReplyNotUnderstood,
+  unmarkNotUnderstood,
   type TutorMessageEntry,
 } from "@/lib/school/tutor-actions";
 import { sanitizeSvg } from "@/lib/utils/sanitize-svg";
@@ -55,11 +58,18 @@ function MessageContent({ content }: { content: string }) {
 export function TutorChatPanel({ topicId }: { topicId: string }) {
   const [messages, setMessages] = useState<TutorMessageEntry[] | null>(null);
   const [input, setInput] = useState("");
+  // The questions already marked "didn't get this", so the flag survives a
+  // reload instead of living only in this component's memory.
+  const [notUnderstood, setNotUnderstood] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    startTransition(async () => setMessages(await getTutorMessages(topicId)));
+    startTransition(async () => {
+      const [msgs, flagged] = await Promise.all([getTutorMessages(topicId), getNotUnderstoodQuestions(topicId)]);
+      setMessages(msgs);
+      setNotUnderstood(flagged);
+    });
   }, [topicId]);
 
   useEffect(() => {
@@ -90,6 +100,30 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
 
   function clear() {
     startTransition(async () => setMessages(await clearTutorChat(topicId)));
+  }
+
+  /** The question a given reply was answering — what gets saved for revision. */
+  function questionBehind(replyId: string): string | null {
+    if (!messages) return null;
+    const i = messages.findIndex((m) => m.id === replyId);
+    for (let j = i - 1; j >= 0; j--) if (messages[j].role === "USER") return messages[j].content.trim();
+    return null;
+  }
+
+  function isFlagged(replyId: string): boolean {
+    const q = questionBehind(replyId);
+    // Long questions are stored truncated, so compare on the stored prefix.
+    return q !== null && notUnderstood.some((n) => n === q || q.startsWith(n.replace(/…$/, "")));
+  }
+
+  function toggleNotUnderstood(replyId: string) {
+    if (pending) return;
+    const q = questionBehind(replyId);
+    if (!q) return;
+    const existing = notUnderstood.find((n) => n === q || q.startsWith(n.replace(/…$/, "")));
+    startTransition(async () => {
+      setNotUnderstood(existing ? await unmarkNotUnderstood(topicId, existing) : await markReplyNotUnderstood(topicId, replyId));
+    });
   }
 
   return (
@@ -133,7 +167,20 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
               >
                 <MessageContent content={m.content} />
               </div>
-              <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
+                {m.role === "ASSISTANT" && !m.id.startsWith("pending-") && questionBehind(m.id) && (
+                  <button
+                    onClick={() => toggleNotUnderstood(m.id)}
+                    disabled={pending}
+                    className={`flex items-center gap-1 text-[10px] ${isFlagged(m.id) ? "text-warning" : "text-muted hover:text-warning"}`}
+                    title={isFlagged(m.id) ? "Remove from your revision list" : "Save what you asked here to your revision list"}
+                  >
+                    <HelpCircle size={11} />
+                    {isFlagged(m.id) ? "On your revision list" : "I didn't get this"}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
           {pending && <p className="text-xs text-muted">Tutor is thinking…</p>}
@@ -158,6 +205,34 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
           Send
         </Button>
       </form>
+
+      {notUnderstood.length > 0 && (
+        <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+          <p className="text-xs font-medium">
+            🔁 Still to revise ({notUnderstood.length}) — the quiz for this subject weights its questions towards these
+          </p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {notUnderstood.map((q) => (
+              <li key={q} className="flex items-start gap-2 text-xs text-muted">
+                <span className="flex-1">• {q}</span>
+                <button
+                  onClick={() => startTransition(async () => setNotUnderstood(await unmarkNotUnderstood(topicId, q)))}
+                  disabled={pending}
+                  className="text-muted hover:text-danger"
+                  title="I get this now — take it off the list"
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[11px] text-muted">
+        Every question you ask here is saved to this topic&apos;s learning log, and anything you mark as not understood
+        is what the subject quiz comes back to.
+      </p>
     </div>
   );
 }

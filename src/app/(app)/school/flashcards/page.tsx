@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FlashcardReview } from "@/components/school/flashcard-review";
+import { GenerateFromConfusionsButton } from "@/components/school/generate-from-confusions-button";
 import { Trash2, Sparkles } from "lucide-react";
 
 export default async function FlashcardsPage() {
@@ -24,7 +25,10 @@ export default async function FlashcardsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-semibold tracking-tight">Flashcards</h1>
-      <p className="mt-1 text-muted">Spaced repetition keeps what you&apos;ve learned from fading.</p>
+      <p className="mt-1 text-muted">
+        Spaced repetition keeps what you&apos;ve learned from fading. Cards can come from your weakest topics, or
+        straight from the questions you marked &ldquo;I didn&apos;t get this&rdquo; in a topic&apos;s tutor chat.
+      </p>
 
       <div className="mt-4 flex gap-2">
         <Badge variant="danger">🔴 Need review: {buckets.NEEDS_REVIEW}</Badge>
@@ -59,8 +63,9 @@ export default async function FlashcardsPage() {
               <Button type="submit" size="sm" variant="secondary">Add card</Button>
             </form>
             <form action={generateFlashcardsFromWeakTopics}>
-              <Button type="submit" size="sm" variant="outline"><Sparkles size={14} />Generate from weak topics</Button>
+              <Button type="submit" size="sm" variant="outline"><Sparkles size={14} />From weak topics</Button>
             </form>
+            <GenerateFromConfusionsButton />
           </div>
 
           <ul className="flex flex-col divide-y divide-border">

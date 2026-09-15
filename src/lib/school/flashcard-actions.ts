@@ -114,3 +114,85 @@ export async function generateFlashcardsFromWeakTopics() {
   }
   revalidatePath("/school/flashcards");
 }
+
+/**
+ * Turns the questions you marked "I didn't get this" in the tutor chat into
+ * flashcards — the same entries the subject quiz reads, so what you struggled
+ * with in a conversation becomes something you actually drill.
+ *
+ * Needs a real AI: the whole point is a correct answer to a question you
+ * couldn't answer yourself, and a template card saying "check your notes"
+ * would be worse than nothing here. Without one it says so and creates
+ * nothing. A question that already has a card is skipped rather than
+ * duplicated.
+ */
+export async function generateFlashcardsFromConfusions(): Promise<{ created: number; message: string }> {
+  const userId = await requireUserId();
+
+  const confusions = await prisma.learningLogEntry.findMany({
+    where: { userId, type: "CONFUSED" },
+    include: { topic: { include: { subject: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+
+  if (confusions.length === 0) {
+    return {
+      created: 0,
+      message:
+        "Nothing marked as not understood yet. In a topic's AI Tutor chat, use \u201cI didn\u2019t get this\u201d on a reply and it lands here.",
+    };
+  }
+  if (!isRealAIConfigured) {
+    return {
+      created: 0,
+      message:
+        "Turning a question you couldn\u2019t answer into a flashcard needs a real AI \u2014 set ANTHROPIC_API_KEY (see Settings). No cards were made up in the meantime.",
+    };
+  }
+
+  const system = buildAcademicSystemPrompt((await prisma.school.findUnique({ where: { userId } }))?.educationSystem);
+  let created = 0;
+  let failed = 0;
+
+  for (const entry of confusions) {
+    const existing = await prisma.flashcard.findFirst({ where: { userId, sourceLogEntryId: entry.id } });
+    if (existing) continue;
+
+    const prompt = `Subject: ${entry.topic.subject.name}\nTopic: ${entry.topic.name}\n\nThe student asked this and did not understand the explanation:\n"${entry.content}"\n\nWrite exactly 1 flashcard that drills the thing they were missing — front is a short, answerable question, back is a concise correct answer. Respond with ONLY a JSON array like [{"front":"...","back":"..."}] — no other text.`;
+
+    let cards: { front: string; back: string }[] = [];
+    try {
+      cards = parseFlashcardArray(await getAIProvider().generate(prompt, { system }));
+    } catch {
+      cards = [];
+    }
+    if (cards.length === 0) {
+      failed++;
+      continue;
+    }
+
+    await prisma.flashcard.create({
+      data: {
+        userId,
+        subjectId: entry.topic.subjectId,
+        topic: entry.topic.name,
+        front: cards[0].front,
+        back: cards[0].back,
+        sourceLogEntryId: entry.id,
+      },
+    });
+    created++;
+  }
+
+  revalidatePath("/school/flashcards");
+  if (created === 0) {
+    return { created: 0, message: "No new cards \u2014 everything you\u2019ve marked already has one." };
+  }
+  return {
+    created,
+    message:
+      `Made ${created} card${created === 1 ? "" : "s"} from what you didn\u2019t understand.` +
+      (failed > 0 ? ` ${failed} couldn\u2019t be generated and were skipped rather than filled in with a guess.` : ""),
+  };
+}

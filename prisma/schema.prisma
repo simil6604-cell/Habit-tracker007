@@ -324,8 +324,14 @@ model Flashcard {
   dueDate      DateTime  @default(now())
   lastResult   String?   // AGAIN | HARD | GOOD | EASY
   createdAt    DateTime  @default(now())
+  // The learning-log entry this card was generated from, when it came from
+  // something you marked as not understood. Kept so a second "generate" pass
+  // doesn't make a duplicate card for the same confusion, and so the card can
+  // say where it came from. Null for cards you wrote yourself.
+  sourceLogEntryId String?
 
   @@index([userId, dueDate])
+  @@index([userId, sourceLogEntryId])
 }
 
 // ---------- Gym ----------

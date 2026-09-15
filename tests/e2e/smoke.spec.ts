@@ -68,6 +68,50 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByRole("cell", { name: /Periodic Table/ })).toBeVisible();
   });
 
+  test("school: questions asked in the tutor chat reach the revision list", async () => {
+    // The chat lives inside a topic row on the subject page.
+    await page.goto("/school");
+    await page.getByRole("link", { name: /Chemistry/ }).click();
+    await page
+      .locator("tr", { hasText: "Periodic Table" })
+      .first()
+      .locator('button[title="AI Learning Assistant"]')
+      .click();
+
+    const ask = page.locator('input[placeholder="Ask anything about this topic…"]');
+    await expect(ask).toBeVisible();
+
+    // Without an AI key the tutor answers with an honest "not connected"
+    // message, which is enough to exercise the logging either way.
+    const question = "Why are noble gases unreactive?";
+    await ask.fill(question);
+    await page.click('button:has-text("Send")');
+    await expect(page.locator('button:has-text("I didn\'t get this")').first()).toBeVisible({ timeout: 60000 });
+
+    // Marking a reply puts the question you asked on the revision list, and
+    // says out loud that the quiz uses it.
+    await page.locator('button:has-text("I didn\'t get this")').first().click();
+    await expect(page.getByText("Still to revise (1)")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText(question, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText(/weights its questions towards these/)).toBeVisible();
+    await expect(page.getByText("On your revision list")).toBeVisible();
+
+    // And taking it off again clears it.
+    await page.locator('button[title="I get this now — take it off the list"]').first().click();
+    await expect(page.getByText("Still to revise")).toBeHidden({ timeout: 30000 });
+  });
+
+  test("school: flashcards can be built from what you didn't understand", async () => {
+    await page.goto("/school/flashcards");
+    const button = page.locator('button:has-text("From what I didn\'t understand")');
+    await expect(button).toBeVisible();
+
+    // Nothing is marked for this fresh account, so it must say so rather than
+    // quietly doing nothing or inventing cards.
+    await button.click();
+    await expect(page.getByText(/Nothing marked as not understood yet|needs a real AI/)).toBeVisible({ timeout: 60000 });
+  });
+
   test("gym: create a workout plan", async () => {
     await page.goto("/gym");
     await page.fill('input[placeholder="e.g. Upper Body"]', "Leg Day");

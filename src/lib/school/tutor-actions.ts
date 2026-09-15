@@ -14,6 +14,37 @@ async function requireUserId() {
 
 export type TutorMessageEntry = { id: string; role: "USER" | "ASSISTANT"; content: string; createdAt: Date };
 
+const OPENERS = {
+  explain:
+    "Can you explain this topic to me, step by step, the way you'd introduce it to someone learning it for the first time?",
+  exam: "What do I specifically need to know about this topic for the exam?",
+} as const;
+
+/** Learning-log entries are shown to you and fed to the quiz, so keep them readable. */
+const MAX_LOG_LENGTH = 300;
+
+/**
+ * Records a question you asked the tutor in the topic's learning log, which is
+ * what the subject quiz reads when it decides what to test you on.
+ *
+ * Only real questions are logged: the canned quick-start openers aren't yours,
+ * a turn with no question mark is usually a "thanks" or a follow-on remark
+ * rather than something you wanted to know, and an identical question already
+ * in the log isn't worth a second row.
+ */
+async function logQuestionAsked(userId: string, topicId: string, question: string) {
+  if (!question.includes("?")) return;
+  if ((Object.values(OPENERS) as string[]).includes(question)) return;
+
+  const content = question.length > MAX_LOG_LENGTH ? `${question.slice(0, MAX_LOG_LENGTH - 1)}…` : question;
+  const existing = await prisma.learningLogEntry.findFirst({
+    where: { userId, topicId, type: "QUESTION", content },
+  });
+  if (existing) return;
+
+  await prisma.learningLogEntry.create({ data: { userId, topicId, type: "QUESTION", content } });
+}
+
 // How many past turns to replay as context — enough for a real conversation
 // to build on itself without the prompt growing unbounded.
 const HISTORY_TURNS = 16;
@@ -57,6 +88,7 @@ export async function sendTutorMessage(topicId: string, message: string): Promis
   const { topic, messages } = loaded;
 
   await prisma.tutorMessage.create({ data: { userId, topicId, role: "USER", content: trimmed } });
+  await logQuestionAsked(userId, topicId, trimmed);
 
   let reply: string;
   if (!isRealAIConfigured) {
@@ -94,15 +126,70 @@ export async function sendTutorMessage(topicId: string, message: string): Promis
 
 /** Seeds the chat with a canned opening line, as if the student typed it — used by the quick-start buttons. */
 export async function startTutorTopic(topicId: string, kind: "explain" | "exam"): Promise<TutorMessageEntry[]> {
-  const opener =
-    kind === "explain"
-      ? "Can you explain this topic to me, step by step, the way you'd introduce it to someone learning it for the first time?"
-      : "What do I specifically need to know about this topic for the exam?";
-  return sendTutorMessage(topicId, opener);
+  return sendTutorMessage(topicId, OPENERS[kind]);
 }
 
 export async function clearTutorChat(topicId: string): Promise<TutorMessageEntry[]> {
   const userId = await requireUserId();
   await prisma.tutorMessage.deleteMany({ where: { topicId, userId } });
   return [];
+}
+
+/**
+ * The questions you've marked as still not understood, newest first. The
+ * subject quiz reads the same entries, so anything listed here is what it
+ * will weight its questions towards.
+ */
+export async function getNotUnderstoodQuestions(topicId: string): Promise<string[]> {
+  const userId = await requireUserId();
+  const entries = await prisma.learningLogEntry.findMany({
+    where: { userId, topicId, type: "CONFUSED" },
+    orderBy: { createdAt: "desc" },
+  });
+  return entries.map((e) => e.content);
+}
+
+/**
+ * Marks a tutor reply as one you didn't follow, storing the question that
+ * prompted it as a CONFUSED entry so the quiz knows to come back to it.
+ *
+ * The question is what gets stored, not the tutor's answer: the quiz needs to
+ * know what you couldn't do, and re-testing you on the explanation you already
+ * didn't follow would just hand you the answer.
+ */
+export async function markReplyNotUnderstood(topicId: string, assistantMessageId: string): Promise<string[]> {
+  const userId = await requireUserId();
+
+  const reply = await prisma.tutorMessage.findFirst({
+    where: { id: assistantMessageId, topicId, userId, role: "ASSISTANT" },
+  });
+  if (!reply) return getNotUnderstoodQuestions(topicId);
+
+  const question = await prisma.tutorMessage.findFirst({
+    where: { topicId, userId, role: "USER", createdAt: { lt: reply.createdAt } },
+    orderBy: { createdAt: "desc" },
+  });
+  const asked = question?.content.trim();
+  if (!asked) return getNotUnderstoodQuestions(topicId);
+
+  const content = asked.length > MAX_LOG_LENGTH ? `${asked.slice(0, MAX_LOG_LENGTH - 1)}…` : asked;
+  const already = await prisma.learningLogEntry.findFirst({
+    where: { userId, topicId, type: "CONFUSED", content },
+  });
+  if (!already) {
+    await prisma.learningLogEntry.create({ data: { userId, topicId, type: "CONFUSED", content } });
+  }
+
+  const topic = await prisma.topic.findFirst({ where: { id: topicId }, select: { subjectId: true } });
+  if (topic) revalidatePath(`/school/subjects/${topic.subjectId}`);
+  return getNotUnderstoodQuestions(topicId);
+}
+
+/** Undo the mark once it's clicked, so the quiz stops chasing something you now get. */
+export async function unmarkNotUnderstood(topicId: string, content: string): Promise<string[]> {
+  const userId = await requireUserId();
+  await prisma.learningLogEntry.deleteMany({ where: { userId, topicId, type: "CONFUSED", content } });
+  const topic = await prisma.topic.findFirst({ where: { id: topicId }, select: { subjectId: true } });
+  if (topic) revalidatePath(`/school/subjects/${topic.subjectId}`);
+  return getNotUnderstoodQuestions(topicId);
 }

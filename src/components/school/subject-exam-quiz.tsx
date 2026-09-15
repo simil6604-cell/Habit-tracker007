@@ -41,9 +41,19 @@ export function SubjectExamQuiz({ subjectId }: { subjectId: string }) {
         AI-graded when a real AI is connected.
       </p>
       {!quiz ? (
-        <Button size="sm" variant="secondary" disabled={pending} onClick={start} className="self-start">
-          {pending ? "Generating…" : "📝 Start exam quiz"}
-        </Button>
+        <div className="flex flex-col gap-1.5">
+          <Button size="sm" variant="secondary" disabled={pending} onClick={start} className="self-start">
+            {pending ? "Writing your questions…" : "📝 Start exam quiz"}
+          </Button>
+          {/* The questions are written fresh each time, which takes a good few
+              seconds — without saying so, the wait reads as nothing happening. */}
+          {pending && (
+            <p className="text-xs text-muted">
+              Takes around 10–20 seconds — the questions are written fresh for your topics and what you&apos;ve marked
+              as not understood, not pulled from a fixed list.
+            </p>
+          )}
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           {quiz.map((q, i) => (
