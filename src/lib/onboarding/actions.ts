@@ -51,12 +51,12 @@ export async function completeOnboarding(raw: OnboardingPayload) {
         create: {
           userId,
           name: data.schoolName,
-          educationSystem: data.educationSystem ?? "OTHER",
+          educationSystem: data.educationSystem || "OTHER",
           yearGroup: data.yearGroup,
         },
         update: {
           name: data.schoolName,
-          educationSystem: data.educationSystem ?? "OTHER",
+          educationSystem: data.educationSystem || "OTHER",
           yearGroup: data.yearGroup,
         },
       });

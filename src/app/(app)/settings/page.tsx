@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { updateProfileName, updateOptimizationDomains, updateNutritionSettings } from "@/lib/settings/actions";
+import { updateProfileName, updateOptimizationDomains, updateNutritionSettings, updateSchoolSettings } from "@/lib/settings/actions";
 import { isRealAIConfigured } from "@/lib/ai/provider";
+import { EDUCATION_SYSTEMS } from "@/lib/data/cambridge";
+import { parseEducationSystems } from "@/lib/ai/academic-prompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -13,6 +15,8 @@ export default async function SettingsPage() {
   const session = await auth();
   const userId = session!.user.id;
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const school = await prisma.school.findUnique({ where: { userId } });
+  const selectedSystems = parseEducationSystems(school?.educationSystem);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
@@ -31,6 +35,36 @@ export default async function SettingsPage() {
           <p className="mt-2 text-xs text-muted">{user.email}</p>
         </CardContent>
       </Card>
+
+      {school && (
+        <Card className="mt-4">
+          <CardHeader><CardTitle>Your school</CardTitle></CardHeader>
+          <CardContent>
+            <form action={updateSchoolSettings} className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-muted">School name</label>
+                <input name="schoolName" defaultValue={school.name} className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-muted">Education system — tick every level you&rsquo;re taking</label>
+                <div className="flex flex-col gap-2">
+                  {EDUCATION_SYSTEMS.map((sys) => (
+                    <label key={sys.value} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" name="educationSystems" value={sys.value} defaultChecked={selectedSystems.includes(sys.value)} />
+                      {sys.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-muted">
+                  Taking IGCSE and A Level subjects side by side? Tick both — the AI then asks which level a question
+                  is at instead of guessing.
+                </p>
+              </div>
+              <Button type="submit" size="sm" variant="secondary" className="self-start">Save</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mt-4">
         <CardHeader><CardTitle>What are you optimizing?</CardTitle></CardHeader>

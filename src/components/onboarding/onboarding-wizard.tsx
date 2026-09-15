@@ -93,7 +93,7 @@ export function OnboardingWizard() {
   }, [domains]);
 
   const [schoolName, setSchoolName] = useState("");
-  const [educationSystem, setEducationSystem] = useState("IGCSE");
+  const [educationSystems, setEducationSystems] = useState<string[]>(["IGCSE"]);
   const [yearGroup, setYearGroup] = useState("");
   const [subjects, setSubjects] = useState<string[]>(["Mathematics", "Physics", "English Language"]);
 
@@ -144,7 +144,7 @@ export function OnboardingWizard() {
       optimizeFootball: domains.optimizeFootball,
       mainFocus,
       schoolName: schoolName || "My School",
-      educationSystem,
+      educationSystem: educationSystems.join(","),
       yearGroup,
       subjects,
       gymGoals,
@@ -253,14 +253,24 @@ export function OnboardingWizard() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted">Education system</label>
+              <label className="mb-1 block text-xs font-medium text-muted">
+                Education system — pick every level you&rsquo;re taking
+              </label>
               <div className="flex flex-wrap gap-2">
                 {EDUCATION_SYSTEMS.map((sys) => (
-                  <Chip key={sys.value} selected={educationSystem === sys.value} onClick={() => setEducationSystem(sys.value)}>
+                  <Chip
+                    key={sys.value}
+                    selected={educationSystems.includes(sys.value)}
+                    onClick={() => toggleFromList(educationSystems, setEducationSystems, sys.value)}
+                  >
                     {sys.label}
                   </Chip>
                 ))}
               </div>
+              <p className="mt-1.5 text-xs text-muted">
+                Doing IGCSE and A Level subjects side by side? Select both — the AI then asks which level a
+                question is at instead of guessing.
+              </p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted">Year group (optional)</label>

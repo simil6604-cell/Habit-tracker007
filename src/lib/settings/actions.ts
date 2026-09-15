@@ -6,6 +6,7 @@ import { auth, signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 
 const VALID_MAIN_FOCUS = ["school", "gym", "football", "balanced"];
+const VALID_EDUCATION_SYSTEMS = ["IGCSE", "AS_LEVEL", "A_LEVEL", "OTHER"];
 
 async function requireUserId() {
   const session = await auth();
@@ -34,6 +35,26 @@ export async function updateOptimizationDomains(formData: FormData) {
     },
   });
   revalidatePath("/settings");
+}
+
+export async function updateSchoolSettings(formData: FormData) {
+  const userId = await requireUserId();
+  const name = String(formData.get("schoolName") ?? "").trim();
+  // Checkboxes sharing a name arrive as repeated entries; none ticked means none selected.
+  const systems = formData
+    .getAll("educationSystems")
+    .map(String)
+    .filter((s) => VALID_EDUCATION_SYSTEMS.includes(s));
+
+  await prisma.school.update({
+    where: { userId },
+    data: {
+      ...(name ? { name } : {}),
+      educationSystem: systems.length ? systems.join(",") : "OTHER",
+    },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/school");
 }
 
 export async function updateNutritionSettings(formData: FormData) {

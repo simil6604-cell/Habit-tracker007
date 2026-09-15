@@ -3,18 +3,32 @@
 // copy of any third-party tutoring product or its content. It calibrates
 // tone/depth to the student's own qualification level (set once in School
 // settings) and is explicit about what it can't honestly claim to be.
+const LEVEL_NAMES: Record<string, string> = {
+  IGCSE: "Cambridge IGCSE",
+  AS_LEVEL: "Cambridge International AS Level",
+  A_LEVEL: "Cambridge International A Level",
+};
+
+/** Stored as a comma-separated list — a student can sit IGCSE and A Level subjects side by side. */
+export function parseEducationSystems(stored: string | null | undefined): string[] {
+  return (stored ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s in LEVEL_NAMES);
+}
+
 export function buildAcademicSystemPrompt(educationSystem: string | null | undefined): string {
+  const levels = parseEducationSystems(educationSystem);
   const levelLine = (() => {
-    switch (educationSystem) {
-      case "IGCSE":
-        return "This student is currently studying towards Cambridge IGCSE qualifications.";
-      case "AS_LEVEL":
-        return "This student is currently studying towards Cambridge International AS Level qualifications.";
-      case "A_LEVEL":
-        return "This student is currently studying towards Cambridge International A Level qualifications.";
-      default:
-        return "This student studies within the Cambridge International curriculum (IGCSE and/or AS & A Level) — if the level isn't clear from what they ask, check which one before assuming.";
+    if (levels.length === 0) {
+      return "This student studies within the Cambridge International curriculum (IGCSE and/or AS & A Level) — if the level isn't clear from what they ask, check which one before assuming.";
     }
+    if (levels.length === 1) {
+      return `This student is currently studying towards ${LEVEL_NAMES[levels[0]]} qualifications.`;
+    }
+    const names = levels.map((l) => LEVEL_NAMES[l]);
+    const list = `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    return `This student is studying towards ${list} qualifications at the same time — different subjects sit at different levels. When the subject's level isn't clear from what they ask, ask which one before answering, rather than assuming the easier or the harder.`;
   })();
 
   return [
