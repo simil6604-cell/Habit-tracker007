@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS } from "@/lib/data/cambridge";
@@ -20,11 +21,22 @@ function Toggle({ selected, onClick, emoji, title, desc }: { selected: boolean; 
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={selected}
       className={cn(
-        "flex flex-1 flex-col items-center gap-2 rounded-2xl border p-6 text-center transition",
-        selected ? "border-accent bg-accent/10" : "border-border bg-surface hover:bg-surface-muted"
+        "relative flex flex-1 flex-col items-center gap-2 rounded-2xl border-2 p-6 text-center transition",
+        selected
+          ? "border-accent bg-accent/20 ring-2 ring-accent/40"
+          : "border-border bg-surface opacity-55 hover:opacity-80 hover:bg-surface-muted"
       )}
     >
+      <span
+        className={cn(
+          "absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full border-2 transition",
+          selected ? "border-accent bg-accent text-accent-foreground" : "border-border bg-transparent"
+        )}
+      >
+        {selected && <Check size={14} strokeWidth={3} />}
+      </span>
       <span className="text-4xl">{emoji}</span>
       <span className="font-semibold">{title}</span>
       <span className="text-xs text-muted">{desc}</span>
@@ -37,11 +49,15 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={selected}
       className={cn(
-        "rounded-full border px-3.5 py-1.5 text-sm font-medium transition",
-        selected ? "border-accent bg-accent/15 text-accent" : "border-border bg-surface text-muted hover:bg-surface-muted"
+        "inline-flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition",
+        selected
+          ? "border-accent bg-accent text-accent-foreground"
+          : "border-border bg-surface text-muted hover:bg-surface-muted hover:text-foreground"
       )}
     >
+      {selected && <Check size={13} strokeWidth={3} />}
       {children}
     </button>
   );
