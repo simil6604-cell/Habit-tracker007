@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Badge } from "@/components/ui/badge";
+import { SUBJECT_LEVELS } from "@/lib/data/cambridge";
 
 export function SubjectCard({
   subject,
@@ -14,14 +15,18 @@ export function SubjectCard({
     avgProgress: number;
     topicCount: number;
     isExamSubject?: boolean;
+    level?: string | null;
   };
 }) {
+  // Distinguishes two subjects sharing a name at different levels.
+  const levelLabel = SUBJECT_LEVELS.find((l) => l.value === subject.level)?.short;
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 transition hover:shadow-md">
       <Link href={`/school/subjects/${subject.id}`} className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: subject.color }} />
           <p className="font-semibold">{subject.name}</p>
+          {levelLabel && <Badge>{levelLabel}</Badge>}
           {subject.isExamSubject && <Badge variant="warning">Exam</Badge>}
         </div>
         {(subject.teacher || subject.room) && (

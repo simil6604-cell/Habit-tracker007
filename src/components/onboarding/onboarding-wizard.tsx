@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS } from "@/lib/data/cambridge";
+import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS, IGCSE_TIERED_SUBJECTS } from "@/lib/data/cambridge";
 import { FOOTBALL_POSITIONS, FOOTBALL_SKILLS, GYM_GOALS } from "@/lib/data/football";
 import { completeOnboarding, type OnboardingPayload } from "@/lib/onboarding/actions";
 
@@ -17,7 +17,7 @@ const SUBJECT_SECTIONS = [
     value: "IGCSE",
     level: "IGCSE_CORE",
     subjectsHeading: "🎓 Your IGCSE subjects",
-    subjectsHint: "Pick the subjects you're sitting at IGCSE, then set Core or Extended for each.",
+    subjectsHint: "Pick the subjects you're sitting at IGCSE. Maths and the sciences then ask for Core or Extended.",
   },
   {
     value: "AS_LEVEL",
@@ -148,18 +148,6 @@ export function OnboardingWizard() {
     [educationSystems]
   );
 
-  /** Which system a subject is already claimed by, so it can't be picked twice. */
-  function takenBy(subjectName: string): string | null {
-    for (const [system, names] of Object.entries(subjectsBySystem)) {
-      if (names.includes(subjectName)) return system;
-    }
-    return null;
-  }
-
-  function systemLabel(system: string) {
-    return EDUCATION_SYSTEMS.find((s) => s.value === system)?.label ?? system;
-  }
-
   function toggleSubjectFor(system: string, name: string) {
     setSubjectsBySystem((prev) => {
       const current = prev[system] ?? [];
@@ -175,9 +163,10 @@ export function OnboardingWizard() {
     const out: { name: string; level: string }[] = [];
     for (const sys of orderedSystems) {
       for (const name of subjectsBySystem[sys.value] ?? []) {
+        const tiered = sys.value === "IGCSE" && IGCSE_TIERED_SUBJECTS.includes(name);
         out.push({
           name,
-          level: sys.value === "IGCSE" ? igcseTiers[name] ?? "IGCSE_CORE" : sys.level,
+          level: sys.value !== "IGCSE" ? sys.level : tiered ? igcseTiers[name] ?? "IGCSE_CORE" : "IGCSE",
         });
       }
     }
@@ -234,8 +223,7 @@ export function OnboardingWizard() {
       schoolName: schoolName || "My School",
       educationSystem: educationSystems.join(","),
       yearGroup,
-      subjects: chosenSubjects.map((s) => s.name),
-      subjectLevels: Object.fromEntries(chosenSubjects.map((s) => [s.name, s.level])),
+      subjects: chosenSubjects,
       gymGoals,
       footballPosition,
       footballTeamName,
@@ -377,30 +365,22 @@ export function OnboardingWizard() {
                   <label className="mb-0.5 block text-sm font-semibold">{sys.subjectsHeading}</label>
                   <p className="mb-2.5 text-xs text-muted">{sys.subjectsHint}</p>
                   <div className="flex flex-wrap gap-2">
-                    {CAMBRIDGE_SUBJECTS.map((s) => {
-                      const owner = takenBy(s);
-                      const takenElsewhere = owner !== null && owner !== sys.value;
-                      return (
-                        <Chip
-                          key={s}
-                          selected={picked.includes(s)}
-                          disabled={takenElsewhere}
-                          title={takenElsewhere ? `Already picked under ${systemLabel(owner)}` : undefined}
-                          onClick={() => toggleSubjectFor(sys.value, s)}
-                        >
-                          {s}
-                        </Chip>
-                      );
-                    })}
+                    {CAMBRIDGE_SUBJECTS.map((s) => (
+                      // Deliberately not blocked elsewhere: taking a subject at
+                      // IGCSE and continuing it at A Level is normal.
+                      <Chip key={s} selected={picked.includes(s)} onClick={() => toggleSubjectFor(sys.value, s)}>
+                        {s}
+                      </Chip>
+                    ))}
                   </div>
 
-                  {sys.value === "IGCSE" && picked.length > 0 && (
+                  {sys.value === "IGCSE" && picked.some((n) => IGCSE_TIERED_SUBJECTS.includes(n)) && (
                     <div className="mt-3 border-t border-border pt-3">
                       <label className="mb-2 block text-xs font-medium text-muted">
                         Core or Extended for each?
                       </label>
                       <div className="flex flex-col gap-2">
-                        {picked.map((name) => (
+                        {picked.filter((n) => IGCSE_TIERED_SUBJECTS.includes(n)).map((name) => (
                           <div key={name} className="flex flex-wrap items-center gap-2">
                             <span className="min-w-32 flex-1 text-sm">{name}</span>
                             <div className="flex gap-1.5">
@@ -425,8 +405,8 @@ export function OnboardingWizard() {
                         ))}
                       </div>
                       <p className="mt-2 text-xs text-muted">
-                        Core caps at grade C and leaves out Extended-only content — the AI sticks to whichever tier
-                        you set here.
+                        Only these syllabuses are tiered. Core caps at grade C and leaves out Extended-only content
+                        — the AI sticks to whichever tier you set here.
                       </p>
                     </div>
                   )}

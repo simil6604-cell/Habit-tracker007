@@ -19,7 +19,22 @@ export type EducationSystem = (typeof EDUCATION_SYSTEMS)[number]["value"];
  * so the AI has to know which tier a subject is on, not just "IGCSE".
  * `system` ties each level back to the education systems the student ticked.
  */
+/**
+ * Only some Cambridge IGCSE syllabuses are tiered into Core and Extended —
+ * the sciences, Maths and English as a Second Language. Everything else is a
+ * single paper set, so asking Core/Extended there is a meaningless question.
+ */
+export const IGCSE_TIERED_SUBJECTS = [
+  "Mathematics",
+  "Physics",
+  "Chemistry",
+  "Biology",
+  "Combined Science",
+  "Second Language",
+];
+
 export const SUBJECT_LEVELS = [
+  { value: "IGCSE", label: "IGCSE", short: "IGCSE", system: "IGCSE" },
   { value: "IGCSE_CORE", label: "IGCSE — Core", short: "Core", system: "IGCSE" },
   { value: "IGCSE_EXTENDED", label: "IGCSE — Extended", short: "Extended", system: "IGCSE" },
   { value: "AS_LEVEL", label: "AS Level", short: "AS", system: "AS_LEVEL" },

@@ -18,6 +18,8 @@ export function parseEducationSystems(stored: string | null | undefined): string
 }
 
 const SUBJECT_LEVEL_LINES: Record<string, string> = {
+  IGCSE:
+    "is sat at Cambridge IGCSE. This syllabus isn't split into Core and Extended tiers, so treat it as the single full syllabus.",
   IGCSE_CORE:
     "is sat at Cambridge IGCSE **Core** tier. Core covers the foundational content and caps at grade C — stay on the core method, don't drift into Extended-only material, and say so plainly if they ask about something that is Extended-only.",
   IGCSE_EXTENDED:

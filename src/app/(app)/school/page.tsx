@@ -32,6 +32,7 @@ export default async function SchoolPage() {
     teacher: s.teacher,
     room: s.room,
     isExamSubject: s.isExamSubject,
+    level: s.level,
     topicCount: s.topics.length,
     avgProgress: s.topics.length ? Math.round(s.topics.reduce((a, t) => a + t.progressPct, 0) / s.topics.length) : 0,
   }));

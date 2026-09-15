@@ -15,8 +15,9 @@ const payloadSchema = z.object({
   schoolName: z.string().optional(),
   educationSystem: z.string().optional(),
   yearGroup: z.string().optional(),
-  subjects: z.array(z.string()).default([]),
-  subjectLevels: z.record(z.string(), z.string()).default({}),
+  // Name plus level, not a bare name: the same subject can run at two levels
+  // at once (IGCSE Maths while starting A Level Maths).
+  subjects: z.array(z.object({ name: z.string(), level: z.string() })).default([]),
 
   gymGoals: z.array(z.string()).default([]),
 
@@ -63,12 +64,11 @@ export async function completeOnboarding(raw: OnboardingPayload) {
       });
       void school;
 
-      for (const [i, name] of data.subjects.entries()) {
-        const level = data.subjectLevels[name] ?? null;
-        const existing = await tx.subject.findFirst({ where: { userId, name } });
-        if (existing) {
-          await tx.subject.update({ where: { id: existing.id }, data: { level } });
-        } else {
+      for (const [i, { name, level }] of data.subjects.entries()) {
+        // Matched on name AND level, so the same subject at two levels stays
+        // two separate subjects rather than overwriting itself.
+        const existing = await tx.subject.findFirst({ where: { userId, name, level } });
+        if (!existing) {
           await tx.subject.create({
             data: { userId, name, level, color: SUBJECT_COLORS[i % SUBJECT_COLORS.length] },
           });
