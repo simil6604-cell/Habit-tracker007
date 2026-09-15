@@ -400,7 +400,10 @@ model Meal {
   carbsG    Int?     // user-entered or picked from the common-foods list; always approximate
   fatG      Int?     // user-entered or picked from the common-foods list; always approximate
   notes     String?
-  imagePath String?  // a photo you took, stored as-is — never analyzed
+  imagePath String?  // a photo you took; the AI can estimate macros from it on request
+  // True when the macros came from an AI estimate rather than a label or your
+  // own entry, so the UI can say so instead of passing a guess off as measured.
+  estimated Boolean @default(false)
 
   @@index([userId, date])
 }

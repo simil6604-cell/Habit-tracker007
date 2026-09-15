@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { COMMON_FOODS } from "@/lib/data/nutrition";
+import { estimateMealNutrition } from "@/lib/nutrition/estimate";
 import type { MealTypeSummary } from "@/lib/gym/nutrition-summary";
 
 type Meal = {
@@ -19,6 +20,7 @@ type Meal = {
   fatG: number | null;
   date: Date;
   imagePath: string | null;
+  estimated?: boolean;
 };
 
 const TYPE_META: Record<string, { label: string; emoji: string }> = {
@@ -30,14 +32,58 @@ const TYPE_META: Record<string, { label: string; emoji: string }> = {
 
 const FOODS_DATALIST_ID = "common-foods";
 
+/** Server actions take plain data, so the photo travels as a data URL. */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 function MealTypeRow({ breakdown, meals }: { breakdown: MealTypeSummary; meals: Meal[] }) {
   const [open, setOpen] = useState(false);
   const kcalRef = useRef<HTMLInputElement>(null);
   const proteinRef = useRef<HTMLInputElement>(null);
   const carbsRef = useRef<HTMLInputElement>(null);
   const fatRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLInputElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [estimating, setEstimating] = useState(false);
+  const [estimateNote, setEstimateNote] = useState<string | null>(null);
+  const [estimateError, setEstimateError] = useState(false);
+  const [estimated, setEstimated] = useState(false);
   const meta = TYPE_META[breakdown.type];
   const pct = breakdown.targetKcal ? Math.min(100, Math.round((breakdown.consumedKcal / breakdown.targetKcal) * 100)) : 0;
+
+  async function estimateWithAI() {
+    const description = descriptionRef.current?.value ?? "";
+    const file = photoRef.current?.files?.[0] ?? null;
+
+    setEstimating(true);
+    setEstimateError(false);
+    setEstimateNote(null);
+    try {
+      const imageDataUrl = file ? await fileToDataUrl(file) : null;
+      const result = await estimateMealNutrition(description, imageDataUrl);
+      if (!result.ok) {
+        setEstimateError(true);
+        setEstimateNote(result.error);
+        return;
+      }
+      if (kcalRef.current) kcalRef.current.value = String(result.kcal);
+      if (proteinRef.current) proteinRef.current.value = String(result.proteinG);
+      if (carbsRef.current) carbsRef.current.value = String(result.carbsG);
+      if (fatRef.current) fatRef.current.value = String(result.fatG);
+      setEstimated(true);
+      setEstimateNote(
+        `Rough estimate — adjust anything that looks off.${result.assumptions ? ` ${result.assumptions}` : ""}`
+      );
+    } finally {
+      setEstimating(false);
+    }
+  }
 
   function onDescriptionChange(e: React.ChangeEvent<HTMLInputElement>) {
     const match = COMMON_FOODS.find((f) => f.name.toLowerCase() === e.target.value.toLowerCase());
@@ -77,6 +123,7 @@ function MealTypeRow({ breakdown, meals }: { breakdown: MealTypeSummary; meals: 
           <form action={createMeal} className="flex flex-wrap gap-2">
             <input type="hidden" name="type" value={breakdown.type} />
             <input
+              ref={descriptionRef}
               name="description"
               required
               placeholder="What did you eat?"
@@ -89,13 +136,22 @@ function MealTypeRow({ breakdown, meals }: { breakdown: MealTypeSummary; meals: 
             <input ref={carbsRef} name="carbsG" type="number" min={0} placeholder="carbs g" className="w-24 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             <input ref={fatRef} name="fatG" type="number" min={0} placeholder="fat g" className="w-20 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             <input
+              ref={photoRef}
               name="photo"
               type="file"
               accept="image/*"
               className="w-full text-xs text-muted file:mr-2 file:rounded-lg file:border-0 file:bg-surface-muted file:px-2 file:py-1.5 file:text-xs sm:w-auto"
             />
+            <input type="hidden" name="estimated" value={estimated ? "1" : ""} />
+            <Button type="button" size="sm" variant="outline" disabled={estimating} onClick={estimateWithAI}>
+              {estimating ? "Estimating…" : "✨ Estimate with AI"}
+            </Button>
             <Button type="submit" size="sm" variant="secondary">Log</Button>
           </form>
+
+          {estimateNote && (
+            <p className={`text-xs ${estimateError ? "text-danger" : "text-muted"}`}>{estimateNote}</p>
+          )}
 
           {meals.length > 0 && (
             <ul className="flex flex-col divide-y divide-border">
@@ -107,6 +163,12 @@ function MealTypeRow({ breakdown, meals }: { breakdown: MealTypeSummary; meals: 
                     )}
                     <span>{m.description}</span>
                     {m.kcal !== null && <span className="text-muted">~{m.kcal} kcal</span>}
+                    {m.proteinG !== null && <span className="text-muted">{m.proteinG}g protein</span>}
+                    {m.estimated && (
+                      <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] text-muted">
+                        AI estimate
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted">{format(m.date, "HH:mm")}</span>

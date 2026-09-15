@@ -32,6 +32,7 @@ export async function createMeal(formData: FormData) {
       proteinG: proteinRaw ? Number(proteinRaw) : null,
       carbsG: carbsRaw ? Number(carbsRaw) : null,
       fatG: fatRaw ? Number(fatRaw) : null,
+      estimated: Boolean(formData.get("estimated")),
       imagePath,
     },
   });
