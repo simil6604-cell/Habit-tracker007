@@ -12,6 +12,10 @@ import { DrillLibraryPanel } from "@/components/football/drill-library-panel";
 import { Sparkles } from "lucide-react";
 import { DomainHero } from "@/components/layout/domain-hero";
 import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
+import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
+import { WeekView } from "@/components/calendar/week-view";
+import { getCalendarItems } from "@/lib/calendar/items";
+import { addDays, startOfDay } from "date-fns";
 
 export default async function FootballPage() {
   const session = await auth();
@@ -25,6 +29,17 @@ export default async function FootballPage() {
   const goals = await prisma.goal.findMany({ where: { userId, category: "FOOTBALL" }, orderBy: { createdAt: "asc" } });
 
   const now = new Date();
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(now), i));
+  const [footballTasks, weekItems] = await Promise.all([
+    prisma.task.findMany({
+      where: { userId, category: "FOOTBALL" },
+      orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+      take: 20,
+    }),
+    getCalendarItems(userId, weekDays[0], addDays(weekDays[6], 1)),
+  ]);
+  const footballWeekItems = weekItems.filter((i) => i.category === "FOOTBALL");
+
   const upcomingTrainings = profile?.trainings.filter((t) => !t.date || t.date >= now) ?? [];
   const upcomingMatches = profile?.matches.filter((m) => m.date >= now) ?? [];
 
@@ -108,6 +123,27 @@ export default async function FootballPage() {
       {!profile && (
         <p className="mt-4 text-sm text-muted">Save your profile above to unlock training, matches and goals.</p>
       )}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Football tasks</CardTitle></CardHeader>
+          <CardContent>
+            <DomainTasksPanel category="FOOTBALL" tasks={footballTasks} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>This football week</CardTitle></CardHeader>
+          <CardContent>
+            {footballWeekItems.length === 0 ? (
+              <p className="text-sm text-muted">
+                Nothing football-related in the next 7 days — add a training session, a match or a task.
+              </p>
+            ) : (
+              <WeekView days={weekDays} items={footballWeekItems} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

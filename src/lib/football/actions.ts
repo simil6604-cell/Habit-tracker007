@@ -86,25 +86,63 @@ export async function toggleTrainingCompleted(trainingId: string) {
   revalidatePath("/football");
 }
 
-export async function attachDrillVideo(trainingId: string, drillIndex: number, formData: FormData) {
-  const userId = await requireUserId();
+type StoredDrill = {
+  name: string;
+  minutes: number;
+  cueText?: string;
+  /** Legacy single link, kept so drills saved before multi-video still work. */
+  videoUrl?: string;
+  videoUrls?: string[];
+};
+
+/** Reads either shape and always hands back a list. */
+function drillVideoList(drill: StoredDrill): string[] {
+  const many = Array.isArray(drill.videoUrls) ? drill.videoUrls : [];
+  return drill.videoUrl && !many.includes(drill.videoUrl) ? [drill.videoUrl, ...many] : many;
+}
+
+async function updateDrills(
+  trainingId: string,
+  userId: string,
+  drillIndex: number,
+  change: (drill: StoredDrill) => StoredDrill
+) {
   const training = await prisma.footballTraining.findFirst({ where: { id: trainingId, profile: { userId } } });
   if (!training) return;
 
-  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
-  if (!videoUrl) return;
-
-  let drills: { name: string; minutes: number; cueText?: string; videoUrl?: string }[] = [];
+  let drills: StoredDrill[] = [];
   try {
     drills = JSON.parse(training.drills);
   } catch {
     return;
   }
   if (!drills[drillIndex]) return;
-  drills[drillIndex] = { ...drills[drillIndex], videoUrl };
+  drills[drillIndex] = change(drills[drillIndex]);
 
   await prisma.footballTraining.update({ where: { id: trainingId }, data: { drills: JSON.stringify(drills) } });
   revalidatePath("/football");
+}
+
+export async function attachDrillVideo(trainingId: string, drillIndex: number, formData: FormData) {
+  const userId = await requireUserId();
+  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  if (!videoUrl) return;
+
+  await updateDrills(trainingId, userId, drillIndex, (drill) => {
+    const existing = drillVideoList(drill);
+    if (existing.includes(videoUrl)) return drill;
+    // Collapses the legacy single field into the list so there's one shape from here on.
+    return { ...drill, videoUrl: undefined, videoUrls: [...existing, videoUrl] };
+  });
+}
+
+export async function removeDrillVideo(trainingId: string, drillIndex: number, videoUrl: string) {
+  const userId = await requireUserId();
+  await updateDrills(trainingId, userId, drillIndex, (drill) => ({
+    ...drill,
+    videoUrl: undefined,
+    videoUrls: drillVideoList(drill).filter((u) => u !== videoUrl),
+  }));
 }
 
 export async function updateTrainingDiary(trainingId: string, formData: FormData) {

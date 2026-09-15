@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { toggleTrainingCompleted, deleteTraining, updateTrainingDiary, attachDrillVideo } from "@/lib/football/actions";
+import { toggleTrainingCompleted, deleteTraining, updateTrainingDiary, attachDrillVideo, removeDrillVideo } from "@/lib/football/actions";
 import { generateTrainingDiaryTip } from "@/lib/football/diary-assistant";
 import { DRILL_VIDEOS } from "@/lib/data/football";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,13 @@ import { Button } from "@/components/ui/button";
 import { VideoReference } from "@/components/shared/video-reference";
 import { Trash2, NotebookPen } from "lucide-react";
 
-type Drill = { name: string; minutes: number; cueText?: string; videoUrl?: string };
+type Drill = { name: string; minutes: number; cueText?: string; videoUrl?: string; videoUrls?: string[] };
+
+/** Mirrors drillVideoList on the server: reads legacy single link or the list. */
+function videoListOf(d: Drill): string[] {
+  const many = Array.isArray(d.videoUrls) ? d.videoUrls : [];
+  return d.videoUrl && !many.includes(d.videoUrl) ? [d.videoUrl, ...many] : many;
+}
 type Training = {
   id: string;
   title: string;
@@ -72,23 +78,48 @@ export function TrainingList({ trainings }: { trainings: Training[] }) {
                   <div key={i} className="rounded-lg bg-surface-muted px-2.5 py-1.5 text-xs text-muted">
                     <span>{d.minutes} min {d.name}</span>
                     {d.cueText && <p className="mt-0.5">💡 {d.cueText}</p>}
-                    {d.videoUrl ? (
-                      <div className="mt-1">
-                        <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Your saved reference</p>
-                        <VideoReference url={d.videoUrl} />
-                      </div>
-                    ) : DRILL_VIDEOS[d.name] ? (
-                      <div className="mt-1">
-                        <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Example drill video</p>
-                        <VideoReference url={DRILL_VIDEOS[d.name]} />
-                      </div>
-                    ) : null}
-                    {!d.videoUrl && (
-                      <form action={attachDrillVideo.bind(null, t.id, i)} className="mt-1 flex gap-1">
-                        <input name="videoUrl" placeholder="Save your own link…" className="w-32 rounded border border-border bg-surface px-1.5 py-1 text-xs" />
-                        <button type="submit" className="text-accent">Save</button>
-                      </form>
-                    )}
+                    {(() => {
+                      const saved = videoListOf(d);
+                      return (
+                        <>
+                          {saved.length > 0 && (
+                            <div className="mt-1">
+                              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">
+                                Your saved references ({saved.length})
+                              </p>
+                              <div className="flex flex-col gap-1.5">
+                                {saved.map((url) => (
+                                  <div key={url} className="flex items-start gap-1">
+                                    <div className="min-w-0 flex-1">
+                                      <VideoReference url={url} />
+                                    </div>
+                                    <form action={removeDrillVideo.bind(null, t.id, i, url)}>
+                                      <button type="submit" title="Remove this video" className="text-muted hover:text-danger">
+                                        ✕
+                                      </button>
+                                    </form>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {saved.length === 0 && DRILL_VIDEOS[d.name] && (
+                            <div className="mt-1">
+                              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Example drill video</p>
+                              <VideoReference url={DRILL_VIDEOS[d.name]} />
+                            </div>
+                          )}
+                          <form action={attachDrillVideo.bind(null, t.id, i)} className="mt-1 flex gap-1">
+                            <input
+                              name="videoUrl"
+                              placeholder={saved.length ? "Add another link…" : "Save your own link…"}
+                              className="w-32 rounded border border-border bg-surface px-1.5 py-1 text-xs"
+                            />
+                            <button type="submit" className="text-accent">Save</button>
+                          </form>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
