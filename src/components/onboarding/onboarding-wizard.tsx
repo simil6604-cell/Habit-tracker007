@@ -4,12 +4,40 @@ import { useMemo, useState, useTransition } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS, levelsForSystems } from "@/lib/data/cambridge";
+import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS } from "@/lib/data/cambridge";
 import { FOOTBALL_POSITIONS, FOOTBALL_SKILLS, GYM_GOALS } from "@/lib/data/football";
 import { completeOnboarding, type OnboardingPayload } from "@/lib/onboarding/actions";
 
 type Domain = "optimizeSchool" | "optimizeGym" | "optimizeFootball";
 type MainFocus = "school" | "gym" | "football" | "balanced";
+
+/** One subject-picking section per education system, in the order a student meets them. */
+const SUBJECT_SECTIONS = [
+  {
+    value: "IGCSE",
+    level: "IGCSE_CORE",
+    subjectsHeading: "🎓 Your IGCSE subjects",
+    subjectsHint: "Pick the subjects you're sitting at IGCSE, then set Core or Extended for each.",
+  },
+  {
+    value: "AS_LEVEL",
+    level: "AS_LEVEL",
+    subjectsHeading: "📘 Your AS Level subjects",
+    subjectsHint: "Pick the subjects you're sitting at AS Level.",
+  },
+  {
+    value: "A_LEVEL",
+    level: "A_LEVEL",
+    subjectsHeading: "📗 Your A Level subjects",
+    subjectsHint: "Pick the subjects you're sitting at A Level — most students take 3.",
+  },
+  {
+    value: "OTHER",
+    level: "OTHER",
+    subjectsHeading: "📚 Your other subjects",
+    subjectsHint: "Subjects outside the Cambridge levels above.",
+  },
+] as const;
 
 const DOMAIN_CARDS: { key: Domain; emoji: string; title: string; desc: string }[] = [
   { key: "optimizeSchool", emoji: "🎓", title: "School", desc: "Timetable, exams, study plans" },
@@ -45,17 +73,33 @@ function Toggle({ selected, onClick, emoji, title, desc }: { selected: boolean; 
   );
 }
 
-function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({
+  selected,
+  onClick,
+  children,
+  disabled,
+  title,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+  title?: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
+      title={title}
       aria-pressed={selected}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition",
         selected
           ? "border-accent bg-accent text-accent-foreground"
-          : "border-border bg-surface text-muted hover:bg-surface-muted hover:text-foreground"
+          : disabled
+            ? "cursor-not-allowed border-border bg-surface text-muted opacity-35"
+            : "border-border bg-surface text-muted hover:bg-surface-muted hover:text-foreground"
       )}
     >
       {selected && <Check size={13} strokeWidth={3} />}
@@ -94,11 +138,52 @@ export function OnboardingWizard() {
 
   const [schoolName, setSchoolName] = useState("");
   const [educationSystems, setEducationSystems] = useState<string[]>(["IGCSE"]);
-  const [subjectLevels, setSubjectLevels] = useState<Record<string, string>>({});
+  // Subjects are chosen per education system, so "IGCSE Maths" and "A Level
+  // Economics" stay visibly separate instead of collapsing into one flat list.
+  const [subjectsBySystem, setSubjectsBySystem] = useState<Record<string, string[]>>({});
+  const [igcseTiers, setIgcseTiers] = useState<Record<string, string>>({});
 
-  const availableLevels = useMemo(() => levelsForSystems(educationSystems), [educationSystems]);
+  const orderedSystems = useMemo(
+    () => SUBJECT_SECTIONS.filter((s) => educationSystems.includes(s.value)),
+    [educationSystems]
+  );
+
+  /** Which system a subject is already claimed by, so it can't be picked twice. */
+  function takenBy(subjectName: string): string | null {
+    for (const [system, names] of Object.entries(subjectsBySystem)) {
+      if (names.includes(subjectName)) return system;
+    }
+    return null;
+  }
+
+  function systemLabel(system: string) {
+    return EDUCATION_SYSTEMS.find((s) => s.value === system)?.label ?? system;
+  }
+
+  function toggleSubjectFor(system: string, name: string) {
+    setSubjectsBySystem((prev) => {
+      const current = prev[system] ?? [];
+      return {
+        ...prev,
+        [system]: current.includes(name) ? current.filter((n) => n !== name) : [...current, name],
+      };
+    });
+  }
+
+  /** Flattened for the payload: every chosen subject with the level it sits at. */
+  const chosenSubjects = useMemo(() => {
+    const out: { name: string; level: string }[] = [];
+    for (const sys of orderedSystems) {
+      for (const name of subjectsBySystem[sys.value] ?? []) {
+        out.push({
+          name,
+          level: sys.value === "IGCSE" ? igcseTiers[name] ?? "IGCSE_CORE" : sys.level,
+        });
+      }
+    }
+    return out;
+  }, [orderedSystems, subjectsBySystem, igcseTiers]);
   const [yearGroup, setYearGroup] = useState("");
-  const [subjects, setSubjects] = useState<string[]>(["Mathematics", "Physics", "English Language"]);
 
   const [gymGoals, setGymGoals] = useState<string[]>(["Improve consistency"]);
 
@@ -149,10 +234,8 @@ export function OnboardingWizard() {
       schoolName: schoolName || "My School",
       educationSystem: educationSystems.join(","),
       yearGroup,
-      subjects,
-      subjectLevels: Object.fromEntries(
-        subjects.map((name) => [name, subjectLevels[name] ?? availableLevels[0].value])
-      ),
+      subjects: chosenSubjects.map((s) => s.name),
+      subjectLevels: Object.fromEntries(chosenSubjects.map((s) => [s.name, s.level])),
       gymGoals,
       footballPosition,
       footballTeamName,
@@ -287,45 +370,80 @@ export function OnboardingWizard() {
                 className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted">Subjects</label>
-              <div className="flex flex-wrap gap-2">
-                {CAMBRIDGE_SUBJECTS.map((s) => (
-                  <Chip key={s} selected={subjects.includes(s)} onClick={() => toggleFromList(subjects, setSubjects, s)}>
-                    {s}
-                  </Chip>
-                ))}
-              </div>
-            </div>
+            {orderedSystems.map((sys) => {
+              const picked = subjectsBySystem[sys.value] ?? [];
+              return (
+                <div key={sys.value} className="rounded-xl border border-border bg-surface p-3.5">
+                  <label className="mb-0.5 block text-sm font-semibold">{sys.subjectsHeading}</label>
+                  <p className="mb-2.5 text-xs text-muted">{sys.subjectsHint}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {CAMBRIDGE_SUBJECTS.map((s) => {
+                      const owner = takenBy(s);
+                      const takenElsewhere = owner !== null && owner !== sys.value;
+                      return (
+                        <Chip
+                          key={s}
+                          selected={picked.includes(s)}
+                          disabled={takenElsewhere}
+                          title={takenElsewhere ? `Already picked under ${systemLabel(owner)}` : undefined}
+                          onClick={() => toggleSubjectFor(sys.value, s)}
+                        >
+                          {s}
+                        </Chip>
+                      );
+                    })}
+                  </div>
 
-            {subjects.length > 0 && (
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted">
-                  What level is each subject at?
-                </label>
-                <div className="flex flex-col gap-2">
-                  {subjects.map((name) => (
-                    <div key={name} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
-                      <span className="min-w-32 flex-1 text-sm font-medium">{name}</span>
-                      <select
-                        value={subjectLevels[name] ?? availableLevels[0].value}
-                        onChange={(e) => setSubjectLevels((prev) => ({ ...prev, [name]: e.target.value }))}
-                        className="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-sm"
-                      >
-                        {availableLevels.map((l) => (
-                          <option key={l.value} value={l.value}>
-                            {l.label}
-                          </option>
+                  {sys.value === "IGCSE" && picked.length > 0 && (
+                    <div className="mt-3 border-t border-border pt-3">
+                      <label className="mb-2 block text-xs font-medium text-muted">
+                        Core or Extended for each?
+                      </label>
+                      <div className="flex flex-col gap-2">
+                        {picked.map((name) => (
+                          <div key={name} className="flex flex-wrap items-center gap-2">
+                            <span className="min-w-32 flex-1 text-sm">{name}</span>
+                            <div className="flex gap-1.5">
+                              {(["IGCSE_CORE", "IGCSE_EXTENDED"] as const).map((tier) => (
+                                <button
+                                  key={tier}
+                                  type="button"
+                                  onClick={() => setIgcseTiers((prev) => ({ ...prev, [name]: tier }))}
+                                  aria-pressed={(igcseTiers[name] ?? "IGCSE_CORE") === tier}
+                                  className={cn(
+                                    "rounded-full border-2 px-3 py-1 text-xs font-medium transition",
+                                    (igcseTiers[name] ?? "IGCSE_CORE") === tier
+                                      ? "border-accent bg-accent text-accent-foreground"
+                                      : "border-border bg-surface-muted text-muted hover:text-foreground"
+                                  )}
+                                >
+                                  {tier === "IGCSE_CORE" ? "Core" : "Extended"}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         ))}
-                      </select>
+                      </div>
+                      <p className="mt-2 text-xs text-muted">
+                        Core caps at grade C and leaves out Extended-only content — the AI sticks to whichever tier
+                        you set here.
+                      </p>
                     </div>
-                  ))}
+                  )}
+
+                  {sys.value === "A_LEVEL" && picked.length > 0 && picked.length < 3 && (
+                    <p className="mt-2 text-xs text-muted">
+                      Most students take 3 A Levels — you&rsquo;ve picked {picked.length}. More or fewer is fine.
+                    </p>
+                  )}
                 </div>
-                <p className="mt-1.5 text-xs text-muted">
-                  IGCSE Core and Extended cover different content and cap at different grades — the AI pitches every
-                  answer to the level you set here, per subject.
-                </p>
-              </div>
+              );
+            })}
+
+            {orderedSystems.length === 0 && (
+              <p className="rounded-xl border border-dashed border-border p-3.5 text-xs text-muted">
+                Pick at least one education system above to choose your subjects.
+              </p>
             )}
           </div>
         </div>
@@ -390,7 +508,7 @@ export function OnboardingWizard() {
             training details afterwards in each section.
           </p>
           <div className="mt-6 flex flex-col gap-2 rounded-xl border border-border bg-surface-muted p-4 text-sm">
-            {domains.optimizeSchool && <p>🎓 {schoolName || "My School"} · {subjects.length} subjects</p>}
+            {domains.optimizeSchool && <p>🎓 {schoolName || "My School"} · {chosenSubjects.length} subjects</p>}
             {domains.optimizeGym && <p>🏋️ Goals: {gymGoals.join(", ") || "none selected"}</p>}
             {domains.optimizeFootball && <p>⚽ Position: {footballPosition}{footballTeamName ? ` · ${footballTeamName}` : ""}</p>}
           </div>
