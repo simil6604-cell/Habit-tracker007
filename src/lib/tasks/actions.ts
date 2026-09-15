@@ -10,6 +10,11 @@ async function requireUserId() {
   return session.user.id;
 }
 
+/** Tasks are shown on /tasks and on each domain page, so all of them go stale together. */
+function revalidateTaskViews() {
+  for (const path of ["/tasks", "/school", "/gym", "/football", "/"]) revalidatePath(path);
+}
+
 export async function createTask(formData: FormData) {
   const userId = await requireUserId();
   const title = String(formData.get("title") ?? "").trim();
@@ -26,7 +31,7 @@ export async function createTask(formData: FormData) {
       dueDate: dueDate ? new Date(dueDate) : null,
     },
   });
-  revalidatePath("/tasks");
+  revalidateTaskViews();
 }
 
 export async function cycleTaskStatus(taskId: string) {
@@ -36,11 +41,11 @@ export async function cycleTaskStatus(taskId: string) {
 
   const next = task.status === "TODO" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "DONE" : "TODO";
   await prisma.task.update({ where: { id: taskId }, data: { status: next } });
-  revalidatePath("/tasks");
+  revalidateTaskViews();
 }
 
 export async function deleteTask(taskId: string) {
   const userId = await requireUserId();
   await prisma.task.deleteMany({ where: { id: taskId, userId } });
-  revalidatePath("/tasks");
+  revalidateTaskViews();
 }

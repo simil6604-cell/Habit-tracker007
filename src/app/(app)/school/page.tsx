@@ -10,6 +10,9 @@ import { HomeworkPanel, ExamPanel } from "@/components/school/homework-exam-list
 import { DailyChecklist } from "@/components/school/daily-checklist";
 import { getTodaySchoolChecklist } from "@/lib/planner/day-review";
 import { DomainHero } from "@/components/layout/domain-hero";
+import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
+import { NotesOverviewPanel } from "@/components/school/notes-overview-panel";
+import { getSchoolNotesOverview } from "@/lib/school/notes-overview";
 
 export default async function SchoolPage() {
   const session = await auth();
@@ -23,6 +26,15 @@ export default async function SchoolPage() {
     prisma.homework.findMany({ where: { userId, status: "PENDING" }, include: { subject: true }, orderBy: { dueDate: "asc" }, take: 20 }),
     prisma.exam.findMany({ where: { userId, date: { gte: now, lte: in14 } }, include: { subject: true }, orderBy: { date: "asc" } }),
     getTodaySchoolChecklist(userId),
+  ]);
+
+  const [schoolTasks, notes] = await Promise.all([
+    prisma.task.findMany({
+      where: { userId, category: "SCHOOL" },
+      orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+      take: 20,
+    }),
+    getSchoolNotesOverview(userId),
   ]);
 
   const subjectCards = subjects.map((s) => ({
@@ -114,6 +126,31 @@ export default async function SchoolPage() {
           </CardHeader>
           <CardContent>
             <ExamPanel exams={exams} subjects={subjects.map((s) => ({ id: s.id, name: s.name }))} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>School tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DomainTasksPanel category="SCHOOL" tasks={schoolTasks} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>My notes &amp; recordings</CardTitle>
+            <Link href="/school/flashcards">
+              <Button variant="outline" size="sm">
+                Flashcards
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <NotesOverviewPanel entries={notes} />
           </CardContent>
         </Card>
       </div>
