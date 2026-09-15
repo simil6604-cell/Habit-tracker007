@@ -35,6 +35,30 @@ export const IGCSE_TIERED_SUBJECTS = [
   "English as a Second Language",
 ];
 
+/**
+ * Syllabuses that exist only at IGCSE. At AS/A Level you are on the advanced
+ * syllabus by definition, so offering the foundation-level variants there
+ * would let a student record a qualification that doesn't exist.
+ */
+export const IGCSE_ONLY_SUBJECTS = [
+  "Combined Science",
+  "Additional Mathematics",
+  "English as a Second Language",
+  "German — Second Language",
+];
+
+/** Syllabuses that only start at AS/A Level. */
+export const ADVANCED_ONLY_SUBJECTS = ["Further Mathematics"];
+
+/** The subjects worth offering under a given education system. */
+export function subjectsForSystem(system: string): string[] {
+  if (system === "IGCSE") return CAMBRIDGE_SUBJECTS.filter((s) => !ADVANCED_ONLY_SUBJECTS.includes(s));
+  if (system === "AS_LEVEL" || system === "A_LEVEL") {
+    return CAMBRIDGE_SUBJECTS.filter((s) => !IGCSE_ONLY_SUBJECTS.includes(s));
+  }
+  return CAMBRIDGE_SUBJECTS;
+}
+
 export const SUBJECT_LEVELS = [
   { value: "IGCSE", label: "IGCSE", short: "IGCSE", system: "IGCSE" },
   { value: "IGCSE_CORE", label: "IGCSE — Core", short: "Core", system: "IGCSE" },
@@ -73,6 +97,7 @@ export const CAMBRIDGE_SUBJECTS = [
   "Sociology",
   "Art & Design",
   "Physical Education",
+  "Further Mathematics",
   // Cambridge runs First Language and Foreign/Second Language German as
   // separate syllabuses at very different levels, so they're separate subjects.
   "German — First Language",

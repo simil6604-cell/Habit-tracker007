@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { EDUCATION_SYSTEMS, CAMBRIDGE_SUBJECTS, IGCSE_TIERED_SUBJECTS } from "@/lib/data/cambridge";
+import { EDUCATION_SYSTEMS, IGCSE_TIERED_SUBJECTS, subjectsForSystem } from "@/lib/data/cambridge";
 import { FOOTBALL_POSITIONS, FOOTBALL_SKILLS, GYM_GOALS } from "@/lib/data/football";
 import { completeOnboarding, type OnboardingPayload } from "@/lib/onboarding/actions";
 
@@ -29,7 +29,8 @@ const SUBJECT_SECTIONS = [
     value: "A_LEVEL",
     level: "A_LEVEL",
     subjectsHeading: "📗 Your A Level subjects",
-    subjectsHint: "Pick the subjects you're sitting at A Level — most students take 3.",
+    subjectsHint:
+      "Pick the subjects you're sitting at A Level — most students take 3. A Level is the advanced syllabus, so there's no tier to choose here.",
   },
   {
     value: "OTHER",
@@ -365,7 +366,7 @@ export function OnboardingWizard() {
                   <label className="mb-0.5 block text-sm font-semibold">{sys.subjectsHeading}</label>
                   <p className="mb-2.5 text-xs text-muted">{sys.subjectsHint}</p>
                   <div className="flex flex-wrap gap-2">
-                    {CAMBRIDGE_SUBJECTS.map((s) => (
+                    {subjectsForSystem(sys.value).map((s) => (
                       // Deliberately not blocked elsewhere: taking a subject at
                       // IGCSE and continuing it at A Level is normal.
                       <Chip key={s} selected={picked.includes(s)} onClick={() => toggleSubjectFor(sys.value, s)}>
