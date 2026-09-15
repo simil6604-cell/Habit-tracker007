@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DeleteAccountButton } from "@/components/settings/danger-zone";
+import { AIConnectionTest } from "@/components/settings/ai-connection-test";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SettingsPage() {
@@ -156,13 +157,16 @@ export default async function SettingsPage() {
 
       <Card className="mt-4">
         <CardHeader><CardTitle>AI Coach</CardTitle></CardHeader>
-        <CardContent className="flex items-center justify-between">
+        <CardContent>
+          <div className="flex items-center justify-between">
           <p className="text-sm text-muted">
             {isRealAIConfigured
               ? "Connected to a real Claude-backed AI — genuine subject tutoring in School (framed for your Cambridge IGCSE/AS/A-Level level) plus richer AI Coach chat replies."
               : "Running on the built-in rule-based coach — it only ever reasons over your own stored data. Set ANTHROPIC_API_KEY in your .env to enable real subject tutoring and chat."}
           </p>
-          <Badge variant={isRealAIConfigured ? "success" : "accent"}>{isRealAIConfigured ? "LLM connected" : "Rule-based"}</Badge>
+            <Badge variant={isRealAIConfigured ? "success" : "accent"}>{isRealAIConfigured ? "LLM connected" : "Rule-based"}</Badge>
+          </div>
+          <AIConnectionTest />
         </CardContent>
       </Card>
 
