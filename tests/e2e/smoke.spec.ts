@@ -72,7 +72,8 @@ test.describe.serial("full app walkthrough", () => {
     await page.goto("/gym");
     await page.fill('input[placeholder="e.g. Upper Body"]', "Leg Day");
     await page.click('button:has-text("Add plan")');
-    await expect(page.getByText("Leg Day")).toBeVisible();
+    // The plan's own card, not the "not on a day yet" hint that also names it.
+    await expect(page.getByText("Leg Day", { exact: true }).first()).toBeVisible();
   });
 
   test("football: save profile and generate training", async () => {

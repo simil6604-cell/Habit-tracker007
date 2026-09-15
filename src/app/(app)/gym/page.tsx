@@ -5,6 +5,11 @@ import { createWorkout } from "@/lib/gym/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { WorkoutPlanCard } from "@/components/gym/workout-plan-card";
+import { WeeklySplitCard } from "@/components/gym/weekly-split-card";
+import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
+import { WeekView } from "@/components/calendar/week-view";
+import { getCalendarItems } from "@/lib/calendar/items";
+import { addDays, startOfDay } from "date-fns";
 import { MealsByTypePanel } from "@/components/gym/meals-panel";
 import { NutritionBalanceCard } from "@/components/gym/nutrition-balance-card";
 import { WaterTrackerCard } from "@/components/gym/water-tracker-card";
@@ -28,6 +33,17 @@ export default async function GymPage() {
   });
 
   const todayWorkout = workouts.find((w) => w.dayOfWeek === todayIdx);
+
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(new Date()), i));
+  const [gymTasks, weekItems] = await Promise.all([
+    prisma.task.findMany({
+      where: { userId, category: "GYM" },
+      orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+      take: 20,
+    }),
+    getCalendarItems(userId, weekDays[0], addDays(weekDays[6], 1)),
+  ]);
+  const gymWeekItems = weekItems.filter((i) => ["GYM", "RECOVERY"].includes(i.category));
 
   const [meals, goals, nutritionSummary, user] = await Promise.all([
     prisma.meal.findMany({ where: { userId }, orderBy: { date: "desc" }, take: 10 }),
@@ -63,6 +79,15 @@ export default async function GymPage() {
           ) : (
             <p className="text-sm text-muted">No workout scheduled for today. Rest day, or add one below.</p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Your training week</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WeeklySplitCard workouts={workouts} todayIdx={todayIdx} />
         </CardContent>
       </Card>
 
@@ -132,6 +157,27 @@ export default async function GymPage() {
           <CardHeader><CardTitle>Physique Goal</CardTitle></CardHeader>
           <CardContent>
             <PhysiqueGoalCard currentWeightKg={user?.weightKg ?? null} targetWeightKg={user?.targetWeightKg ?? null} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Gym tasks</CardTitle></CardHeader>
+          <CardContent>
+            <DomainTasksPanel category="GYM" tasks={gymTasks} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>This gym week</CardTitle></CardHeader>
+          <CardContent>
+            {gymWeekItems.length === 0 ? (
+              <p className="text-sm text-muted">
+                Nothing gym-related scheduled in the next 7 days — log a session or add a gym task.
+              </p>
+            ) : (
+              <WeekView days={weekDays} items={gymWeekItems} />
+            )}
           </CardContent>
         </Card>
       </div>
