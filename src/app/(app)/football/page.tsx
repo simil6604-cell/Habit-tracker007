@@ -13,6 +13,11 @@ import { Sparkles } from "lucide-react";
 import { DomainHero } from "@/components/layout/domain-hero";
 import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
 import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
+import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
+import { LeagueSnapshot } from "@/components/football/league-snapshot";
+import { UpcomingOpponentsCard } from "@/components/football/upcoming-opponents-card";
+import { analyzeTable } from "@/lib/football/table-analysis";
+import { previewOpponents } from "@/lib/football/opponents";
 import { WeekView } from "@/components/calendar/week-view";
 import { getCalendarItems } from "@/lib/calendar/items";
 import { addDays, startOfDay } from "date-fns";
@@ -23,7 +28,11 @@ export default async function FootballPage() {
 
   const profile = await prisma.footballProfile.findUnique({
     where: { userId },
-    include: { team: true, trainings: { orderBy: { date: "asc" } }, matches: { orderBy: { date: "asc" } } },
+    include: {
+      team: { include: { standings: { orderBy: { rank: "asc" } } } },
+      trainings: { orderBy: { date: "asc" } },
+      matches: { orderBy: { date: "asc" } },
+    },
   });
 
   const goals = await prisma.goal.findMany({ where: { userId, category: "FOOTBALL" }, orderBy: { createdAt: "asc" } });
@@ -42,6 +51,11 @@ export default async function FootballPage() {
 
   const upcomingTrainings = profile?.trainings.filter((t) => !t.date || t.date >= now) ?? [];
   const upcomingMatches = profile?.matches.filter((m) => m.date >= now) ?? [];
+
+  const standings = profile?.team?.standings ?? [];
+  const weaknesses = profile?.weaknesses?.split(",").filter(Boolean) ?? [];
+  const analysis = profile?.team ? analyzeTable(standings, profile.team.name, weaknesses) : null;
+  const opponents = profile?.team ? previewOpponents(upcomingMatches, standings, profile.team.name) : [];
 
   const focusSkills = profile
     ? [...new Set([...(POSITION_FOCUS[profile.position as FootballPosition] ?? []), ...(profile.weaknesses?.split(",").filter(Boolean) ?? [])])]
@@ -110,6 +124,25 @@ export default async function FootballPage() {
               <MatchList matches={upcomingMatches} />
             </CardContent>
           </Card>
+
+          {profile.team && (
+            <Card className="mt-4">
+              <CardHeader><CardTitle>League table &amp; race for 1st</CardTitle></CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <StandingsSyncPanel initialUrl={profile.team.sourceUrl} lastSyncedAt={profile.team.lastSyncedAt} />
+                <LeagueSnapshot standings={standings} myTeamName={profile.team.name} analysis={analysis} />
+              </CardContent>
+            </Card>
+          )}
+
+          {profile.team && (
+            <Card className="mt-4">
+              <CardHeader><CardTitle>Upcoming opponents</CardTitle></CardHeader>
+              <CardContent>
+                <UpcomingOpponentsCard previews={opponents} />
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="mt-4">
             <CardHeader><CardTitle>Development Goals</CardTitle></CardHeader>

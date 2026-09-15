@@ -81,11 +81,56 @@ test.describe.serial("full app walkthrough", () => {
     await page.selectOption('select[name="position"]', "ST");
     await page.fill('input[name="teamName"]', "Test FC");
     await page.click('button:has-text("Save profile")');
-    await expect(page.getByRole("link", { name: "Team & table" })).toBeVisible();
+    // The hero button, not the inline link the empty league table also renders.
+    await expect(page.locator('a[href="/football/team"]').first()).toBeVisible();
 
     await page.click('button:has-text("Generate individual training")');
     await page.reload();
     await expect(page.getByText("🎯 Individual Training")).toBeVisible();
+  });
+
+  test("football: league table, race for 1st and opponent scouting", async () => {
+    await page.goto("/football");
+    await expect(page.getByText("League table & race for 1st")).toBeVisible();
+
+    // Two fixtures: one against a team that will be in the table, one that won't.
+    // Scoped to the match form — the training form above it also has a date field.
+    const matchForm = page.locator('form:has(input[name="opponent"])');
+    for (const [opponent, day] of [["Table FC", "10"], ["Unknown Rovers", "17"]] as const) {
+      await matchForm.locator('input[name="opponent"]').fill(opponent);
+      await matchForm.locator('input[name="date"]').fill(`2099-01-${day}T15:00`);
+      await matchForm.locator('button:has-text("Add match")').click();
+      await expect(page.getByText(opponent).first()).toBeVisible();
+    }
+
+    // A two-row table: the leader ahead of us on points and goal difference.
+    await page.goto("/football/team");
+    const rows = [
+      { rank: "1", teamName: "Table FC", played: "4", won: "4", drawn: "0", lost: "0", goalsFor: "12", goalsAgainst: "2", points: "12" },
+      { rank: "2", teamName: "Test FC", played: "4", won: "1", drawn: "1", lost: "2", goalsFor: "4", goalsAgainst: "6", points: "4" },
+    ];
+    for (const row of rows) {
+      for (const [name, value] of Object.entries(row)) {
+        await page.fill(`form:has(input[name="rank"]) input[name="${name}"]`, value);
+      }
+      await page.click('form:has(input[name="rank"]) button:has-text("Add")');
+      // The server action re-renders the table; wait for the row before filling the
+      // next. Matched on the row, since our own cell also carries a "You" badge.
+      await expect(page.locator("tbody tr", { hasText: row.teamName })).toBeVisible();
+    }
+
+    // Race maths: 2 teams -> a 1-match season, already played 4, so 0 left and 1st
+    // is out of reach. The point is that it states that rather than inventing hope.
+    const race = page.locator('div:has(> div > h3:text("Race for 1st place"))').first();
+    await expect(race).toContainText("2nd");
+    await expect(race).toContainText("Out of reach on points");
+    await expect(race).toContainText("nothing here is invented");
+
+    // Opponent scouting: the matched one carries table context, the other says so.
+    const opponents = page.locator('div:has(> div > h3:text("Upcoming opponents"))').first();
+    await expect(opponents).toContainText("1st on 12 pts");
+    await expect(opponents).toContainText("six-pointer");
+    await expect(opponents).toContainText("Not matched to a table row");
   });
 
   test("ai coach: responds to a chat message", async () => {

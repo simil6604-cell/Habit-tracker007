@@ -3,12 +3,14 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { addStanding, deleteStanding } from "@/lib/football/actions";
 import { analyzeTable } from "@/lib/football/table-analysis";
+import { previewOpponents } from "@/lib/football/opponents";
+import { RaceToFirstCard } from "@/components/football/race-to-first-card";
+import { UpcomingOpponentsCard } from "@/components/football/upcoming-opponents-card";
 import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
-import { format } from "date-fns";
 
 export default async function FootballTeamPage() {
   const session = await auth();
@@ -20,13 +22,15 @@ export default async function FootballTeamPage() {
   });
   if (!profile?.team) redirect("/football");
 
-  const nextMatch = await prisma.footballMatch.findFirst({
+  const upcomingMatches = await prisma.footballMatch.findMany({
     where: { profileId: profile.id, date: { gte: new Date() } },
     orderBy: { date: "asc" },
+    take: 5,
   });
 
   const weaknesses = profile.weaknesses ? profile.weaknesses.split(",").filter(Boolean) : [];
   const analysis = analyzeTable(profile.team.standings, profile.team.name, weaknesses);
+  const opponents = previewOpponents(upcomingMatches, profile.team.standings, profile.team.name);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -38,36 +42,30 @@ export default async function FootballTeamPage() {
       </p>
 
       <Card className="mt-6">
-        <CardHeader><CardTitle>Next Match</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Upcoming opponents</CardTitle></CardHeader>
         <CardContent>
-          {nextMatch ? (
-            <p className="text-sm">
-              {nextMatch.isHome ? "vs" : "@"} <span className="font-medium">{nextMatch.opponent}</span> —{" "}
-              {format(nextMatch.date, "EEEE, MMM d 'at' HH:mm")}
-            </p>
-          ) : (
-            <p className="text-sm text-muted">No upcoming match scheduled — add one on the Football page.</p>
-          )}
+          <UpcomingOpponentsCard previews={opponents} />
         </CardContent>
       </Card>
 
-      {analysis && (
+      {analysis ? (
         <Card className="mt-4">
-          <CardHeader><CardTitle>AI Analysis</CardTitle></CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <span>Current position: <strong>{analysis.mine.rank}</strong></span>
-              <span>Points: <strong>{analysis.mine.points}</strong></span>
-              <span>Goal difference: <strong>{analysis.goalDiff >= 0 ? "+" : ""}{analysis.goalDiff}</strong></span>
-            </div>
-            <ul className="flex flex-col gap-1 text-sm text-muted">
-              {analysis.insights.map((i) => (
-                <li key={i}>• {i}</li>
-              ))}
-            </ul>
+          <CardHeader><CardTitle>Race for 1st place</CardTitle></CardHeader>
+          <CardContent>
+            <RaceToFirstCard analysis={analysis} />
           </CardContent>
         </Card>
-      )}
+      ) : profile.team.standings.length > 0 ? (
+        <Card className="mt-4">
+          <CardHeader><CardTitle>Race for 1st place</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted">
+              None of the rows in the table is named &ldquo;{profile.team.name}&rdquo;, so there&apos;s nothing to measure you
+              against. Rename your team in the Football profile to match the league table exactly, and this fills in.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="mt-4">
         <CardHeader><CardTitle>League Table</CardTitle></CardHeader>
@@ -87,7 +85,9 @@ export default async function FootballTeamPage() {
             <Button type="submit" size="sm" variant="secondary" className="col-span-2 sm:col-span-1">Add</Button>
           </form>
 
-          <div className="overflow-x-auto">
+          {/* min-w-0: without it this flex item refuses to shrink below the table's
+              min-content width, so the page scrolls sideways instead of the table. */}
+          <div className="min-w-0 overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted">
