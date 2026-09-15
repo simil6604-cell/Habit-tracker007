@@ -73,7 +73,10 @@ export const CAMBRIDGE_SUBJECTS = [
   "Sociology",
   "Art & Design",
   "Physical Education",
-  "German",
+  // Cambridge runs First Language and Foreign/Second Language German as
+  // separate syllabuses at very different levels, so they're separate subjects.
+  "German — First Language",
+  "German — Second Language",
   "French",
   "Spanish",
   "Italian",
