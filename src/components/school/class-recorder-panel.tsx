@@ -42,6 +42,9 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
   const [interim, setInterim] = useState("");
   const [micError, setMicError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // Browsers end a recognition session on every pause in speech. Without this
+  // flag the mic dies a few seconds into a lesson and looks broken.
+  const wantListeningRef = useRef(false);
 
   const [recordings, setRecordings] = useState<ClassRecordingEntry[] | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -59,7 +62,10 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
   }, [topicId]);
 
   useEffect(() => {
-    return () => recognitionRef.current?.stop();
+    return () => {
+      wantListeningRef.current = false;
+      recognitionRef.current?.stop();
+    };
   }, []);
 
   function startListening() {
@@ -82,22 +88,38 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
       setInterim(interimChunk);
     };
     recognition.onerror = (event) => {
+      // "no-speech" and "aborted" are just pauses — let onend restart quietly
+      // rather than showing the student an error mid-lesson.
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      wantListeningRef.current = false;
       setMicError(
-        event.error === "not-allowed"
-          ? "Microphone access was denied — allow it in your browser to record."
+        event.error === "not-allowed" || event.error === "service-not-allowed"
+          ? "Microphone access was denied — allow it for this site in your browser settings, then try again."
           : event.error === "network"
             ? "Couldn't reach the browser's speech service (it needs internet access) — type or paste instead."
             : `Speech recognition stopped (${event.error}).`
       );
       setListening(false);
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      if (!wantListeningRef.current) {
+        setListening(false);
+        return;
+      }
+      try {
+        recognition.start();
+      } catch {
+        // Already restarting — the next onend will try again.
+      }
+    };
     recognitionRef.current = recognition;
+    wantListeningRef.current = true;
     recognition.start();
     setListening(true);
   }
 
   function stopListening() {
+    wantListeningRef.current = false;
     recognitionRef.current?.stop();
     setListening(false);
     setInterim("");

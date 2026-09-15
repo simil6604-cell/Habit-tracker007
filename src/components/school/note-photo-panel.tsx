@@ -71,7 +71,10 @@ export function NotePhotoPanel({ topicId }: { topicId: string }) {
           name="photo"
           type="file"
           accept="image/*"
-          capture="environment"
+          // No `capture` here: it forces iOS straight into single-shot camera
+          // mode and silently ignores `multiple`, so the photo library and
+          // multi-select are both unreachable. Without it the OS offers camera
+          // *and* library, and several photos at once.
           multiple
           required
           className="text-xs text-muted file:mr-2 file:rounded-lg file:border-0 file:bg-surface-muted file:px-2 file:py-1.5 file:text-xs"
