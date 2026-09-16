@@ -21,9 +21,14 @@ async function loadSubjectForQuiz(subjectId: string, userId: string) {
   });
   if (!subject) return null;
 
+  // Newest first and bounded: every question asked in a topic's tutor chat is
+  // logged, so an unbounded fetch would grow the prompt without limit and bury
+  // recent confusions under months of old ones.
   const log = await prisma.learningLogEntry.findMany({
     where: { userId, topic: { subjectId } },
     include: { topic: true },
+    orderBy: { createdAt: "desc" },
+    take: 40,
   });
 
   return { subject, log };

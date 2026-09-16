@@ -31,8 +31,11 @@ export type TableAnalysis = {
   seasonNote: string;
   matchesLeft: number;
   leaderMatchesLeft: number;
-  /** Your points if you won every remaining match. */
+  /** Your points if you won every remaining match of the assumed season. */
   maxPoints: number;
+  /** Your ceiling if the season turns out to be home-and-away — what the
+   *  "out of reach" claim is tested against, so it is never a guess. */
+  bestCasePoints: number;
   /** False when 1st is out of reach even if you win out and the leader loses out. */
   stillPossible: boolean;
   /** Leader's finish if they keep their current points-per-game. */
@@ -80,7 +83,16 @@ export function analyzeTable(
   const matchesLeft = Math.max(0, seasonMatches - mine.played);
   const leaderMatchesLeft = Math.max(0, seasonMatches - leader.played);
   const maxPoints = mine.points + matchesLeft * 3;
-  const stillPossible = mine.rank === 1 || maxPoints > leader.points || (maxPoints === leader.points && goalDiffGap === 0);
+
+  // "1st is out of reach" is a claim that something is impossible, so it can't
+  // rest on the season-length guess above. Early in a home-and-away season
+  // nobody has played more than singleRound yet, so the guess says one round
+  // and would rule out a title that is still wide open. The claim is therefore
+  // tested against the most generous season the table could belong to.
+  const mostMatchesPossible = Math.max(0, singleRound * 2 - mine.played);
+  const bestCasePoints = mine.points + mostMatchesPossible * 3;
+  const stillPossible =
+    mine.rank === 1 || bestCasePoints > leader.points || (bestCasePoints === leader.points && goalDiffGap === 0);
 
   const leaderPace = leader.played > 0 ? leader.points / leader.played : 0;
   const leaderProjected = Math.round(leader.points + leaderPace * leaderMatchesLeft);
@@ -102,7 +114,7 @@ export function analyzeTable(
 
   if (!stillPossible) {
     insights.push(
-      `1st is out of reach on points: winning all ${matchesLeft} remaining matches gets you to ${maxPoints}, and ${leader.teamName} already has ${leader.points}. Second place is the target now.`
+      `1st is out of reach on points: even a full home-and-away run-in of ${mostMatchesPossible} wins only reaches ${bestCasePoints}, and ${leader.teamName} already has ${leader.points}. Second place is the target now.`
     );
   } else if (mine.rank !== 1) {
     insights.push(
@@ -148,6 +160,7 @@ export function analyzeTable(
     matchesLeft,
     leaderMatchesLeft,
     maxPoints,
+    bestCasePoints,
     stillPossible,
     leaderProjected,
     pointsNeeded,

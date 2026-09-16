@@ -40,10 +40,12 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
   }, [messages, pending]);
 
   // Dictation feeds the same box you'd type in, so you can fix a misheard word
-  // before sending rather than being stuck with it.
+  // before sending rather than being stuck with it. Only while listening: a
+  // final result can land just after Stop, and without this guard it would
+  // re-fill the box with the words that were just sent.
   useEffect(() => {
-    if (mic.transcript) setInput(mic.transcript);
-  }, [mic.transcript]);
+    if (mic.listening && mic.transcript) setInput(mic.transcript);
+  }, [mic.transcript, mic.listening]);
 
   function send(text: string) {
     const trimmed = text.trim();

@@ -40,6 +40,9 @@ function findStanding(opponent: string, standings: Standing[]): Standing | null 
 
   const contained = standings.filter((s) => {
     const n = normalize(s.teamName);
+    // A name that normalises away entirely (e.g. just "FC") would otherwise be
+    // "contained in" every opponent and match them all.
+    if (!n) return false;
     return n.includes(target) || target.includes(n);
   });
   // Ambiguous ("Zug" matching two Zug sides) is treated as no match, not a coin flip.

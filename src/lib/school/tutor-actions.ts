@@ -131,7 +131,13 @@ export async function startTutorTopic(topicId: string, kind: "explain" | "exam")
 
 export async function clearTutorChat(topicId: string): Promise<TutorMessageEntry[]> {
   const userId = await requireUserId();
-  await prisma.tutorMessage.deleteMany({ where: { topicId, userId } });
+  // The auto-logged questions came from this conversation, so they go with it.
+  // Anything you deliberately marked as not understood (CONFUSED) is yours and
+  // stays — clearing the chat isn't the same as saying you now understand it.
+  await prisma.$transaction([
+    prisma.tutorMessage.deleteMany({ where: { topicId, userId } }),
+    prisma.learningLogEntry.deleteMany({ where: { topicId, userId, type: "QUESTION" } }),
+  ]);
   return [];
 }
 
@@ -170,7 +176,11 @@ export async function markReplyNotUnderstood(topicId: string, assistantMessageId
     orderBy: { createdAt: "desc" },
   });
   const asked = question?.content.trim();
-  if (!asked) return getNotUnderstoodQuestions(topicId);
+  // Same rule as logQuestionAsked: a quick-start opener is the app's wording,
+  // not yours, so it never becomes something the quiz chases you about.
+  if (!asked || (Object.values(OPENERS) as string[]).includes(asked)) {
+    return getNotUnderstoodQuestions(topicId);
+  }
 
   const content = asked.length > MAX_LOG_LENGTH ? `${asked.slice(0, MAX_LOG_LENGTH - 1)}…` : asked;
   const already = await prisma.learningLogEntry.findFirst({

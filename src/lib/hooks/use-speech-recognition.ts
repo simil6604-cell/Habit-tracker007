@@ -113,7 +113,11 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
     };
 
     recognition.onend = () => {
-      if (!wantListeningRef.current) {
+      // Only the recognizer that is still the active one may restart itself:
+      // a stop followed quickly by a start creates a second recognizer, and
+      // without this check the old one revives alongside it and can no longer
+      // be stopped, because stop() only holds the newest.
+      if (!wantListeningRef.current || recognitionRef.current !== recognition) {
         setListening(false);
         return;
       }
@@ -138,7 +142,11 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
 
   const stop = useCallback(() => {
     wantListeningRef.current = false;
-    recognitionRef.current?.stop();
+    const recognition = recognitionRef.current;
+    // Dropped before stopping, so the onend guard above sees it is no longer
+    // the active recognizer even if a restart is already in flight.
+    recognitionRef.current = null;
+    recognition?.stop();
     setListening(false);
     setInterim("");
   }, []);

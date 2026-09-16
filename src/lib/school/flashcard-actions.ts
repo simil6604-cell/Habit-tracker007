@@ -187,6 +187,14 @@ export async function generateFlashcardsFromConfusions(): Promise<{ created: num
 
   revalidatePath("/school/flashcards");
   if (created === 0) {
+    // "Nothing new" and "every generation failed" look identical from the
+    // outside, and reporting an outage as success is the worse of the two.
+    if (failed > 0) {
+      return {
+        created: 0,
+        message: `Couldn\u2019t generate any cards \u2014 the AI call failed for all ${failed}. Nothing was made up; try again in a moment.`,
+      };
+    }
     return { created: 0, message: "No new cards \u2014 everything you\u2019ve marked already has one." };
   }
   return {

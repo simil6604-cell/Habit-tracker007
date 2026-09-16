@@ -1,5 +1,14 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
 
+// The Web Speech API has no official TS DOM typings, so `tsc --noEmit` rejects
+// these reads even though every browser that supports voice exposes them.
+declare global {
+  interface Window {
+    SpeechRecognition?: unknown;
+    webkitSpeechRecognition?: unknown;
+  }
+}
+
 /**
  * End-to-end smoke test for the whole app: registers a fresh account, runs
  * onboarding, then exercises the core flow of every domain (School, Gym,

@@ -71,17 +71,28 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
     return null;
   }
 
+  /**
+   * A stored entry matches the question it came from. Long questions are stored
+   * truncated with an ellipsis, so those match on their prefix — but only
+   * those: matching every entry by prefix would flag a longer question that
+   * merely starts with a shorter flagged one, and un-flagging would then delete
+   * the wrong entry.
+   */
+  function matchesStored(stored: string, question: string): boolean {
+    if (stored === question) return true;
+    return stored.endsWith("…") && question.startsWith(stored.slice(0, -1));
+  }
+
   function isFlagged(replyId: string): boolean {
     const q = questionBehind(replyId);
-    // Long questions are stored truncated, so compare on the stored prefix.
-    return q !== null && notUnderstood.some((n) => n === q || q.startsWith(n.replace(/…$/, "")));
+    return q !== null && notUnderstood.some((n) => matchesStored(n, q));
   }
 
   function toggleNotUnderstood(replyId: string) {
     if (pending) return;
     const q = questionBehind(replyId);
     if (!q) return;
-    const existing = notUnderstood.find((n) => n === q || q.startsWith(n.replace(/…$/, "")));
+    const existing = notUnderstood.find((n) => matchesStored(n, q));
     startTransition(async () => {
       setNotUnderstood(existing ? await unmarkNotUnderstood(topicId, existing) : await markReplyNotUnderstood(topicId, replyId));
     });
