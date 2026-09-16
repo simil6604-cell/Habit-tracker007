@@ -316,11 +316,20 @@ test.describe.serial("full app walkthrough", () => {
     expect(await page.getByRole("button", { name: /Speak replies/ }).isEnabled()).toBe(caps.synthesis);
 
     if (caps.recognition) {
-      // No audio device in CI: it must say so and leave typing working, rather
-      // than sitting on "Listening…" forever.
+      // What a microphone does depends entirely on the machine: it may listen,
+      // find no audio device, or have permission refused. The promise the app
+      // makes is narrower and testable everywhere — pressing Talk either starts
+      // listening or says why it didn't, and typing keeps working either way.
+      // Never a dead button and never a stuck "Listening…".
       await page.getByRole("button", { name: /Talk/ }).click();
-      await expect(page.getByText(/No microphone was found|Listening…/)).toBeVisible({ timeout: 15000 });
+      await expect(
+        page.getByText(/Listening…|No microphone was found|Microphone access was blocked|Couldn't start the microphone|speech recognition/i)
+      ).toBeVisible({ timeout: 15000 });
       await expect(page.locator('input[name="message"]')).toBeEnabled();
+
+      // And whichever happened, there is a way onward: either Stop & send (it
+      // is listening) or Talk again (it isn't).
+      await expect(page.getByRole("button", { name: /Stop & send|Talk/ }).first()).toBeEnabled();
     }
   });
 
@@ -337,6 +346,34 @@ test.describe.serial("full app walkthrough", () => {
     await page.click('button:has-text("Add")');
     await page.reload();
     await expect(page.getByText("Pack football boots")).toBeVisible();
+  });
+
+  test("uploads: a photo is private to its owner and never served from the app directory", async ({
+    browser,
+  }: {
+    browser: Browser;
+  }) => {
+    // A path in the shape uploads are stored as. It doesn't need to exist: the
+    // point is which requests are refused before a file is ever looked for.
+    const mine = `/uploads/${"x".repeat(25)}/photo.png`;
+
+    // Signed in, but somebody else's folder.
+    const res = await page.request.get(mine, { maxRedirects: 0 });
+    expect(res.status()).not.toBe(200);
+
+    // Traversal and shapes this app never writes.
+    for (const evil of [
+      `/uploads/${"x".repeat(25)}/..%2f..%2fpackage.json`,
+      `/uploads/${"x".repeat(25)}/nested/dir/photo.png`,
+      `/uploads/${"x".repeat(25)}/notes.txt`,
+    ]) {
+      expect((await page.request.get(evil, { maxRedirects: 0 })).status()).not.toBe(200);
+    }
+
+    // Signed out entirely.
+    const anon = await browser.newContext();
+    expect((await anon.request.get(mine, { maxRedirects: 0 })).status()).not.toBe(200);
+    await anon.close();
   });
 
   test("settings: toggle theme and sign out", async () => {

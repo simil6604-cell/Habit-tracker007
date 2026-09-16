@@ -53,3 +53,4 @@ next-env.d.ts
 
 # user-uploaded photos (personal data, not app code)
 /public/uploads/
+/.data/

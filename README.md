@@ -183,3 +183,40 @@ No medical diagnoses, no extreme diets, no unsafe training volume, no
 unrealistic body ideals. The app nudges toward balance and recovery and
 explicitly recommends talking to a parent, coach, or doctor for anything
 health-related.
+
+## Deploying (Render)
+
+The settings below live in the Render dashboard, which means they exist
+nowhere else — recreate the service without them and the app breaks in ways
+that are hard to trace, so they are written down here.
+
+**Build Command**
+```
+npm install && npm run build
+```
+
+**Start Command**
+```
+npx prisma db push --skip-generate && npm run start
+```
+`prisma db push` belongs in the *start* command, not the build command: the
+persistent disk is only mounted at runtime, so a build-time write fails with
+`Read-only file system (os error 30)`. Having it here also means a schema
+change applies itself on the next deploy.
+
+**Disk** — mount at `/var/data`. Everything that must survive a deploy lives
+there, because the app directory itself is rebuilt from git every time.
+
+**Environment variables**
+
+| Variable | Value | Why |
+|---|---|---|
+| `DATABASE_URL` | `file:/var/data/prod.db` | SQLite on the persistent disk. Anywhere else and every account, note and log is wiped on each deploy. |
+| `UPLOAD_DIR` | `/var/data/uploads` | Note photos, meal photos and progress photos. Without this they are written into the app directory, and each deploy deletes them while the database rows still point at them — the photos turn into broken images with no error. |
+| `ANTHROPIC_API_KEY` | your key | Enables the real AI. Without it the app falls back to its own rule-based logic and says so rather than inventing answers. Settings → **Test AI connection** reports what is actually wrong if it isn't working. |
+| `AUTH_SECRET` | a long random string | Signs session cookies. |
+| `NEXTAUTH_URL` / `AUTH_URL` | your app's URL | Auth redirects are built from this. |
+
+Uploaded photos are served by an authenticated route rather than as static
+files, so a progress photo is not readable by anyone who happens to have the
+link.
