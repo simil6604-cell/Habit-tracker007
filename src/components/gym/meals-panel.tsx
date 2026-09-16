@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createMeal, deleteMeal } from "@/lib/nutrition/actions";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Trash2 } from "lucide-react";
 import { COMMON_FOODS } from "@/lib/data/nutrition";
 import { estimateMealNutrition } from "@/lib/nutrition/estimate";
 import type { MealTypeSummary } from "@/lib/gym/nutrition-summary";
+import { currentMealType } from "@/lib/gym/meal-time";
 
 type Meal = {
   id: string;
@@ -42,8 +43,21 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-function MealTypeRow({ breakdown, meals }: { breakdown: MealTypeSummary; meals: Meal[] }) {
-  const [open, setOpen] = useState(false);
+function MealTypeRow({
+  breakdown,
+  meals,
+  defaultOpen = false,
+}: {
+  breakdown: MealTypeSummary;
+  meals: Meal[];
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  // The parent only learns the time of day after mount, so defaultOpen arrives
+  // one render late — useState alone would keep the initial false forever.
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   const kcalRef = useRef<HTMLInputElement>(null);
   const proteinRef = useRef<HTMLInputElement>(null);
   const carbsRef = useRef<HTMLInputElement>(null);
@@ -126,11 +140,17 @@ function MealTypeRow({ breakdown, meals }: { breakdown: MealTypeSummary; meals: 
               ref={descriptionRef}
               name="description"
               required
-              placeholder="What did you eat?"
+              placeholder="What did you eat? Write it however you like…"
               list={FOODS_DATALIST_ID}
               onChange={onDescriptionChange}
-              className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
             />
+            {/* The datalist pops a suggestion list as soon as you type, which
+                reads as though the app only accepts what's on it. It doesn't. */}
+            <p className="w-full text-xs text-muted">
+              Type anything — the suggestions are only a shortcut that fills the numbers for you. Leave the numbers
+              blank and use ✨ Estimate with AI, or fill them in yourself.
+            </p>
             <input ref={kcalRef} name="kcal" type="number" min={0} placeholder="kcal" className="w-20 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             <input ref={proteinRef} name="proteinG" type="number" min={0} placeholder="protein g" className="w-24 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             <input ref={carbsRef} name="carbsG" type="number" min={0} placeholder="carbs g" className="w-24 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
@@ -189,10 +209,21 @@ function MealTypeRow({ breakdown, meals }: { breakdown: MealTypeSummary; meals: 
 }
 
 export function MealsByTypePanel({ meals, breakdown }: { meals: Meal[]; breakdown: MealTypeSummary[] }) {
+  // Decided after mount, from the clock on your device: the server runs in UTC
+  // and would open the wrong meal for anyone who isn't. Rendering the same
+  // thing on both sides first also avoids a hydration mismatch.
+  const [nowMealType, setNowMealType] = useState<string | null>(null);
+  useEffect(() => setNowMealType(currentMealType(new Date().getHours())), []);
+
   return (
     <div className="flex flex-col gap-2">
       {breakdown.map((b) => (
-        <MealTypeRow key={b.type} breakdown={b} meals={meals.filter((m) => m.type === b.type)} />
+        <MealTypeRow
+          key={b.type}
+          breakdown={b}
+          meals={meals.filter((m) => m.type === b.type)}
+          defaultOpen={b.type === nowMealType}
+        />
       ))}
       <p className="mt-1 text-xs text-muted">
         Meal-type targets are just a common rule-of-thumb share of your own daily goal (not measured or

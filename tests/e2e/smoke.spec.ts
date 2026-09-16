@@ -218,6 +218,30 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText("Leg Day", { exact: true }).first()).toBeVisible();
   });
 
+  test("gym: a meal box is open on arrival, and takes whatever you type", async () => {
+    await page.goto("/gym");
+
+    // One section open, not four: the entry field is in front of you without
+    // burying the day's overview.
+    const openForms = page.locator('input[name="description"]');
+    await expect(openForms).toHaveCount(1);
+    await expect(openForms.first()).toBeVisible();
+
+    // The suggestion list is a shortcut, not a menu you must pick from — that
+    // is what made this feel like the app refused your own wording.
+    await expect(openForms.first()).toHaveAttribute("placeholder", /however you like/);
+    await expect(page.getByText(/the suggestions are only a shortcut/)).toBeVisible();
+
+    const form = page.locator('form:has(input[name="description"])').first();
+    await openForms.first().fill("Zwei Spiegeleier, Brot und ein Apfel vom Baum");
+    await expect(openForms.first()).toHaveValue(/Apfel vom Baum/);
+
+    // Free text fills nothing in behind your back.
+    for (const field of ["kcal", "proteinG", "carbsG", "fatG"]) {
+      await expect(form.locator(`[name="${field}"]`)).toHaveValue("");
+    }
+  });
+
   test("gym: example days hit the protein goal with real listed food", async () => {
     await page.goto("/gym/meal-plan");
 
