@@ -177,6 +177,21 @@ src/lib/ai/                 Provider interface, chat engine, balance/
 src/lib/<domain>/actions.ts Server actions (CRUD) per domain
 ```
 
+## Tests
+
+```
+npm test        # unit tests — the reasoning: league arithmetic, meal planning,
+                # spaced repetition, the SVG sanitizer, the deployment check
+npm run test:e2e  # end-to-end — the whole app in a real browser
+```
+
+The unit tests cover the code where a wrong answer is *confidently* wrong and
+invisible to a browser test: a title race declared over, a day that misses its
+protein goal, a flashcard scheduled for the wrong week, markup that should
+never have been let through. Several of them exist because that exact bug
+shipped once — they were each checked by reintroducing the bug and confirming
+the test fails.
+
 ## Safety
 
 No medical diagnoses, no extreme diets, no unsafe training volume, no
