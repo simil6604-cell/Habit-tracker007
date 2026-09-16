@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { stripMarkdown } from "@/lib/utils/markdown";
 import { format } from "date-fns";
 import type { NoteOverviewEntry } from "@/lib/school/notes-overview";
 
@@ -26,7 +27,11 @@ export function NotesOverviewPanel({ entries }: { entries: NoteOverviewEntry[] }
           </div>
 
           <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap text-sm text-muted">
-            {e.summary ?? "No AI summary yet — connect an AI in Settings and re-summarize from the topic."}
+            {/* A clamped preview, so the Markdown markers are stripped rather
+                than rendered as blocks that would break the clamp. */}
+            {e.summary
+              ? stripMarkdown(e.summary)
+              : "No AI summary yet — connect an AI in Settings and re-summarize from the topic."}
           </p>
 
           <Link

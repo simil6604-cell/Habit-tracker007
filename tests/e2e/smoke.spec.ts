@@ -106,6 +106,28 @@ test.describe.serial("full app walkthrough", () => {
     }
   });
 
+  test("school: an assistant reply renders as structure, not raw markdown", async () => {
+    await page.goto("/school");
+    await page.getByRole("link", { name: /Chemistry/ }).click();
+    await page
+      .locator("tr", { hasText: "Periodic Table" })
+      .first()
+      .locator('button[title="AI Learning Assistant"]')
+      .click();
+
+    // Ask something and wait for a reply, whatever the AI situation is.
+    await page.fill('input[placeholder="Ask anything about this topic…"]', "Explain group 1 trends.");
+    await page.click('button:has-text("Send")');
+    await expect(page.locator('button:has-text("I didn\'t get this")').first()).toBeVisible({ timeout: 60000 });
+
+    // A revision-style answer uses headings, bullets and bold. Whatever the
+    // reply contains, none of those markers may survive as literal characters —
+    // that is what makes an answer look broken rather than structured.
+    const main = (await page.locator("main").textContent()) ?? "";
+    expect(main).not.toContain("**");
+    expect(main).not.toMatch(/#{2,}\s/);
+  });
+
   test("school: questions asked in the tutor chat reach the revision list", async () => {
     // The chat lives inside a topic row on the subject page.
     await page.goto("/school");

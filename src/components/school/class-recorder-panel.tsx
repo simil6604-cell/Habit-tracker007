@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { AIProse } from "@/components/shared/ai-message";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
@@ -155,7 +156,9 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
       )}
       {quizError && <p className="text-xs text-danger">{quizError}</p>}
       {quizFeedback && (
-        <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{quizFeedback}</p>
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <AIProse text={quizFeedback} />
+        </div>
       )}
 
       {recordings === null ? (
@@ -174,7 +177,7 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
                     </button>
                   </div>
                   {r.summary ? (
-                    <p className="mt-1 whitespace-pre-wrap text-sm">{r.summary}</p>
+                    <div className="mt-1"><AIProse text={r.summary} /></div>
                   ) : (
                     <p className="mt-1 text-xs text-muted">No AI summary yet — connect a real AI in Settings for one.</p>
                   )}

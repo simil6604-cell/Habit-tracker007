@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { AIProse } from "@/components/shared/ai-message";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -157,7 +158,9 @@ export function LearningLogAndQuiz({ topicId }: { topicId: string }) {
         )}
         {quizError && <p className="mt-2 text-xs text-danger">{quizError}</p>}
         {quizFeedback && (
-          <p className="mt-2 whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{quizFeedback}</p>
+          <div className="mt-2 rounded-lg border border-border bg-surface p-3">
+            <AIProse text={quizFeedback} />
+          </div>
         )}
       </div>
     </div>

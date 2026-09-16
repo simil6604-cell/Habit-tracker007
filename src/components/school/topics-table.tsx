@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, useTransition } from "react";
+import { AIProse } from "@/components/shared/ai-message";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,13 +32,26 @@ function statusEmoji(pct: number) {
   return "🔴";
 }
 
-function TopicAssistant({ topicId }: { topicId: string }) {
+function TopicAssistant({ topicId, revisionUrl }: { topicId: string; revisionUrl: string | null }) {
   const [response, setResponse] = useState<string | null>(null);
   const [mistake, setMistake] = useState("");
   const [pending, startTransition] = useTransition();
 
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-surface-muted p-4">
+      {/* The revision page for this subject, right where the questions get
+          asked — the assistant can't read it, so getting there in one tap is
+          what actually helps. */}
+      {revisionUrl && (
+        <a
+          href={revisionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="self-start text-xs text-accent hover:underline"
+        >
+          ↗ Open your revision notes for this subject
+        </a>
+      )}
       <TutorChatPanel topicId={topicId} />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
@@ -63,7 +77,11 @@ function TopicAssistant({ topicId }: { topicId: string }) {
       </div>
 
       {pending && <p className="text-xs text-muted">Thinking…</p>}
-      {response && <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{response}</p>}
+      {response && (
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <AIProse text={response} />
+        </div>
+      )}
 
       <LearningLogAndQuiz topicId={topicId} />
 
@@ -78,7 +96,15 @@ function TopicAssistant({ topicId }: { topicId: string }) {
   );
 }
 
-export function TopicsTable({ subjectId, topics }: { subjectId: string; topics: Topic[] }) {
+export function TopicsTable({
+  subjectId,
+  topics,
+  revisionUrl = null,
+}: {
+  subjectId: string;
+  topics: Topic[];
+  revisionUrl?: string | null;
+}) {
   const [, startTransition] = useTransition();
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -151,7 +177,7 @@ export function TopicsTable({ subjectId, topics }: { subjectId: string; topics: 
               {expanded === t.id && (
                 <tr>
                   <td colSpan={8} className="pb-3">
-                    <TopicAssistant topicId={t.id} />
+                    <TopicAssistant topicId={t.id} revisionUrl={revisionUrl} />
                   </td>
                 </tr>
               )}

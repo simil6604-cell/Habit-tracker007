@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { AIProse } from "@/components/shared/ai-message";
 import { Button } from "@/components/ui/button";
 import { generateSubjectQuiz, gradeSubjectQuiz } from "@/lib/school/subject-quiz-actions";
 
@@ -89,7 +90,11 @@ export function SubjectExamQuiz({ subjectId }: { subjectId: string }) {
         </div>
       )}
       {error && <p className="text-xs text-danger">{error}</p>}
-      {feedback && <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{feedback}</p>}
+      {feedback && (
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <AIProse text={feedback} />
+        </div>
+      )}
     </div>
   );
 }

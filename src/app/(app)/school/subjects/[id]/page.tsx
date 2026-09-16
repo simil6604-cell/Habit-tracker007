@@ -93,7 +93,7 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
           <CardTitle>Topics</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <TopicsTable subjectId={subject.id} topics={subject.topics} />
+          <TopicsTable subjectId={subject.id} topics={subject.topics} revisionUrl={subject.revisionUrl} />
 
           <form action={addTopic} className="flex flex-wrap items-end gap-2 border-t border-border pt-4">
             <input type="hidden" name="subjectId" value={subject.id} />

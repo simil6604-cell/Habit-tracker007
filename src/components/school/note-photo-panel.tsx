@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { AIProse } from "@/components/shared/ai-message";
 import Image from "next/image";
 import { format } from "date-fns";
 import { Trash2, RefreshCw } from "lucide-react";
@@ -124,7 +125,7 @@ export function NotePhotoPanel({ topicId }: { topicId: string }) {
                   </div>
                 </div>
                 {p.summary ? (
-                  <p className="mt-1 whitespace-pre-wrap text-sm">{p.summary}</p>
+                  <div className="mt-1"><AIProse text={p.summary} /></div>
                 ) : (
                   <p className="mt-1 text-xs text-muted">
                     No AI summary yet — connect a real AI in Settings, then hit refresh.

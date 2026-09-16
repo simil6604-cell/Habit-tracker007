@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { getSubjectWeaknesses } from "@/lib/school/learning-actions";
+import { AIProse } from "@/components/shared/ai-message";
 
 export function SubjectWeaknesses({ subjectId }: { subjectId: string }) {
   const [response, setResponse] = useState<string | null>(null);
@@ -18,7 +19,11 @@ export function SubjectWeaknesses({ subjectId }: { subjectId: string }) {
       >
         Show my weaknesses
       </Button>
-      {response && <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface-muted p-3 text-sm">{response}</p>}
+      {response && (
+        <div className="rounded-lg border border-border bg-surface-muted p-3">
+          <AIProse text={response} />
+        </div>
+      )}
     </div>
   );
 }
