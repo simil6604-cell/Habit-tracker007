@@ -428,13 +428,22 @@ test.describe.serial("full app walkthrough", () => {
     const res = await page.request.get(mine, { maxRedirects: 0 });
     expect(res.status()).not.toBe(200);
 
-    // Traversal and shapes this app never writes.
+    // Traversal and shapes this app never writes. Next decodes each segment
+    // before the route sees it, so "..%2F.." arrives as real path syntax
+    // inside what looks like one segment — which is how a request once climbed
+    // out of its own folder and read another account's photo. The .png cases
+    // matter most: an extension the app serves gets past every other check.
     for (const evil of [
+      `/uploads/${"x".repeat(25)}/..%2Fother%2Fphoto.png`,
+      `/uploads/${"x".repeat(25)}/..%252Fother%252Fphoto.png`,
+      `/uploads/${"x".repeat(25)}/..%5Cother%5Cphoto.png`,
+      `/uploads/${"x".repeat(25)}/%2e%2e%2fother%2fphoto.png`,
+      `/uploads/${"x".repeat(25)}/%2Fetc%2Fhosts.png`,
       `/uploads/${"x".repeat(25)}/..%2f..%2fpackage.json`,
       `/uploads/${"x".repeat(25)}/nested/dir/photo.png`,
       `/uploads/${"x".repeat(25)}/notes.txt`,
     ]) {
-      expect((await page.request.get(evil, { maxRedirects: 0 })).status()).not.toBe(200);
+      expect((await page.request.get(evil, { maxRedirects: 0 })).status(), evil).not.toBe(200);
     }
 
     // Signed out entirely.

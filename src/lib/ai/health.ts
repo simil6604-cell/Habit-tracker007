@@ -15,6 +15,16 @@ import { isRealAIConfigured } from "./provider";
  */
 type Outcome = { at: Date; reason: string };
 
+/**
+ * One failed call is not an outage. A single 429 or a one-off 400 from one
+ * request would otherwise latch the banner on every page until the next
+ * success — the app claiming to be broken while it works. Two in a row, or one
+ * that is still the last thing that happened after a few minutes, is a
+ * different matter.
+ */
+const FAILURES_BEFORE_ALARM = 2;
+const STALE_FAILURE_MS = 5 * 60 * 1000;
+
 let lastSuccess: Date | null = null;
 let lastFailure: Outcome | null = null;
 let failuresSinceSuccess = 0;
@@ -75,7 +85,11 @@ export function getAIHealth(): AIHealth {
     };
   }
 
-  if (lastFailure) {
+  const failureIsMeaningful =
+    lastFailure !== null &&
+    (failuresSinceSuccess >= FAILURES_BEFORE_ALARM || Date.now() - lastFailure.at.getTime() > STALE_FAILURE_MS);
+
+  if (lastFailure && failureIsMeaningful) {
     return {
       ok: false,
       problem: `The last AI call failed: ${lastFailure.reason}`,

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -65,4 +65,25 @@ export async function deleteUploadedImage(imagePath: string | null | undefined) 
       // already gone, or never lived here — fine
     }
   }
+}
+
+/**
+ * Reads back a stored image by the path the database holds.
+ *
+ * Both roots are tried, so a photo saved before UPLOAD_DIR existed still opens.
+ * Without this every caller has to know where uploads live, and one that
+ * guesses wrong fails silently — which is exactly what happened to the AI
+ * summaries when uploads moved off the app directory.
+ */
+export async function readUploadedImage(imagePath: string): Promise<Buffer | null> {
+  if (!imagePath.startsWith("/uploads/")) return null;
+  const relative = imagePath.slice("/uploads/".length);
+  for (const root of [UPLOAD_ROOT, LEGACY_UPLOAD_ROOT]) {
+    try {
+      return await readFile(path.join(root, relative));
+    } catch {
+      // try the other root
+    }
+  }
+  return null;
 }

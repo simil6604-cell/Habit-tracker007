@@ -52,6 +52,17 @@ describe("getDeploymentWarnings", () => {
     expect(await warningsWith({ DATABASE_URL: "file:./prisma/prod.db" })).toHaveLength(1);
   });
 
+  // Prisma resolves a relative SQLite path against the prisma/ directory, not
+  // the working directory. Resolving it the other way puts "../data/prod.db"
+  // outside the repo, when it really sits inside it.
+  it("resolves a relative path the way Prisma does, from prisma/", async () => {
+    expect(await warningsWith({ DATABASE_URL: "file:../data/prod.db" })).toHaveLength(1);
+  });
+
+  it("still sees a genuinely external relative path as safe", async () => {
+    expect(await warningsWith({ DATABASE_URL: "file:../../../var/data/prod.db" })).toEqual([]);
+  });
+
   it("says nothing about a database it doesn't manage the storage for", async () => {
     expect(await warningsWith({ DATABASE_URL: "postgresql://user:pw@host:5432/db" })).toEqual([]);
   });

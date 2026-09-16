@@ -16,7 +16,11 @@ async function requireUserId() {
 async function loadTopicContext(
   topicId: string,
   userId: string
-): Promise<{ ctx: TopicContext; subjectId: string; subject: { name: string; level: string | null } } | null> {
+): Promise<{
+  ctx: TopicContext;
+  subjectId: string;
+  subject: { name: string; level: string | null; revisionUrl: string | null };
+} | null> {
   const topic = await prisma.topic.findFirst({
     where: { id: topicId, subject: { userId } },
     include: { subject: true },
@@ -34,7 +38,9 @@ async function loadTopicContext(
 
   return {
     subjectId: topic.subjectId,
-    subject: { name: topic.subject.name, level: topic.subject.level },
+    // revisionUrl included: it carries the "you have NOT read that site"
+    // safeguard, and dropping it let these calls invent page references.
+    subject: { name: topic.subject.name, level: topic.subject.level, revisionUrl: topic.subject.revisionUrl },
     ctx: {
       topicName: topic.name,
       subjectName: topic.subject.name,
@@ -49,10 +55,11 @@ async function loadTopicContext(
 
 async function academicSystemPromptFor(
   userId: string,
-  subject?: { name: string; level?: string | null } | null
+  subject?: { name: string; level?: string | null; revisionUrl?: string | null } | null
 ): Promise<string> {
   const school = await prisma.school.findUnique({ where: { userId } });
-  return buildAcademicSystemPrompt(school?.educationSystem, subject);
+  // These are explanations to the student, so they get the teaching shape.
+  return buildAcademicSystemPrompt(school?.educationSystem, subject, { teaching: true });
 }
 
 const NO_REAL_AI_MESSAGE =

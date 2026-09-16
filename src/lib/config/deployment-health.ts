@@ -21,11 +21,19 @@ function insideAppDirectory(target: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-/** The filesystem path a SQLite DATABASE_URL points at, or null for other databases. */
+/**
+ * The filesystem path a SQLite DATABASE_URL points at, or null for other
+ * databases.
+ *
+ * A relative path is resolved against the prisma/ directory, not the working
+ * directory, because that is where Prisma resolves it from — resolving it the
+ * other way puts the file somewhere it isn't and can miss a database that
+ * really does sit inside the repo.
+ */
 function sqliteFilePath(databaseUrl: string | undefined): string | null {
   if (!databaseUrl?.startsWith("file:")) return null;
   const raw = databaseUrl.slice("file:".length);
-  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), "prisma", raw);
 }
 
 export function getDeploymentWarnings(): DeploymentWarning[] {

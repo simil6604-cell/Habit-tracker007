@@ -95,7 +95,7 @@ export async function sendTutorMessage(topicId: string, message: string): Promis
     reply = NO_REAL_AI_MESSAGE;
   } else {
     const school = await prisma.school.findUnique({ where: { userId } });
-    const system = `${buildAcademicSystemPrompt(school?.educationSystem, topic.subject)}\n\n${TUTOR_STYLE_PROMPT}`;
+    const system = `${buildAcademicSystemPrompt(school?.educationSystem, topic.subject, { teaching: true })}\n\n${TUTOR_STYLE_PROMPT}`;
 
     const history = messages
       .slice(-HISTORY_TURNS)

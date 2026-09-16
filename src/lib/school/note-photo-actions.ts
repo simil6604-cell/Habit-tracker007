@@ -1,11 +1,9 @@
 "use server";
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { saveUploadedImage, deleteUploadedImage } from "@/lib/uploads/save-image";
+import { saveUploadedImage, deleteUploadedImage, readUploadedImage } from "@/lib/uploads/save-image";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 
@@ -37,7 +35,8 @@ async function summarizeNotePhoto(
   if (!mediaType) return null; // HEIC/HEIF etc. — Claude's vision API needs jpeg/png/webp/gif
 
   try {
-    const buffer = await readFile(path.join(process.cwd(), "public", imagePath));
+    const buffer = await readUploadedImage(imagePath);
+    if (!buffer) return null;
     const imageBase64 = buffer.toString("base64");
     const school = await prisma.school.findUnique({ where: { userId } });
     const system = buildAcademicSystemPrompt(school?.educationSystem, subject);

@@ -43,8 +43,13 @@ export function MicrophoneCheck() {
     setSecure(window.isSecureContext ? "pass" : "fail");
   }, [mic.supported]);
 
-  const permission: Result = mic.error ? "fail" : mic.listening || heard ? "pass" : "unknown";
-  const capture: Result = heard ? "pass" : mic.listening ? "unknown" : "unknown";
+  // Only permission-shaped errors belong on the permission row. The hook also
+  // reports a browser that keeps ending the recording, and telling someone who
+  // granted access that they refused it sends them to fix the wrong thing.
+  const permissionProblem = mic.error !== null && /blocked|denied|permission|microphone was found/i.test(mic.error);
+  const permission: Result = permissionProblem ? "fail" : mic.listening || heard ? "pass" : "unknown";
+  const otherProblem = mic.error !== null && !permissionProblem ? mic.error : null;
+  const capture: Result = heard ? "pass" : otherProblem ? "fail" : "unknown";
 
   return (
     <div className="flex flex-col gap-3">
@@ -71,8 +76,8 @@ export function MicrophoneCheck() {
           result={permission}
           label="Microphone permission"
           detail={
-            mic.error
-              ? mic.error
+            permissionProblem
+              ? mic.error!
               : permission === "pass"
                 ? "Granted."
                 : "Not tested yet — press the button below and allow access when your browser asks."
@@ -84,9 +89,11 @@ export function MicrophoneCheck() {
           detail={
             heard
               ? `Heard: "${heard}"`
-              : mic.listening
-                ? "Listening… say a few words."
-                : "Not tested yet. This is the one that matters — the rest can pass while the mic stays silent."
+              : otherProblem
+                ? otherProblem
+                : mic.listening
+                  ? "Listening… say a few words."
+                  : "Not tested yet. This is the one that matters — the rest can pass while the mic stays silent."
           }
         />
       </ul>
