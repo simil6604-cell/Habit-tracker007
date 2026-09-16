@@ -228,8 +228,13 @@ test.describe.serial("full app walkthrough", () => {
     // Monday, so asserting on a single card is a coin flip.
     const weekOf = (locator: typeof cards) => locator.evaluateAll((els) => els.map((e) => e.textContent).join("|"));
     const before = await weekOf(cards);
-    await page.click('a[href*="variant="]');
-    await expect(page.getByRole("heading", { name: "Example days" })).toBeVisible();
+
+    // Waiting on the heading would prove nothing — it is on the page before and
+    // after — so wait for the navigation itself, or the old week gets read back.
+    const regenerate = page.locator('a[href*="variant="]').first();
+    const target = await regenerate.getAttribute("href");
+    await regenerate.click();
+    await page.waitForURL(`**${target}`);
     const after = await weekOf(page.locator("div.rounded-2xl").filter({ hasText: "Day total" }));
     expect(after).not.toBe(before);
   });
@@ -374,6 +379,25 @@ test.describe.serial("full app walkthrough", () => {
     const anon = await browser.newContext();
     expect((await anon.request.get(mine, { maxRedirects: 0 })).status()).not.toBe(200);
     await anon.close();
+  });
+
+  test("ai status: the app says when the AI is not working, without being asked", async () => {
+    await page.goto("/");
+    const banner = page.locator('[data-testid="ai-status-banner"]');
+
+    // The suite runs without an API key, so the app has to volunteer that —
+    // the whole point is that a dead AI is never silent. It must name the
+    // variable and say what to do, not just "AI unavailable".
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText(/No AI key reached the app/);
+    await expect(banner).toContainText(/ANTHROPIC_API_KEY/);
+    await expect(banner.getByRole("link", { name: /Settings/ })).toBeVisible();
+
+    // And it follows you around, rather than living on one page you must find.
+    for (const url of ["/school", "/gym", "/football", "/coach"]) {
+      await page.goto(url);
+      await expect(page.locator('[data-testid="ai-status-banner"]')).toBeVisible();
+    }
   });
 
   test("settings: toggle theme and sign out", async () => {

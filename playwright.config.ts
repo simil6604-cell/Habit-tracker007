@@ -43,6 +43,11 @@ export default defineConfig({
     timeout: 180_000,
     env: {
       DATABASE_URL: `file:${testDbPath}`,
+      // No AI key on purpose. The suite then exercises the path every user
+      // hits when the AI is unreachable — the honest fallbacks and the status
+      // banner — instead of depending on a network service, spending credit,
+      // and varying run to run with whatever the model happened to reply.
+      ANTHROPIC_API_KEY: "",
       // Auth redirects are built from this — must match the test server's
       // own port or they'll bounce to whatever NEXTAUTH_URL is in .env.
       NEXTAUTH_URL: `http://localhost:${PORT}`,

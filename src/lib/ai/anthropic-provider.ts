@@ -1,16 +1,20 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider } from "./provider";
+import { recordAIFailure, recordAISuccess } from "./health";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 
 function friendlyAnthropicError(err: unknown): string {
   if (err instanceof Anthropic.APIError) {
-    if (err.status === 401) return "The configured ANTHROPIC_API_KEY is invalid — check it in your .env.";
-    if (err.status === 429) return "The AI service is rate-limited right now — try again shortly.";
-    if (err.status && err.status >= 500) return "The AI service is temporarily unavailable — try again shortly.";
-    return `The AI service returned an error (${err.status ?? "unknown"}).`;
+    // Wording stays host-agnostic: this message is shown to someone whose app
+    // may be running on Render, not next to a .env file they can open.
+    if (err.status === 401) return "the API key was rejected as invalid — re-paste ANTHROPIC_API_KEY where your app's environment variables are set";
+    if (err.status === 403) return "the API key was refused (403) — it may be disabled, or restricted to a different workspace";
+    if (err.status === 429) return "the AI service is rate-limited or out of credit right now — check your Anthropic account's usage and billing";
+    if (err.status && err.status >= 500) return "the AI service is temporarily unavailable — this one is at their end, try again shortly";
+    return `the AI service returned an error (${err.status ?? "unknown"})`;
   }
-  return err instanceof Error ? err.message : "Couldn't reach the AI service.";
+  return err instanceof Error ? err.message : "the AI service could not be reached";
 }
 
 export class AnthropicProvider implements AIProvider {
@@ -48,7 +52,9 @@ export class AnthropicProvider implements AIProvider {
         messages: [{ role: "user", content }],
       });
     } catch (err) {
-      throw new Error(friendlyAnthropicError(err));
+      const message = friendlyAnthropicError(err);
+      recordAIFailure(message);
+      throw new Error(message);
     }
 
     // Join every text block rather than taking the first: a reply can arrive
@@ -64,12 +70,15 @@ export class AnthropicProvider implements AIProvider {
       // produced — worth saying, because the fix is a bigger max_tokens, not
       // a retry. Naming the limit makes that diagnosable from the message.
       if (message.stop_reason === "max_tokens") {
+        // A truncated reply means the connection is fine, so it isn't recorded
+        // as an outage — the fix is a bigger limit, not a key.
         throw new Error(
           `The AI's reply was cut off before it produced any text (max_tokens ${maxTokens}). Ask for something shorter, or raise the limit for this feature.`
         );
       }
       throw new Error(`The AI service returned no text (stop reason: ${message.stop_reason ?? "unknown"}).`);
     }
+    recordAISuccess();
     return text;
   }
 }
