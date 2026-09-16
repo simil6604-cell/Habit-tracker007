@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,38 +14,14 @@ import {
   type ClassRecordingEntry,
 } from "@/lib/school/class-recording-actions";
 
-// The Web Speech API has no official TS DOM typings yet — this is a
-// minimal shape covering only what this component uses.
-type SpeechRecognitionResult = { isFinal: boolean; 0: { transcript: string } };
-type SpeechRecognitionEvent = { resultIndex: number; results: ArrayLike<SpeechRecognitionResult> };
-type SpeechRecognitionErrorEvent = { error: string };
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-};
-
-function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as Record<string, unknown>;
-  return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SpeechRecognitionLike) | null;
-}
-
 export function ClassRecorderPanel({ topicId }: { topicId: string }) {
-  const [supported, setSupported] = useState(false);
-  const [listening, setListening] = useState(false);
+  // The transcript is editable — you can fix a misheard word, or type/paste a
+  // lesson you didn't record — so dictation appends into local state rather
+  // than the box being driven by the recogniser.
   const [transcript, setTranscript] = useState("");
-  const [interim, setInterim] = useState("");
-  const [micError, setMicError] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  // Browsers end a recognition session on every pause in speech. Without this
-  // flag the mic dies a few seconds into a lesson and looks broken.
-  const wantListeningRef = useRef(false);
+  const mic = useSpeechRecognition({
+    onFinal: (chunk) => setTranscript((t) => (t ? `${t} ${chunk}` : chunk).trim()),
+  });
 
   const [recordings, setRecordings] = useState<ClassRecordingEntry[] | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -58,72 +35,7 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
 
   useEffect(() => {
     startTransition(async () => setRecordings(await getClassRecordings(topicId)));
-    setSupported(Boolean(getSpeechRecognitionCtor()));
   }, [topicId]);
-
-  useEffect(() => {
-    return () => {
-      wantListeningRef.current = false;
-      recognitionRef.current?.stop();
-    };
-  }, []);
-
-  function startListening() {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) return;
-    setMicError(null);
-    const recognition = new Ctor();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = typeof navigator !== "undefined" ? navigator.language : "en-GB";
-    recognition.onresult = (event) => {
-      let finalChunk = "";
-      let interimChunk = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) finalChunk += result[0].transcript;
-        else interimChunk += result[0].transcript;
-      }
-      if (finalChunk) setTranscript((t) => (t ? `${t} ${finalChunk}` : finalChunk).trim());
-      setInterim(interimChunk);
-    };
-    recognition.onerror = (event) => {
-      // "no-speech" and "aborted" are just pauses — let onend restart quietly
-      // rather than showing the student an error mid-lesson.
-      if (event.error === "no-speech" || event.error === "aborted") return;
-      wantListeningRef.current = false;
-      setMicError(
-        event.error === "not-allowed" || event.error === "service-not-allowed"
-          ? "Microphone access was denied — allow it for this site in your browser settings, then try again."
-          : event.error === "network"
-            ? "Couldn't reach the browser's speech service (it needs internet access) — type or paste instead."
-            : `Speech recognition stopped (${event.error}).`
-      );
-      setListening(false);
-    };
-    recognition.onend = () => {
-      if (!wantListeningRef.current) {
-        setListening(false);
-        return;
-      }
-      try {
-        recognition.start();
-      } catch {
-        // Already restarting — the next onend will try again.
-      }
-    };
-    recognitionRef.current = recognition;
-    wantListeningRef.current = true;
-    recognition.start();
-    setListening(true);
-  }
-
-  function stopListening() {
-    wantListeningRef.current = false;
-    recognitionRef.current?.stop();
-    setListening(false);
-    setInterim("");
-  }
 
   function save() {
     setSaveError(null);
@@ -170,13 +82,13 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
       <p className="text-xs font-medium text-muted">🎙️ Record class → summary + quiz</p>
 
       <div className="flex items-center gap-2">
-        {supported ? (
-          listening ? (
-            <Button type="button" size="sm" variant="danger" onClick={stopListening}>
+        {mic.supported ? (
+          mic.listening ? (
+            <Button type="button" size="sm" variant="danger" onClick={mic.stop}>
               ⏹ Stop recording
             </Button>
           ) : (
-            <Button type="button" size="sm" variant="secondary" onClick={startListening}>
+            <Button type="button" size="sm" variant="secondary" onClick={mic.start}>
               🎙️ Start recording
             </Button>
           )
@@ -185,12 +97,12 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
             This browser doesn&apos;t support live speech-to-text — type or paste what was covered below instead.
           </p>
         )}
-        {listening && <span className="text-xs text-danger">● Listening…</span>}
+        {mic.listening && <span className="text-xs text-danger">● Listening…</span>}
       </div>
-      {micError && <p className="text-xs text-danger">{micError}</p>}
+      {mic.error && <p className="text-xs text-danger">{mic.error}</p>}
 
       <textarea
-        value={transcript + (interim ? ` ${interim}` : "")}
+        value={transcript + (mic.interim ? ` ${mic.interim}` : "")}
         onChange={(e) => setTranscript(e.target.value)}
         placeholder="Live transcript appears here while recording — or type/paste what the teacher explained"
         rows={4}

@@ -51,10 +51,25 @@ export class AnthropicProvider implements AIProvider {
       throw new Error(friendlyAnthropicError(err));
     }
 
-    const textBlock = message.content.find((block) => block.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      throw new Error("The AI service returned an empty response.");
+    // Join every text block rather than taking the first: a reply can arrive
+    // as several, and non-text blocks (thinking, tool use) sit among them.
+    const text = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === "text")
+      .map((block) => block.text)
+      .join("")
+      .trim();
+
+    if (!text) {
+      // No text at all usually means the reply was cut off before any was
+      // produced — worth saying, because the fix is a bigger max_tokens, not
+      // a retry. Naming the limit makes that diagnosable from the message.
+      if (message.stop_reason === "max_tokens") {
+        throw new Error(
+          `The AI's reply was cut off before it produced any text (max_tokens ${maxTokens}). Ask for something shorter, or raise the limit for this feature.`
+        );
+      }
+      throw new Error(`The AI service returned no text (stop reason: ${message.stop_reason ?? "unknown"}).`);
     }
-    return textBlock.text;
+    return text;
   }
 }

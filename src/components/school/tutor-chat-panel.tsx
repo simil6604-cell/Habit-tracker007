@@ -14,46 +14,7 @@ import {
   unmarkNotUnderstood,
   type TutorMessageEntry,
 } from "@/lib/school/tutor-actions";
-import { sanitizeSvg } from "@/lib/utils/sanitize-svg";
-
-function SvgDiagram({ code }: { code: string }) {
-  const [safeHtml, setSafeHtml] = useState<string | null>(null);
-  useEffect(() => {
-    setSafeHtml(sanitizeSvg(code));
-  }, [code]);
-  if (!safeHtml) return null;
-  return (
-    <div
-      className="mt-2 rounded-lg border border-border bg-white p-2"
-      dangerouslySetInnerHTML={{ __html: safeHtml }}
-    />
-  );
-}
-
-function MessageContent({ content }: { content: string }) {
-  const parts: { type: "text" | "svg"; value: string }[] = [];
-  const regex = /```svg\n?([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) parts.push({ type: "text", value: content.slice(lastIndex, match.index) });
-    parts.push({ type: "svg", value: match[1] });
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < content.length) parts.push({ type: "text", value: content.slice(lastIndex) });
-
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.type === "text" ? (
-          p.value.trim() && <p key={i} className="whitespace-pre-wrap text-sm">{p.value.trim()}</p>
-        ) : (
-          <SvgDiagram key={i} code={p.value} />
-        )
-      )}
-    </>
-  );
-}
+import { AIMessageContent } from "@/components/shared/ai-message";
 
 export function TutorChatPanel({ topicId }: { topicId: string }) {
   const [messages, setMessages] = useState<TutorMessageEntry[] | null>(null);
@@ -165,7 +126,7 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
                   m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
                 }`}
               >
-                <MessageContent content={m.content} />
+                <AIMessageContent content={m.content} />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>

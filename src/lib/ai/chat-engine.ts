@@ -12,6 +12,9 @@ const KEYWORDS = {
   gym: /\b(gym|workout|training|kraft|fitness)\b/i,
   optimizeWeek: /(optimi[sz]e|plan).*(week|woche)|entire week|whole week/i,
   tired: /\b(tired|exhausted|müde|erschöpft|overwhelmed)\b/i,
+  // Asking to be shown something, in either language the student uses.
+  wantsPicture:
+    /\b(draw|sketch|diagram|picture|visuali[sz]e|show me|zeichne|skizz\w*|diagramm|bild|zeig mir|male)\b/i,
 };
 
 function fmtTime(d: Date) {
@@ -53,6 +56,16 @@ function describeMainFocus(focus: string | null | undefined) {
   }
 }
 
+// The coach is often explaining something spatial — a week's layout, a
+// session's structure, how load and recovery trade off — where a drawing
+// beats a paragraph. Same contract as the topic tutor, so one sanitizer and
+// one renderer cover both.
+const COACH_DIAGRAM_PROMPT = [
+  "When a simple picture would genuinely make your point clearer — a week laid out as blocks, a session broken into phases, a load/recovery curve, a pitch or gym diagram — include exactly one in your reply as a fenced code block starting with ```svg and ending with ```.",
+  "Keep it simple: a `viewBox=\"0 0 320 220\"`, basic shapes only (rect, circle, ellipse, line, polyline, polygon, path, text), clear <text> labels, no more than ~40 elements, no external references, no scripts. Only include one when it truly helps — most replies won't need one.",
+  "Your reply may be read aloud, so write in plain speakable sentences: no markdown headings, no asterisks for emphasis, and no LaTeX math delimiters. Use real symbols (², √, ×, ≤) where natural.",
+].join("\n");
+
 export async function generateCoachReply(userId: string, userMessage: string): Promise<string> {
   if (KEYWORDS.optimizeWeek.test(userMessage)) {
     await runWeeklyBalanceCheck(userId);
@@ -73,6 +86,20 @@ export async function generateCoachReply(userId: string, userMessage: string): P
 
   if (KEYWORDS.tired.test(userMessage)) {
     return "It's completely normal to feel stretched sometimes. Recovery isn't optional — if you're consistently exhausted, that's a sign to scale back gym or football volume, not push through. If this feeling persists, it's worth talking to a parent, coach or doctor rather than relying on an app.";
+  }
+
+  // The canned branches below answer from stored data and can't draw. When
+  // the student is explicitly asking to be shown something, that request wins:
+  // hand it to the AI, which gets the same data in its system prompt and can
+  // actually produce a diagram. Without a real AI connected there's nothing to
+  // gain, so the normal routing stands.
+  if (isRealAIConfigured && KEYWORDS.wantsPicture.test(userMessage)) {
+    const drawn = await askCoachAI(userId, userMessage);
+    // You asked to be shown something. Quietly answering a different question
+    // from stored data would look like the AI is broken, which is exactly the
+    // confusion to avoid — say what went wrong instead.
+    if (drawn.ok) return drawn.text;
+    return `I couldn't reach the AI to draw that just now (${drawn.error}). Try again in a moment — or ask without asking for a picture and I'll answer from your stored schedule instead.`;
   }
 
   const mentionsExam = KEYWORDS.exam.test(userMessage);
@@ -133,6 +160,28 @@ export async function generateCoachReply(userId: string, userMessage: string): P
 
   // Generic fallback: ask a real AI if one's connected, else summarize tomorrow.
   if (isRealAIConfigured) {
+    const fromAI = await askCoachAI(userId, userMessage);
+    if (fromAI.ok) return fromAI.text;
+    // The summary below is still a useful answer, but it isn't the one that was
+    // asked for, so it doesn't get to masquerade as one.
+    return `(Couldn't reach the AI just now — ${fromAI.error}. Here's what I can tell you from your own data.)\n\n${await ruleBasedSummary(userId)}`;
+  }
+
+  return ruleBasedSummary(userId);
+}
+
+/**
+ * The coach's real-AI path: the student's actual scores, next exam and stated
+ * focus as context, and permission to draw.
+ *
+ * A failure is reported, not swallowed: the caller decides what to show, and
+ * the reason is logged so "the AI doesn't work" can actually be diagnosed
+ * rather than guessed at.
+ */
+type CoachAIResult = { ok: true; text: string } | { ok: false; error: string };
+
+async function askCoachAI(userId: string, userMessage: string): Promise<CoachAIResult> {
+  {
     const [school, scores, exam, user] = await Promise.all([
       prisma.school.findUnique({ where: { userId } }),
       computeDomainScores(userId),
@@ -147,15 +196,24 @@ export async function generateCoachReply(userId: string, userMessage: string): P
       `Current scores — School ${scores.school}%, Gym ${scores.gym}%, Football ${scores.football}%, Recovery ${scores.recovery}%.`,
       exam ? `Next exam: ${exam.subject?.name ?? exam.title} in ${daysUntil} day${daysUntil === 1 ? "" : "s"}.` : "No upcoming exam logged yet.",
       describeMainFocus(user?.mainFocus),
+      COACH_DIAGRAM_PROMPT,
     ].join("\n");
 
     try {
-      return await getAIProvider().generate(userMessage, { system });
-    } catch {
-      // Fall through to the rule-based summary below on any failure.
+      // A reply carrying a diagram runs well past the 1024-token default, and
+      // being cut off mid-SVG produces no usable text at all. Measured replies
+      // reach ~3000 characters, and the model's own reasoning is counted too,
+      // so this is set well clear of the observed ceiling rather than at it.
+      return { ok: true, text: await getAIProvider().generate(userMessage, { system, maxTokens: 4000 }) };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "unknown error";
+      console.error("[coach] AI call failed:", error);
+      return { ok: false, error };
     }
   }
+}
 
+async function ruleBasedSummary(userId: string): Promise<string> {
   const plan = await generateDayPlan(userId, addDays(new Date(), 1));
   const scores = await computeDomainScores(userId);
   return [

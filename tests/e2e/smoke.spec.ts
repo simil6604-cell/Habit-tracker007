@@ -230,10 +230,35 @@ test.describe.serial("full app walkthrough", () => {
 
   test("ai coach: responds to a chat message", async () => {
     await page.goto("/coach");
-    await page.fill('input[name="message"]', "optimize my entire week");
-    await page.locator('form:has(input[name="message"]) button[type="submit"]').click();
-    await page.waitForTimeout(1000);
-    await expect(page.locator("main")).toContainText(/School|Gym|Football|Recovery/);
+    const chat = page.locator('form:has(input[name="message"])');
+    await chat.locator('input[name="message"]').fill("optimize my entire week");
+    await chat.locator('button[type="submit"]').click();
+    // The reply lands in the thread without the page navigating — a navigation
+    // here would tear down an open microphone mid-conversation.
+    await expect(page.locator("main")).toContainText(/School|Gym|Football|Recovery/, { timeout: 60000 });
+    expect(new URL(page.url()).pathname).toBe("/coach");
+  });
+
+  test("ai coach: offers voice, and degrades honestly without a microphone", async () => {
+    await page.goto("/coach");
+    await expect(page.getByRole("button", { name: /Talk/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Speak replies/ })).toBeVisible();
+
+    // Each control is only offered when the browser actually supports it.
+    const caps = await page.evaluate(() => ({
+      recognition: Boolean(window.SpeechRecognition || window.webkitSpeechRecognition),
+      synthesis: "speechSynthesis" in window,
+    }));
+    expect(await page.getByRole("button", { name: /Talk/ }).isEnabled()).toBe(caps.recognition);
+    expect(await page.getByRole("button", { name: /Speak replies/ }).isEnabled()).toBe(caps.synthesis);
+
+    if (caps.recognition) {
+      // No audio device in CI: it must say so and leave typing working, rather
+      // than sitting on "Listening…" forever.
+      await page.getByRole("button", { name: /Talk/ }).click();
+      await expect(page.getByText(/No microphone was found|Listening…/)).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('input[name="message"]')).toBeEnabled();
+    }
   });
 
   test("calendar: day, week and month views load", async () => {

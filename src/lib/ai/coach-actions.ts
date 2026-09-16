@@ -12,16 +12,46 @@ async function requireUserId() {
   return session.user.id;
 }
 
-export async function sendChatMessage(formData: FormData) {
-  const userId = await requireUserId();
-  const content = String(formData.get("message") ?? "").trim();
-  if (!content) return;
+export type CoachMessage = { id: string; role: "USER" | "ASSISTANT"; content: string; createdAt: Date };
 
-  await prisma.chatMessage.create({ data: { userId, role: "USER", content } });
-  const reply = await generateCoachReply(userId, content);
+export async function getCoachMessages(): Promise<CoachMessage[]> {
+  const userId = await requireUserId();
+  const messages = await prisma.chatMessage.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+  });
+  return messages.map((m) => ({
+    id: m.id,
+    role: m.role as "USER" | "ASSISTANT",
+    content: m.content,
+    createdAt: m.createdAt,
+  }));
+}
+
+/**
+ * Same conversation as the form-posted chat, but returns the thread instead of
+ * relying on a page revalidation — a spoken turn has to land without the page
+ * navigating out from under the microphone.
+ */
+export async function sendCoachMessageLive(content: string): Promise<CoachMessage[]> {
+  const userId = await requireUserId();
+  const trimmed = content.trim();
+  if (!trimmed) return getCoachMessages();
+
+  await prisma.chatMessage.create({ data: { userId, role: "USER", content: trimmed } });
+  const reply = await generateCoachReply(userId, trimmed);
   await prisma.chatMessage.create({ data: { userId, role: "ASSISTANT", content: reply } });
 
   revalidatePath("/coach");
+  return getCoachMessages();
+}
+
+export async function clearCoachChat(): Promise<CoachMessage[]> {
+  const userId = await requireUserId();
+  await prisma.chatMessage.deleteMany({ where: { userId } });
+  revalidatePath("/coach");
+  return [];
 }
 
 export async function triggerWeeklyOptimization() {
