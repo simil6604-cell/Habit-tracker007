@@ -5,7 +5,8 @@ import { AIProse } from "@/components/shared/ai-message";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { updateTopicProgress, deleteTopic } from "@/lib/school/actions";
+import { updateTopicProgress, deleteTopic, updateTopicRevisionUrl } from "@/lib/school/actions";
+import { revisionHost } from "@/lib/utils/revision-url";
 import { submitMistake } from "@/lib/school/learning-actions";
 import { TutorChatPanel } from "@/components/school/tutor-chat-panel";
 import { LearningLogAndQuiz } from "@/components/school/learning-log-quiz";
@@ -24,6 +25,7 @@ type Topic = {
   actualMinutes: number;
   nextReview: Date | null;
   weaknessNote: string | null;
+  revisionUrl: string | null;
 };
 
 function statusEmoji(pct: number) {
@@ -32,26 +34,70 @@ function statusEmoji(pct: number) {
   return "🔴";
 }
 
-function TopicAssistant({ topicId, revisionUrl }: { topicId: string; revisionUrl: string | null }) {
+/**
+ * The revision page for this topic, falling back to the subject's.
+ *
+ * Which one you're looking at is labelled: "the subject's page" and "this
+ * topic's page" send you to different places, and silently opening the wrong
+ * one is worse than saying which it is.
+ */
+function RevisionLink({
+  topicId,
+  subjectId,
+  topicUrl,
+  subjectUrl,
+}: {
+  topicId: string;
+  subjectId: string;
+  topicUrl: string | null;
+  subjectUrl: string | null;
+}) {
+  const effective = topicUrl ?? subjectUrl;
+  const host = revisionHost(effective);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {effective && host && (
+        <a href={effective} target="_blank" rel="noopener noreferrer" className="self-start text-xs text-accent hover:underline">
+          ↗ Open {topicUrl ? "this topic's" : "the subject's"} revision notes on {host}
+        </a>
+      )}
+      <form action={updateTopicRevisionUrl.bind(null, topicId, subjectId)} className="flex flex-wrap items-center gap-1.5">
+        <input
+          name="revisionUrl"
+          type="url"
+          defaultValue={topicUrl ?? ""}
+          placeholder={subjectUrl ? "Link for this topic specifically…" : "Paste the revision page for this topic…"}
+          className="min-w-[12rem] flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs"
+        />
+        <button type="submit" className="text-xs text-accent hover:underline">
+          {topicUrl ? "Update" : "Save"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function TopicAssistant({
+  topicId,
+  subjectId,
+  topicUrl,
+  subjectUrl,
+}: {
+  topicId: string;
+  subjectId: string;
+  topicUrl: string | null;
+  subjectUrl: string | null;
+}) {
   const [response, setResponse] = useState<string | null>(null);
   const [mistake, setMistake] = useState("");
   const [pending, startTransition] = useTransition();
 
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-surface-muted p-4">
-      {/* The revision page for this subject, right where the questions get
-          asked — the assistant can't read it, so getting there in one tap is
-          what actually helps. */}
-      {revisionUrl && (
-        <a
-          href={revisionUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="self-start text-xs text-accent hover:underline"
-        >
-          ↗ Open your revision notes for this subject
-        </a>
-      )}
+      {/* The revision page, right where the questions get asked — the
+          assistant can't read it, so getting there in one tap is what helps. */}
+      <RevisionLink topicId={topicId} subjectId={subjectId} topicUrl={topicUrl} subjectUrl={subjectUrl} />
       <TutorChatPanel topicId={topicId} />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
@@ -177,7 +223,7 @@ export function TopicsTable({
               {expanded === t.id && (
                 <tr>
                   <td colSpan={8} className="pb-3">
-                    <TopicAssistant topicId={t.id} revisionUrl={revisionUrl} />
+                    <TopicAssistant topicId={t.id} subjectId={subjectId} topicUrl={t.revisionUrl} subjectUrl={revisionUrl} />
                   </td>
                 </tr>
               )}

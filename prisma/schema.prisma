@@ -169,6 +169,9 @@ model Topic {
   actualMinutes  Int      @default(0)
   nextReview     DateTime?
   weaknessNote   String?
+  // The revision page for this specific topic. Falls back to the subject's
+  // link when unset, so there is always somewhere to go.
+  revisionUrl    String?
   learningLog    LearningLogEntry[]
   notePhotos     NotePhoto[]
   classRecordings ClassRecording[]

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { parseRevisionUrl } from "@/lib/utils/revision-url";
 import { SUBJECT_COLORS } from "@/lib/data/cambridge";
 import { FIXED_PERIOD_TYPES, inferCellPeriodType, type PeriodType } from "./timetable-grid";
 
@@ -75,19 +76,28 @@ export async function updateSubjectRevisionUrl(subjectId: string, formData: Form
   const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId } });
   if (!subject) return;
 
-  const raw = String(formData.get("revisionUrl") ?? "").trim();
-  let revisionUrl: string | null = null;
-  if (raw) {
-    try {
-      const parsed = new URL(raw);
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") revisionUrl = parsed.toString();
-    } catch {
-      revisionUrl = null;
-    }
-  }
+  const revisionUrl = parseRevisionUrl(String(formData.get("revisionUrl") ?? ""));
 
   await prisma.subject.update({ where: { id: subjectId }, data: { revisionUrl } });
   revalidatePath("/school");
+  revalidatePath(`/school/subjects/${subjectId}`);
+}
+
+/**
+ * The revision page for one topic. Separate from the subject's link because a
+ * revision site has a page per topic, and "open the notes for this" is only
+ * useful if it lands on the thing you are stuck on rather than the subject's
+ * front page.
+ */
+export async function updateTopicRevisionUrl(topicId: string, subjectId: string, formData: FormData) {
+  const userId = await requireUserId();
+  const topic = await prisma.topic.findFirst({ where: { id: topicId, subject: { userId } } });
+  if (!topic) return;
+
+  await prisma.topic.update({
+    where: { id: topicId },
+    data: { revisionUrl: parseRevisionUrl(String(formData.get("revisionUrl") ?? "")) },
+  });
   revalidatePath(`/school/subjects/${subjectId}`);
 }
 

@@ -106,6 +106,44 @@ test.describe.serial("full app walkthrough", () => {
     }
   });
 
+  test("school: a topic can point at its own revision page, or inherit the subject's", async () => {
+    await page.goto("/school");
+    await page.getByRole("link", { name: /Chemistry/ }).click();
+
+    // Give the subject a link, then open the topic that has none of its own.
+    const subjectUrl = "https://www.savemyexams.com/igcse/chemistry/cie/";
+    const subjectForm = page.locator('form:has(input[name="revisionUrl"])').first();
+    await subjectForm.locator('input[name="revisionUrl"]').fill(subjectUrl);
+    await subjectForm.locator('button[type="submit"]').click();
+    await expect(page.getByRole("link", { name: /Open revision notes/ })).toBeVisible();
+
+    const openTopic = async () => {
+      await page
+        .locator("tr", { hasText: "Periodic Table" })
+        .first()
+        .locator('button[title="AI Learning Assistant"]')
+        .click();
+    };
+    await openTopic();
+
+    // Inherited, and labelled as the subject's so you know where you'll land.
+    const inherited = page.getByRole("link", { name: /revision notes on/ });
+    await expect(inherited).toHaveAttribute("href", subjectUrl);
+    await expect(inherited).toContainText(/the subject's/);
+
+    // A topic-specific link takes over, and says so.
+    const topicUrl = "https://www.savemyexams.com/igcse/chemistry/cie/revision-notes/the-periodic-table/";
+    const topicForm = page.locator('form:has(input[name="revisionUrl"])').last();
+    await topicForm.locator('input[name="revisionUrl"]').fill(topicUrl);
+    await topicForm.locator('button[type="submit"]').click();
+    await page.reload();
+    await openTopic();
+
+    const own = page.getByRole("link", { name: /revision notes on/ });
+    await expect(own).toHaveAttribute("href", topicUrl);
+    await expect(own).toContainText(/this topic's/);
+  });
+
   test("school: an assistant reply renders as structure, not raw markdown", async () => {
     await page.goto("/school");
     await page.getByRole("link", { name: /Chemistry/ }).click();
