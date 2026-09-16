@@ -35,13 +35,15 @@ const SUBJECT_LEVEL_LINES: Record<string, string> = {
  */
 export function buildAcademicSystemPrompt(
   educationSystem: string | null | undefined,
-  subject?: { name: string; level?: string | null } | null
+  subject?: { name: string; level?: string | null; revisionUrl?: string | null } | null
 ): string {
+  const revisionLine = describeRevisionSource(subject?.revisionUrl);
   const levels = parseEducationSystems(educationSystem);
 
   if (subject?.level && SUBJECT_LEVEL_LINES[subject.level]) {
     return buildPrompt(
-      `Right now you are helping with **${subject.name}**, which ${SUBJECT_LEVEL_LINES[subject.level]} Pitch depth, vocabulary and command words to exactly that level — the student takes other subjects at other levels, so do not carry a different subject's level over to this one.`
+      `Right now you are helping with **${subject.name}**, which ${SUBJECT_LEVEL_LINES[subject.level]} Pitch depth, vocabulary and command words to exactly that level — the student takes other subjects at other levels, so do not carry a different subject's level over to this one.`,
+      revisionLine
     );
   }
 
@@ -57,13 +59,37 @@ export function buildAcademicSystemPrompt(
     return `This student is studying towards ${list} qualifications at the same time — different subjects sit at different levels. When the subject's level isn't clear from what they ask, ask which one before answering, rather than assuming the easier or the harder.`;
   })();
 
-  return buildPrompt(levelLine);
+  return buildPrompt(levelLine, revisionLine);
 }
 
-function buildPrompt(levelLine: string): string {
+/**
+ * Tells the assistant which revision site the student works from, so its
+ * explanations line up with the material they actually have open.
+ *
+ * The app never fetches that site, so the assistant is told in the same breath
+ * that it has not read it. Without that, "the student revises from X" reliably
+ * turns into invented quotes and page references — worse than not knowing,
+ * because it sounds authoritative.
+ */
+function describeRevisionSource(revisionUrl: string | null | undefined): string | null {
+  if (!revisionUrl) return null;
+  let host: string;
+  try {
+    host = new URL(revisionUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+  return [
+    `The student revises this subject from ${host}, so structure explanations the way a revision-notes site does: the concept stated plainly, then the method, then a worked example, then what an examiner is looking for.`,
+    `You have NOT read any page on ${host} — the app only stores the student's link to it and never fetches the content. So never quote it, never cite one of its pages, headings, question numbers or wording, and never say "as ${host} puts it" or imply you know what a specific page says. If the student wants the answer tied to a specific page, ask them to paste or photograph it, and work from what they give you.`,
+  ].join("\n");
+}
+
+function buildPrompt(levelLine: string, revisionLine?: string | null): string {
   return [
     "You are the academic assistant inside a personal school/gym/football optimization app, talking directly to the student.",
     levelLine,
+    ...(revisionLine ? [revisionLine] : []),
     "Calibrate depth and vocabulary to that qualification:",
     "- Cambridge IGCSE: foundational, descriptive answers. Clear definitions, correctly applying the core method or knowledge. Command words like 'state', 'describe', 'explain', 'calculate'. Core tier stops short of Extended-only content.",
     "- Cambridge International AS & A Level: deeper analytical and evaluative answers. Go beyond description into 'analyse', 'evaluate', 'discuss', 'to what extent' — link ideas and weigh evidence the way Cambridge's assessment objectives (AO1 knowledge, AO2 application, AO3 analysis & evaluation) reward.",

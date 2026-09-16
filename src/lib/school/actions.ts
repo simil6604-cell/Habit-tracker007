@@ -61,6 +61,36 @@ export async function updateSubjectLevel(subjectId: string, level: string) {
   revalidatePath(`/school/subjects/${subjectId}`);
 }
 
+/**
+ * Saves the revision site you work from for a subject. Only http(s) links are
+ * kept — the value ends up in an href, and anything else there (javascript:,
+ * data:) is a way to run code when you click your own bookmark.
+ *
+ * The app stores the link and nothing else: it never fetches the page or
+ * copies its content, which for a paid revision site would mean redistributing
+ * material you're licensed to read, not to republish.
+ */
+export async function updateSubjectRevisionUrl(subjectId: string, formData: FormData) {
+  const userId = await requireUserId();
+  const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId } });
+  if (!subject) return;
+
+  const raw = String(formData.get("revisionUrl") ?? "").trim();
+  let revisionUrl: string | null = null;
+  if (raw) {
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") revisionUrl = parsed.toString();
+    } catch {
+      revisionUrl = null;
+    }
+  }
+
+  await prisma.subject.update({ where: { id: subjectId }, data: { revisionUrl } });
+  revalidatePath("/school");
+  revalidatePath(`/school/subjects/${subjectId}`);
+}
+
 export async function addTopic(formData: FormData) {
   const userId = await requireUserId();
   const subjectId = String(formData.get("subjectId") ?? "");

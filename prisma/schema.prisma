@@ -121,6 +121,11 @@ model Subject {
   // A Level Economics side by side, and the AI must pitch each accordingly.
   level          String?  // IGCSE_CORE | IGCSE_EXTENDED | AS_LEVEL | A_LEVEL | OTHER
   baselineConfidence Int? // 0-100, from the initial "where do you stand" assessment
+  // A revision site you work from for this subject (Save My Exams, Physics &
+  // Maths Tutor, your school's own portal...). Stored as a link only: the app
+  // never fetches or copies the site's content, it just puts the page one tap
+  // away and tells the AI which material you're revising from.
+  revisionUrl    String?
   createdAt      DateTime @default(now())
 
   topics        Topic[]

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { TopicsTable } from "@/components/school/topics-table";
 import { SubjectWeaknesses } from "@/components/school/subject-weaknesses";
 import { SubjectLevelPicker } from "@/components/school/subject-level-picker";
+import { RevisionSourceCard } from "@/components/school/revision-source-card";
 import { parseEducationSystems } from "@/lib/ai/academic-prompt";
 
 export default async function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -60,6 +61,15 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Revision source</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RevisionSourceCard subjectId={subject.id} subjectName={subject.name} revisionUrl={subject.revisionUrl} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
         <CardHeader>
           <CardTitle>AI Learning Assistant</CardTitle>
         </CardHeader>

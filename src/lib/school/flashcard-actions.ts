@@ -151,7 +151,9 @@ export async function generateFlashcardsFromConfusions(): Promise<{ created: num
     };
   }
 
-  const system = buildAcademicSystemPrompt((await prisma.school.findUnique({ where: { userId } }))?.educationSystem);
+  // Built per entry rather than once: these confusions can span subjects sat at
+  // different levels, each with its own revision source.
+  const educationSystem = (await prisma.school.findUnique({ where: { userId } }))?.educationSystem;
   let created = 0;
   let failed = 0;
 
@@ -163,6 +165,7 @@ export async function generateFlashcardsFromConfusions(): Promise<{ created: num
 
     let cards: { front: string; back: string }[] = [];
     try {
+      const system = buildAcademicSystemPrompt(educationSystem, entry.topic.subject);
       cards = parseFlashcardArray(await getAIProvider().generate(prompt, { system }));
     } catch {
       cards = [];

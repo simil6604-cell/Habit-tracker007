@@ -77,6 +77,35 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByRole("cell", { name: /Periodic Table/ })).toBeVisible();
   });
 
+  test("school: a revision link is saved and stays a link, not content", async () => {
+    await page.goto("/school");
+    await page.getByRole("link", { name: /Chemistry/ }).click();
+
+    await expect(page.getByText("Revision source")).toBeVisible();
+    // The card has to be explicit that saving a link doesn't hand the AI the
+    // site's content — that's the whole basis on which it's safe to save.
+    await expect(page.getByText(/never fetches the page/)).toBeVisible();
+
+    const form = page.locator('form:has(input[name="revisionUrl"])');
+    const url = "https://www.savemyexams.com/igcse/chemistry/cie/";
+    await form.locator('input[name="revisionUrl"]').fill(url);
+    await form.locator('button[type="submit"]').click();
+
+    const link = page.getByRole("link", { name: /Open revision notes/ });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", url);
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", /noopener/);
+
+    // The value lands in an href, so a scheme that can run code is refused.
+    await form.locator('input[name="revisionUrl"]').fill("javascript:alert(1)");
+    await form.locator('button[type="submit"]').click();
+    await page.reload();
+    for (const bad of await page.locator("main a").evaluateAll((as) => as.map((a) => a.getAttribute("href") ?? ""))) {
+      expect(bad.startsWith("javascript:")).toBe(false);
+    }
+  });
+
   test("school: questions asked in the tutor chat reach the revision list", async () => {
     // The chat lives inside a topic row on the subject page.
     await page.goto("/school");
@@ -172,11 +201,14 @@ test.describe.serial("full app walkthrough", () => {
       }
     }
 
-    // Regenerating has to actually produce a different plan.
-    const before = await cards.first().textContent();
+    // Regenerating has to actually produce a different plan. Compared across the
+    // whole week, not one day: two variants can legitimately land on the same
+    // Monday, so asserting on a single card is a coin flip.
+    const weekOf = (locator: typeof cards) => locator.evaluateAll((els) => els.map((e) => e.textContent).join("|"));
+    const before = await weekOf(cards);
     await page.click('a[href*="variant="]');
     await expect(page.getByRole("heading", { name: "Example days" })).toBeVisible();
-    const after = await page.locator("div.rounded-2xl").filter({ hasText: "Day total" }).first().textContent();
+    const after = await weekOf(page.locator("div.rounded-2xl").filter({ hasText: "Day total" }));
     expect(after).not.toBe(before);
   });
 
