@@ -53,14 +53,34 @@ export async function saveUploadedImage(file: File, userId: string): Promise<str
   return `/uploads/${userId}/${filename}`;
 }
 
+/**
+ * Turns a stored `/uploads/<owner>/<file>` path into the two segments it must
+ * consist of, or null.
+ *
+ * These paths are written by this app, so in principle they are already safe.
+ * That is exactly the reasoning that let a traversal through the serving route
+ * survive review, so the same strict shape is enforced here: anything that
+ * isn't one id and one filename, in the alphabet this app generates, is not a
+ * path we will touch the filesystem with.
+ */
+function uploadSegments(imagePath: string): [string, string] | null {
+  if (!imagePath.startsWith("/uploads/")) return null;
+  const segments = imagePath.slice("/uploads/".length).split("/");
+  if (segments.length !== 2) return null;
+  const [owner, filename] = segments;
+  if (!/^[A-Za-z0-9_-]+$/.test(owner)) return null;
+  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/.test(filename)) return null;
+  return [owner, filename];
+}
+
 /** Best-effort delete — a missing file is not an error worth surfacing. */
 export async function deleteUploadedImage(imagePath: string | null | undefined) {
-  if (!imagePath || !imagePath.startsWith("/uploads/")) return;
-  const relative = imagePath.slice("/uploads/".length);
+  const segments = imagePath ? uploadSegments(imagePath) : null;
+  if (!segments) return;
   // Both roots: a photo saved before UPLOAD_DIR existed still deletes cleanly.
   for (const root of [UPLOAD_ROOT, LEGACY_UPLOAD_ROOT]) {
     try {
-      await unlink(path.join(root, relative));
+      await unlink(path.join(root, ...segments));
     } catch {
       // already gone, or never lived here — fine
     }
@@ -76,11 +96,11 @@ export async function deleteUploadedImage(imagePath: string | null | undefined) 
  * summaries when uploads moved off the app directory.
  */
 export async function readUploadedImage(imagePath: string): Promise<Buffer | null> {
-  if (!imagePath.startsWith("/uploads/")) return null;
-  const relative = imagePath.slice("/uploads/".length);
+  const segments = uploadSegments(imagePath);
+  if (!segments) return null;
   for (const root of [UPLOAD_ROOT, LEGACY_UPLOAD_ROOT]) {
     try {
-      return await readFile(path.join(root, relative));
+      return await readFile(path.join(root, ...segments));
     } catch {
       // try the other root
     }
