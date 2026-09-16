@@ -412,6 +412,34 @@ test.describe.serial("full app walkthrough", () => {
     }
   });
 
+  test("settings: the microphone check separates the four ways voice can fail", async () => {
+    await page.goto("/settings");
+    const card = page.locator("div.rounded-2xl").filter({ has: page.getByRole("heading", { name: "Microphone" }) });
+    await expect(card).toBeVisible();
+
+    const rows = card.locator("li");
+    await expect(rows).toHaveCount(4);
+
+    // Each is a separate cause with a separate fix, which is the point: a
+    // silent microphone otherwise tells you nothing about which one you have.
+    await expect(rows.nth(0)).toContainText(/speech recognition/i);
+    await expect(rows.nth(1)).toContainText(/secure connection/i);
+    await expect(rows.nth(2)).toContainText(/permission/i);
+    await expect(rows.nth(3)).toContainText(/hears you/i);
+
+    // The last one is the only proof that counts, and it says so.
+    await expect(rows.nth(3)).toContainText(/the one that matters/i);
+
+    // Pressing it must reach a verdict rather than sitting untested — CI has
+    // no audio device, so the verdict here is a refusal, which is still a
+    // verdict.
+    const button = card.getByRole("button", { name: /Test my microphone/ });
+    if (await button.isEnabled()) {
+      await button.click();
+      await expect(rows.nth(2)).not.toContainText(/Not tested yet/, { timeout: 15000 });
+    }
+  });
+
   test("settings: toggle theme and sign out", async () => {
     await page.goto("/settings");
     await expect(page.getByText(email)).toBeVisible();

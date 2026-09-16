@@ -24,6 +24,10 @@ function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SpeechRecognitionLike) | null;
 }
 
+/** A pause in speech ends a session every few seconds; a broken one ends it instantly. */
+const RESTART_WINDOW_MS = 10_000;
+const MAX_RESTARTS_PER_WINDOW = 12;
+
 const ERROR_MESSAGES: Record<string, string> = {
   "not-allowed": "Microphone access was blocked — allow it for this site in your browser settings and try again.",
   "service-not-allowed": "Your browser blocked speech recognition for this page.",
@@ -63,6 +67,13 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const wantListeningRef = useRef(false);
+  // Restarting on every pause assumes the session lasted a moment. Where it
+  // ends instantly and forever — iOS Safari does not really support continuous
+  // recognition — that assumption spins: restart, end, restart, hundreds of
+  // times a second, with the mic indicator flickering and nothing recognised.
+  // These track that so it can stop and say so instead.
+  const restartsRef = useRef(0);
+  const firstRestartAtRef = useRef(0);
   // Held in a ref so a re-render with a new callback doesn't tear down the mic.
   const onFinalRef = useRef(options?.onFinal);
   onFinalRef.current = options?.onFinal;
@@ -121,6 +132,23 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
         setListening(false);
         return;
       }
+
+      const now = Date.now();
+      if (now - firstRestartAtRef.current > RESTART_WINDOW_MS) {
+        firstRestartAtRef.current = now;
+        restartsRef.current = 0;
+      }
+      restartsRef.current += 1;
+      if (restartsRef.current > MAX_RESTARTS_PER_WINDOW) {
+        wantListeningRef.current = false;
+        recognitionRef.current = null;
+        setListening(false);
+        setError(
+          "This browser keeps ending the recording immediately, so dictation can't stay open here. Type instead, or try Chrome."
+        );
+        return;
+      }
+
       try {
         recognition.start();
       } catch {
@@ -130,6 +158,8 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
 
     recognitionRef.current = recognition;
     wantListeningRef.current = true;
+    restartsRef.current = 0;
+    firstRestartAtRef.current = 0;
     try {
       recognition.start();
       setListening(true);

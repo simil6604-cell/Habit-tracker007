@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DeleteAccountButton } from "@/components/settings/danger-zone";
 import { AIConnectionTest } from "@/components/settings/ai-connection-test";
+import { MicrophoneCheck } from "@/components/settings/microphone-check";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SettingsPage() {
@@ -167,6 +168,17 @@ export default async function SettingsPage() {
             <Badge variant={isRealAIConfigured ? "success" : "accent"}>{isRealAIConfigured ? "LLM connected" : "Rule-based"}</Badge>
           </div>
           <AIConnectionTest />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Microphone</CardTitle></CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted">
+            Dictation is used by the AI Coach and by the class recorder in School. It depends on the device you&apos;re
+            holding, not on this app — so check it here, on that device.
+          </p>
+          <MicrophoneCheck />
         </CardContent>
       </Card>
 
