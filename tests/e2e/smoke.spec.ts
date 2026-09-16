@@ -390,6 +390,18 @@ test.describe.serial("full app walkthrough", () => {
     // variable and say what to do, not just "AI unavailable".
     await expect(banner).toBeVisible();
     await expect(banner).toContainText(/No AI key reached the app/);
+
+    // The suite deliberately runs one unsafe path and one safe one: the test
+    // database sits in the repo (a deploy would wipe it) while UPLOAD_DIR is
+    // outside it. Exactly one warning proves the check catches the real risk
+    // without crying wolf about the correct setting — and these are the
+    // loudest messages in the app, so a false alarm would teach you to ignore
+    // the true one.
+    const dataLoss = page.locator('[data-testid="deployment-warning"]');
+    await expect(dataLoss).toHaveCount(1);
+    await expect(dataLoss).toContainText(/database is stored inside the app directory/);
+    await expect(dataLoss).toContainText(/DATABASE_URL/);
+    await expect(dataLoss).not.toContainText(/Uploaded photos/);
     await expect(banner).toContainText(/ANTHROPIC_API_KEY/);
     await expect(banner.getByRole("link", { name: /Settings/ })).toBeVisible();
 

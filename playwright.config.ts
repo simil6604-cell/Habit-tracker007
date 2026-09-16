@@ -1,8 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
+import os from "node:os";
 import path from "node:path";
 
 const PORT = 3100;
 const testDbPath = path.join(__dirname, "prisma", "test.db");
+// Outside the repo on purpose: the deployment check warns about anything a
+// deploy would wipe, and the suite asserts it fires for the test database
+// (which does live in the repo) and stays quiet for this. One safe path and
+// one unsafe path in the same run tests both halves of that check.
+const testUploadDir = path.join(os.tmpdir(), "momentum-e2e-uploads");
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -48,6 +54,7 @@ export default defineConfig({
       // banner — instead of depending on a network service, spending credit,
       // and varying run to run with whatever the model happened to reply.
       ANTHROPIC_API_KEY: "",
+      UPLOAD_DIR: testUploadDir,
       // Auth redirects are built from this — must match the test server's
       // own port or they'll bounce to whatever NEXTAUTH_URL is in .env.
       NEXTAUTH_URL: `http://localhost:${PORT}`,

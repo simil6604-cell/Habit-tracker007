@@ -1,0 +1,59 @@
+# Render Blueprint — the deployment configuration this app needs to not lose data.
+#
+# Kept here rather than only in the dashboard: the settings below are not
+# cosmetic. Get the disk or either path wrong and the app still starts, still
+# looks fine, and quietly deletes everything you saved on the next deploy.
+#
+# Applying this to an ALREADY RUNNING service overwrites that service's current
+# settings. If yours is working, treat this as the recipe for rebuilding it, and
+# change the live service through the dashboard.
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: momentum
+    runtime: node
+    # A persistent disk requires a paid instance type; the free tier has none,
+    # and without the disk nothing below survives a deploy.
+    plan: starter
+    buildCommand: npm install && npm run build
+    # `prisma db push` belongs in the START command, not the build command: the
+    # disk is only mounted at runtime, so a build-time write fails with
+    # "Read-only file system (os error 30)". Here it also means a schema change
+    # applies itself on the next deploy.
+    startCommand: npx prisma db push --skip-generate && npm run start
+    # /login is reachable without a session, so it is a real health signal.
+    healthCheckPath: /login
+
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      # SQLite on the persistent disk. Anywhere else and every account, subject,
+      # note and log is wiped on each deploy.
+      - key: DATABASE_URL
+        value: file:/var/data/prod.db
+
+      # Note photos, meal photos and progress photos. Without this they are
+      # written inside the app directory, which is rebuilt from git every
+      # deploy — the files vanish while the database rows still point at them,
+      # so they turn into broken images with no error anywhere.
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+
+      # Prompted for in the dashboard, never stored in the repo.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      - key: AUTH_SECRET
+        generateValue: true
+
+      # Auth redirects are built from these — they must match the service's own
+      # public URL, so they are filled in at creation time.
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: AUTH_URL
+        sync: false

@@ -186,9 +186,15 @@ health-related.
 
 ## Deploying (Render)
 
-The settings below live in the Render dashboard, which means they exist
-nowhere else — recreate the service without them and the app breaks in ways
-that are hard to trace, so they are written down here.
+`render.yaml` in the repo root is the machine-readable version of everything
+below, for creating the service from scratch. Applying it to a service that is
+already running overwrites that service's settings, so if yours works, treat
+the Blueprint as the rebuild recipe and change the live service in the
+dashboard.
+
+The app also checks this itself at runtime: if the database or the uploads
+directory ends up somewhere a deploy will wipe, every page says so in red
+before the data is lost, rather than after.
 
 **Build Command**
 ```
