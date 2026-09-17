@@ -1,4 +1,5 @@
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
+import { fetchPublicUrl } from "@/lib/net/public-url";
 
 export type ImportedStanding = {
   rank: number;
@@ -36,26 +37,24 @@ function htmlToText(html: string): string {
  * it returns an honest error instead of guessing.
  */
 export async function fetchAndParseStandings(url: string): Promise<ImportResult> {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return { ok: false, error: "That doesn't look like a valid URL." };
-  }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    return { ok: false, error: "Only http/https links are supported." };
-  }
+  // The fetch happens on the server, inside the deployment's own network, from
+  // a link the user typed. Checking that it says http:// proves nothing about
+  // where it goes: http://169.254.169.254/ and http://127.0.0.1:5432/ pass that
+  // check and reach places no browser could. fetchPublicUrl resolves the name
+  // first and refuses anything private, on the first request and on every
+  // redirect.
+  const fetched = await fetchPublicUrl(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; MomentumApp/1.0; +https://example.com)" },
+    timeoutMs: 15000,
+  });
+  if (!fetched.ok) return { ok: false, error: fetched.error };
 
   let html: string;
   try {
-    const res = await fetch(parsed.toString(), {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; MomentumApp/1.0; +https://example.com)" },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return { ok: false, error: `The page returned an error (HTTP ${res.status}).` };
-    html = await res.text();
+    if (!fetched.response.ok) return { ok: false, error: `The page returned an error (HTTP ${fetched.response.status}).` };
+    html = await fetched.response.text();
   } catch (err) {
-    return { ok: false, error: `Couldn't reach that page (${err instanceof Error ? err.message : "unknown error"}).` };
+    return { ok: false, error: `Couldn't read that page (${err instanceof Error ? err.message : "unknown error"}).` };
   }
 
   if (!isRealAIConfigured) {

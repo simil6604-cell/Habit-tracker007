@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { parseRevisionUrl } from "@/lib/utils/revision-url";
 import { estimateCaloriesBurned } from "./calories";
 
 async function requireUserId() {
@@ -68,7 +69,8 @@ export async function addExercise(formData: FormData) {
       targetReps: Number(formData.get("targetReps") ?? 10),
       targetWeight: formData.get("targetWeight") ? Number(formData.get("targetWeight")) : null,
       cueText: String(formData.get("cueText") ?? "").trim() || null,
-      videoUrl: String(formData.get("videoUrl") ?? "").trim() || null,
+      // Validated, not just trimmed: it is rendered as an href.
+      videoUrl: parseRevisionUrl(String(formData.get("videoUrl") ?? "")),
       order,
     },
   });

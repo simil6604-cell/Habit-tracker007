@@ -3,6 +3,19 @@
 // tag/attribute not on the list — no <script>, no <foreignObject>, no
 // <image>/<use> (which could pull in external content), no event-handler
 // attributes, no javascript:/data: URLs. Browser-only (DOMParser).
+//
+// It also drops every node that is neither an element nor text. That is not
+// tidiness: the markup is parsed as XML and re-inserted as HTML, and the two
+// parsers disagree about those nodes. An XML processing instruction survives
+// serialisation verbatim, and the HTML parser then ends it at the first ">",
+// releasing whatever follows as real markup:
+//
+//   <?a ><img src=x onerror=...>?>
+//
+// which walks straight past an allowlist that only ever inspected elements.
+// Verified in Chromium: before this, that payload ran; after it, nothing of it
+// is left. (<img> is one of the tags that breaks out of SVG back into HTML,
+// which is why it fires at all.)
 
 const ALLOWED_TAGS = new Set([
   "svg", "g", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon",
@@ -22,11 +35,19 @@ function isSafeValue(value: string): boolean {
   return !/javascript:/i.test(value) && !/^\s*data:/i.test(value);
 }
 
+const ELEMENT_NODE = 1;
+const TEXT_NODE = 3;
+
 function clean(el: Element): number {
   const tag = el.tagName.toLowerCase();
   if (!ALLOWED_TAGS.has(tag)) {
     el.remove();
     return 0;
+  }
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType !== ELEMENT_NODE && node.nodeType !== TEXT_NODE) {
+      node.parentNode?.removeChild(node);
+    }
   }
   for (const attr of Array.from(el.attributes)) {
     const name = attr.name.toLowerCase();

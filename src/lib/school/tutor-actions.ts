@@ -190,7 +190,7 @@ export async function markReplyNotUnderstood(topicId: string, assistantMessageId
     await prisma.learningLogEntry.create({ data: { userId, topicId, type: "CONFUSED", content } });
   }
 
-  const topic = await prisma.topic.findFirst({ where: { id: topicId }, select: { subjectId: true } });
+  const topic = await prisma.topic.findFirst({ where: { id: topicId, subject: { userId } }, select: { subjectId: true } });
   if (topic) revalidatePath(`/school/subjects/${topic.subjectId}`);
   return getNotUnderstoodQuestions(topicId);
 }
@@ -199,7 +199,7 @@ export async function markReplyNotUnderstood(topicId: string, assistantMessageId
 export async function unmarkNotUnderstood(topicId: string, content: string): Promise<string[]> {
   const userId = await requireUserId();
   await prisma.learningLogEntry.deleteMany({ where: { userId, topicId, type: "CONFUSED", content } });
-  const topic = await prisma.topic.findFirst({ where: { id: topicId }, select: { subjectId: true } });
+  const topic = await prisma.topic.findFirst({ where: { id: topicId, subject: { userId } }, select: { subjectId: true } });
   if (topic) revalidatePath(`/school/subjects/${topic.subjectId}`);
   return getNotUnderstoodQuestions(topicId);
 }

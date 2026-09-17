@@ -119,19 +119,26 @@ export async function addTopic(formData: FormData) {
   revalidatePath(`/school/subjects/${subjectId}`);
 }
 
+/**
+ * Both of these take two ids, and the one that matters is the topic. Checking
+ * the subject proves nothing about it: the caller sends both, so naming your
+ * own subject alongside someone else's topic satisfied the check and wrote to
+ * their row. The filter has to hang off the id being written.
+ *
+ * The progress value is clamped because it leaves this row: it feeds the
+ * school score, the coach's prompt and the planner, so a number outside 0-100
+ * is not a wrong pixel, it is a wrong recommendation.
+ */
 export async function updateTopicProgress(topicId: string, subjectId: string, progressPct: number) {
   const userId = await requireUserId();
-  const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId } });
-  if (!subject) return;
-  await prisma.topic.update({ where: { id: topicId }, data: { progressPct } });
+  const pct = Math.min(100, Math.max(0, Math.round(Number(progressPct) || 0)));
+  await prisma.topic.updateMany({ where: { id: topicId, subject: { userId } }, data: { progressPct: pct } });
   revalidatePath(`/school/subjects/${subjectId}`);
 }
 
 export async function deleteTopic(topicId: string, subjectId: string) {
   const userId = await requireUserId();
-  const subject = await prisma.subject.findFirst({ where: { id: subjectId, userId } });
-  if (!subject) return;
-  await prisma.topic.delete({ where: { id: topicId } });
+  await prisma.topic.deleteMany({ where: { id: topicId, subject: { userId } } });
   revalidatePath(`/school/subjects/${subjectId}`);
 }
 

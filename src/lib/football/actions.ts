@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { parseRevisionUrl } from "@/lib/utils/revision-url";
 import { generateIndividualTraining } from "./training-generator";
 import { fetchAndParseStandings } from "./standings-import";
 import type { FootballPosition } from "@/lib/data/football";
@@ -21,7 +22,10 @@ export async function updateProfile(formData: FormData) {
 
   let teamId: string | undefined;
   if (teamName) {
-    let team = await prisma.footballTeam.findFirst({ where: { name: teamName } });
+    // Scoped to this user's own profiles on purpose. Looking a team up by name
+    // alone made the name the only credential: anyone who typed your club's
+    // name joined the same row, and could then replace or delete its standings.
+    let team = await prisma.footballTeam.findFirst({ where: { name: teamName, profiles: { some: { userId } } } });
     if (!team) team = await prisma.footballTeam.create({ data: { name: teamName, dataSource: "MANUAL" } });
     teamId = team.id;
   }
@@ -125,7 +129,9 @@ async function updateDrills(
 
 export async function attachDrillVideo(trainingId: string, drillIndex: number, formData: FormData) {
   const userId = await requireUserId();
-  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  // Same check as the revision links: this ends up in an href, and a
+  // javascript: URL there runs code when you tap your own saved reference.
+  const videoUrl = parseRevisionUrl(String(formData.get("videoUrl") ?? ""));
   if (!videoUrl) return;
 
   await updateDrills(trainingId, userId, drillIndex, (drill) => {
