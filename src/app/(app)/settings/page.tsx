@@ -190,6 +190,21 @@ export default async function SettingsPage() {
             league data, or medical advice. This app does not diagnose health conditions or recommend extreme diets or
             training — if something feels physically or mentally off, please talk to a parent, coach, or doctor.
           </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Download everything</p>
+              <p className="text-xs text-muted">
+                One file with all your data and photos — keep it somewhere else, so this app is never the only copy.
+              </p>
+            </div>
+            <a
+              href="/api/export"
+              download
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-surface-muted"
+            >
+              Download backup
+            </a>
+          </div>
           <div className="flex items-center justify-between border-t border-border pt-3">
             <p className="text-sm font-medium">Delete account</p>
             <DeleteAccountButton />

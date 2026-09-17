@@ -1,4 +1,8 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 // The Web Speech API has no official TS DOM typings, so `tsc --noEmit` rejects
 // these reads even though every browser that supports voice exposes them.
@@ -509,6 +513,85 @@ test.describe.serial("full app walkthrough", () => {
       await button.click();
       await expect(rows.nth(2)).not.toContainText(/Not tested yet/, { timeout: 15000 });
     }
+  });
+
+  test("settings: the backup contains this account's data and photos, and nobody else's", async ({
+    browser,
+  }: {
+    browser: Browser;
+  }) => {
+    // A real photo first, so the archive has something to carry. This is the
+    // smallest valid PNG — 1x1, transparent.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwACRgFxfyRfSwAAAABJRU5ErkJggg==",
+      "base64"
+    );
+    await page.goto("/gym/history");
+    await page.setInputFiles('input[name="photo"]', { name: "progress.png", mimeType: "image/png", buffer: png });
+    await page.fill('input[name="caption"]', "Backup test photo");
+    await page.getByRole("button", { name: "Add photo" }).click();
+    await expect(page.getByText("Backup test photo")).toBeVisible();
+
+    const download = await page.request.get("/api/export");
+    expect(download.status()).toBe(200);
+    expect(download.headers()["content-disposition"]).toContain("momentum-backup-");
+    expect(Number(download.headers()["x-momentum-photos"])).toBeGreaterThanOrEqual(1);
+    // A photo the data points at but that isn't on disk is the failure mode
+    // this header exists to make visible — here everything must be found.
+    expect(download.headers()["x-momentum-missing-photos"]).toBe("0");
+
+    const archive = await download.body();
+    const dir = mkdtempSync(path.join(tmpdir(), "momentum-e2e-backup-"));
+    const file = path.join(dir, "backup.tar.gz");
+    writeFileSync(file, archive);
+    // The system's own tar, not a library that agrees with the writer.
+    execFileSync("tar", ["-xzf", file, "-C", dir]);
+
+    const root = readdirSync(dir).find((entry) => entry.startsWith("momentum-backup-"))!;
+    expect(root, "the archive has a dated folder").toBeTruthy();
+    const contents = readdirSync(path.join(dir, root));
+    expect(contents).toContain("data.json");
+    expect(contents).toContain("README.txt");
+    expect(readdirSync(path.join(dir, root, "photos")).length).toBeGreaterThanOrEqual(1);
+
+    const data = JSON.parse(readFileSync(path.join(dir, root, "data.json"), "utf8"));
+    expect(data.email).toBe(email);
+    expect(data.subjects.length).toBeGreaterThan(0);
+    // Credentials are not data, and a backup you might email yourself must not
+    // carry them.
+    expect(data.passwordHash).toBeUndefined();
+    expect(data.accounts).toBeUndefined();
+    expect(data.sessions).toBeUndefined();
+
+    // Somebody else's account gets their own backup, not this one's.
+    const otherEmail = `e2e_backup_${Date.now()}@example.com`;
+    const other = await browser.newContext();
+    const otherPage = await other.newPage();
+    await otherPage.goto("/register");
+    await otherPage.fill('input[name="name"]', "Other Person");
+    await otherPage.fill('input[name="email"]', otherEmail);
+    await otherPage.fill('input[name="password"]', password);
+    await otherPage.getByRole("button", { name: /create account/i }).click();
+    await otherPage.waitForURL(/\/onboarding|\/$/);
+
+    const theirs = await otherPage.request.get("/api/export");
+    expect(theirs.status()).toBe(200);
+    const theirFile = path.join(dir, "theirs.tar.gz");
+    writeFileSync(theirFile, await theirs.body());
+    const theirDir = mkdtempSync(path.join(tmpdir(), "momentum-e2e-backup-other-"));
+    execFileSync("tar", ["-xzf", theirFile, "-C", theirDir]);
+    const theirRoot = readdirSync(theirDir).find((entry) => entry.startsWith("momentum-backup-"))!;
+    const theirData = JSON.parse(readFileSync(path.join(theirDir, theirRoot, "data.json"), "utf8"));
+
+    expect(theirData.email).toBe(otherEmail);
+    expect(JSON.stringify(theirData)).not.toContain(email);
+    expect(theirData.bodyPhotos).toEqual([]);
+
+    // Signed out, it hands over nothing at all.
+    const anon = await browser.newContext();
+    expect((await anon.request.get("/api/export", { maxRedirects: 0 })).status()).not.toBe(200);
+    await anon.close();
+    await other.close();
   });
 
   test("settings: toggle theme and sign out", async () => {
