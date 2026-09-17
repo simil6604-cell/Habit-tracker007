@@ -139,7 +139,15 @@ test.describe.serial("full app walkthrough", () => {
     const topicUrl = "https://www.savemyexams.com/igcse/chemistry/cie/revision-notes/the-periodic-table/";
     const topicForm = page.locator('form:has(input[name="revisionUrl"])').last();
     await topicForm.locator('input[name="revisionUrl"]').fill(topicUrl);
+    // Wait for the save itself before reloading. Reloading straight after the
+    // click races the server action, and a page rebuilt from the state before
+    // it lands still shows the inherited link — which is how this test failed
+    // once in a run where nothing about the app had changed.
+    const saved = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().includes("/school/subjects")
+    );
     await topicForm.locator('button[type="submit"]').click();
+    await saved;
     await page.reload();
     await openTopic();
 
@@ -592,6 +600,123 @@ test.describe.serial("full app walkthrough", () => {
     expect((await anon.request.get("/api/export", { maxRedirects: 0 })).status()).not.toBe(200);
     await anon.close();
     await other.close();
+  });
+
+  test("settings: a backup restores into a fresh account, photo and all", async ({
+    browser,
+  }: {
+    browser: Browser;
+  }) => {
+    // Writing a whole account's rows one by one takes longer than a click.
+    test.setTimeout(120_000);
+    // The disaster this exists for: the app is gone, you install it again, and
+    // all you have is the file. So the restore goes into a brand new account,
+    // not the one it came from.
+    const backup = await page.request.get("/api/export");
+    expect(backup.status()).toBe(200);
+    const archive = await backup.body();
+
+    const freshEmail = `e2e_restore_${Date.now()}@example.com`;
+    const fresh = await browser.newContext();
+    const freshPage = await fresh.newPage();
+    await freshPage.goto("/register");
+    await freshPage.fill('input[name="name"]', "Fresh Install");
+    await freshPage.fill('input[name="email"]', freshEmail);
+    await freshPage.fill('input[name="password"]', password);
+    await freshPage.getByRole("button", { name: /create account/i }).click();
+    await freshPage.waitForURL("**/onboarding");
+
+    // A brand new account is held on this screen until it is set up, so the
+    // restore has to be reachable from here — otherwise the one case a backup
+    // exists for means setting everything up by hand first.
+    await expect(freshPage.getByText("Already have a backup?")).toBeVisible();
+
+    const dir = mkdtempSync(path.join(tmpdir(), "momentum-e2e-restore-"));
+    const file = path.join(dir, "momentum-backup.tar.gz");
+    writeFileSync(file, archive);
+
+    await freshPage.getByText("Already have a backup?").click();
+    await freshPage.setInputFiles('input[type="file"][accept*="gzip"]', file);
+    await freshPage.getByTestId("restore-confirm").check();
+    const restored = freshPage.waitForResponse((response) => response.url().includes("/api/restore"));
+    await freshPage.getByRole("button", { name: "Restore this backup" }).click();
+
+    // The response is the authoritative account of what happened. The panel's
+    // own summary is not asserted here on purpose: a restore onto a set-up
+    // account makes onboarding let it through, so the page navigates home and
+    // the message goes with it.
+    const response = await restored;
+    expect(response.status(), "the restore request itself").toBe(200);
+    const payload = await response.json();
+    expect(payload.error ?? null, "the restore reported an error").toBeNull();
+    expect(payload.rows, "rows restored").toBeGreaterThan(0);
+    expect(payload.photos, "photos restored").toBeGreaterThanOrEqual(1);
+    expect(payload.ignored, "files in the archive that were not part of a backup").toEqual([]);
+
+    // Set up now, so the screen that held this account hostage lets it past.
+    await freshPage.waitForURL("/", { timeout: 30_000 });
+
+    // The data arrived...
+    await freshPage.goto("/school");
+    await expect(freshPage.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+    // ...including the topic under it, which means the parent link survived
+    // being written under a new id.
+    await freshPage.getByRole("link", { name: /Chemistry/ }).click();
+    await expect(freshPage.getByRole("cell", { name: /Periodic Table/ })).toBeVisible();
+    // The restored account is set up, so onboarding lets it through now.
+    await freshPage.goto("/onboarding");
+    await freshPage.waitForURL("/");
+
+    // The photo came back as a file, not just as a row: this is a real
+    // request through the serving route, which only answers for the owner.
+    await freshPage.goto("/gym/history");
+    await expect(freshPage.getByText("Backup test photo")).toBeVisible();
+    const img = freshPage.locator('img[src^="/uploads/"]').first();
+    await expect(img).toBeVisible();
+    const src = await img.getAttribute("src");
+    expect((await freshPage.request.get(src!)).status()).toBe(200);
+
+    // Restoring the same file again replaces rather than piles up: this is the
+    // "I wasn't sure it worked, let me do it again" case, and it must not end
+    // with two of everything.
+    await freshPage.goto("/onboarding");
+    await freshPage.waitForURL("/");
+    await freshPage.goto("/settings");
+    await freshPage.setInputFiles('input[type="file"][accept*="gzip"]', file);
+    await freshPage.getByTestId("restore-confirm").check();
+    const again = freshPage.waitForResponse((response) => response.url().includes("/api/restore"));
+    await freshPage.getByRole("button", { name: "Restore this backup" }).click();
+    expect((await again).status()).toBe(200);
+    await expect(freshPage.getByTestId("restore-result")).toBeVisible();
+
+    await freshPage.goto("/school");
+    await expect(freshPage.getByRole("link", { name: /Chemistry/ })).toHaveCount(1);
+
+    // Restoring data is not becoming that person: the account is still theirs.
+    await freshPage.goto("/settings");
+    await expect(freshPage.getByText(freshEmail)).toBeVisible();
+
+    // And the photo restored under this account is still private to it.
+    const outsider = await browser.newContext();
+    expect((await outsider.request.get(src!, { maxRedirects: 0 })).status()).not.toBe(200);
+    await outsider.close();
+    await fresh.close();
+  });
+
+  test("settings: a file that is not a backup is refused with a reason", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "momentum-e2e-junk-"));
+    const junk = path.join(dir, "holiday-photo.gz");
+    writeFileSync(junk, Buffer.from("this is not an archive at all", "utf8"));
+
+    await page.goto("/settings");
+    await page.setInputFiles('input[type="file"][accept*="gzip"]', junk);
+    await page.getByTestId("restore-confirm").check();
+    await page.getByRole("button", { name: "Restore this backup" }).click();
+
+    await expect(page.getByTestId("restore-error")).toBeVisible();
+    // And it said so without touching anything.
+    await page.goto("/school");
+    await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
   });
 
   test("settings: toggle theme and sign out", async () => {

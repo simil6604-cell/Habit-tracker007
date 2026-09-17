@@ -1,4 +1,4 @@
-import { gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 /**
  * A minimal tar writer, so "download everything" is one file.
@@ -60,4 +60,69 @@ export function createTar(entries: TarEntry[]): Buffer {
 
 export function createTarGz(entries: TarEntry[]): Buffer {
   return gzipSync(createTar(entries));
+}
+
+function readOctal(block: Buffer, offset: number, length: number): number {
+  // Fields are octal digits terminated by a NUL or a space; some writers pad
+  // with spaces on the left as well.
+  const raw = block.subarray(offset, offset + length).toString("ascii").replace(/\0.*$/, "").trim();
+  if (!raw) return 0;
+  const value = parseInt(raw, 8);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function cString(block: Buffer, offset: number, length: number): string {
+  const raw = block.subarray(offset, offset + length);
+  const end = raw.indexOf(0);
+  return raw.subarray(0, end === -1 ? raw.length : end).toString("utf8");
+}
+
+/**
+ * Reads a tar archive back into its entries.
+ *
+ * Only regular files are returned: a restore has no business creating
+ * symlinks, devices or directories out of a file someone uploaded. Entry names
+ * are handed back exactly as stored — deciding which of them is acceptable is
+ * the caller's job, and the caller has more context for it than this does.
+ */
+export function readTar(archive: Buffer): TarEntry[] {
+  const entries: TarEntry[] = [];
+  let offset = 0;
+
+  while (offset + BLOCK <= archive.length) {
+    const header = archive.subarray(offset, offset + BLOCK);
+    // A block of zeros ends the archive.
+    if (header.every((byte) => byte === 0)) break;
+
+    const name = cString(header, 0, 100);
+    const prefix = cString(header, 345, 155);
+    const size = readOctal(header, 124, 12);
+    const mtime = readOctal(header, 136, 12);
+    const typeflag = String.fromCharCode(header[156] || 0x30);
+
+    const dataStart = offset + BLOCK;
+    const dataEnd = dataStart + size;
+    if (dataEnd > archive.length) throw new Error("Archive is truncated.");
+
+    // "0" and "\0" both mean a regular file; anything else is skipped.
+    if (typeflag === "0" || typeflag === "\0") {
+      entries.push({
+        name: prefix ? `${prefix}/${name}` : name,
+        body: Buffer.from(archive.subarray(dataStart, dataEnd)),
+        mtime: new Date(mtime * 1000),
+      });
+    }
+
+    offset = dataEnd + (size % BLOCK === 0 ? 0 : BLOCK - (size % BLOCK));
+  }
+
+  return entries;
+}
+
+export function readTarGz(archive: Buffer): TarEntry[] {
+  // Not a gzip file? Then it was never one of ours.
+  if (archive.length < 2 || archive[0] !== 0x1f || archive[1] !== 0x8b) {
+    throw new Error("That file isn't a .tar.gz archive.");
+  }
+  return readTar(gunzipSync(archive));
 }

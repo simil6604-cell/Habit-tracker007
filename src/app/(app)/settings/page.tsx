@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DeleteAccountButton } from "@/components/settings/danger-zone";
 import { AIConnectionTest } from "@/components/settings/ai-connection-test";
 import { MicrophoneCheck } from "@/components/settings/microphone-check";
+import { RestoreBackupPanel } from "@/components/settings/restore-backup-panel";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SettingsPage() {
@@ -204,6 +205,14 @@ export default async function SettingsPage() {
             >
               Download backup
             </a>
+          </div>
+          <div className="border-t border-border pt-3">
+            <p className="text-sm font-medium">Restore a backup</p>
+            <p className="mb-2 text-xs text-muted">
+              Put a downloaded backup back in — after a new install, a lost phone, or a bad day. It replaces what
+              this account holds now with what is in the file.
+            </p>
+            <RestoreBackupPanel />
           </div>
           <div className="flex items-center justify-between border-t border-border pt-3">
             <p className="text-sm font-medium">Delete account</p>
