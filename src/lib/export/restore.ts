@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { UPLOAD_ROOT } from "@/lib/uploads/save-image";
 import { readTarGz, type TarEntry } from "./tar";
@@ -39,10 +40,16 @@ export type RestoreResult =
   | { ok: false; error: string };
 
 /**
- * Relation fields by name. A relation that holds an object or a list is
- * recognisable by its value, but one that is empty comes back as `null` and
- * looks exactly like a nullable column — and Prisma rejects `school: null` on
- * a create, which is how the first version of this failed. Names, not shapes.
+ * Relation fields by name, used only to decide what an *empty* value means.
+ *
+ * A relation holding an object or a list is recognisable by its value, but an
+ * empty one comes back as `null` and looks exactly like a nullable column —
+ * and Prisma rejects `school: null` on a create, which is how the first
+ * version of this failed. Dropping those names outright is wrong too:
+ * `Flashcard.topic` is a plain string column that happens to share a name with
+ * a relation, and dropping it lost the label on every restored card. So a name
+ * on this list is dropped when it is null or an object, and kept when it holds
+ * an actual value.
  */
 const RELATION_KEYS = new Set([
   "user",
@@ -79,8 +86,8 @@ export function scalars(row: unknown, extra: Record<string, unknown> = {}): Reco
     // The children are restored by name, in order, so a nested copy here would
     // only confuse Prisma. Every Json column in this schema is stored as a
     // string, so nothing real is lost.
-    if (RELATION_KEYS.has(key)) continue;
     if (value !== null && typeof value === "object") continue;
+    if (value === null && RELATION_KEYS.has(key)) continue;
     out[key] = value;
   }
   return { ...out, ...extra };
@@ -169,36 +176,45 @@ function rewriteImagePath(imagePath: unknown, userId: string, photos: Map<string
   return `/uploads/${userId}/${filename}`;
 }
 
-/** Removes everything the account currently holds. Children go with their parents. */
-async function wipe(userId: string): Promise<void> {
-  await prisma.$transaction([
-    prisma.subject.deleteMany({ where: { userId } }),
-    prisma.school.deleteMany({ where: { userId } }),
-    prisma.homework.deleteMany({ where: { userId } }),
-    prisma.exam.deleteMany({ where: { userId } }),
-    prisma.studySession.deleteMany({ where: { userId } }),
-    prisma.flashcard.deleteMany({ where: { userId } }),
-    prisma.schoolHabit.deleteMany({ where: { userId } }),
-    prisma.learningLogEntry.deleteMany({ where: { userId } }),
-    prisma.notePhoto.deleteMany({ where: { userId } }),
-    prisma.classRecording.deleteMany({ where: { userId } }),
-    prisma.tutorMessage.deleteMany({ where: { userId } }),
-    prisma.workoutSession.deleteMany({ where: { userId } }),
-    prisma.workout.deleteMany({ where: { userId } }),
-    prisma.meal.deleteMany({ where: { userId } }),
-    prisma.waterLog.deleteMany({ where: { userId } }),
-    prisma.bodyWeightLog.deleteMany({ where: { userId } }),
-    prisma.bodyPhoto.deleteMany({ where: { userId } }),
-    prisma.scannedProduct.deleteMany({ where: { userId } }),
-    prisma.footballProfile.deleteMany({ where: { userId } }),
-    prisma.goal.deleteMany({ where: { userId } }),
-    prisma.task.deleteMany({ where: { userId } }),
-    prisma.calendarEvent.deleteMany({ where: { userId } }),
-    prisma.aIRecommendation.deleteMany({ where: { userId } }),
-    prisma.progress.deleteMany({ where: { userId } }),
-    prisma.chatMessage.deleteMany({ where: { userId } }),
-    prisma.assessment.deleteMany({ where: { userId } }),
-  ]);
+/**
+ * Removes everything the account currently holds. Children go with their
+ * parents, except the timetable, which no cascade reaches.
+ *
+ * Runs on the caller's transaction, not its own: a restore that wiped in one
+ * transaction and then wrote in none would leave the account destroyed the
+ * moment any single row failed.
+ */
+async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  // TimetableSlot has no relation to User, so nothing cascades to it, and its
+  // link to Subject is SetNull — without this the old timetable survives a
+  // "replaces everything" restore and the new one stacks on top of it.
+  await tx.timetableSlot.deleteMany({ where: { userId } });
+  await tx.subject.deleteMany({ where: { userId } });
+  await tx.school.deleteMany({ where: { userId } });
+  await tx.homework.deleteMany({ where: { userId } });
+  await tx.exam.deleteMany({ where: { userId } });
+  await tx.studySession.deleteMany({ where: { userId } });
+  await tx.flashcard.deleteMany({ where: { userId } });
+  await tx.schoolHabit.deleteMany({ where: { userId } });
+  await tx.learningLogEntry.deleteMany({ where: { userId } });
+  await tx.notePhoto.deleteMany({ where: { userId } });
+  await tx.classRecording.deleteMany({ where: { userId } });
+  await tx.tutorMessage.deleteMany({ where: { userId } });
+  await tx.workoutSession.deleteMany({ where: { userId } });
+  await tx.workout.deleteMany({ where: { userId } });
+  await tx.meal.deleteMany({ where: { userId } });
+  await tx.waterLog.deleteMany({ where: { userId } });
+  await tx.bodyWeightLog.deleteMany({ where: { userId } });
+  await tx.bodyPhoto.deleteMany({ where: { userId } });
+  await tx.scannedProduct.deleteMany({ where: { userId } });
+  await tx.footballProfile.deleteMany({ where: { userId } });
+  await tx.goal.deleteMany({ where: { userId } });
+  await tx.task.deleteMany({ where: { userId } });
+  await tx.calendarEvent.deleteMany({ where: { userId } });
+  await tx.aIRecommendation.deleteMany({ where: { userId } });
+  await tx.progress.deleteMany({ where: { userId } });
+  await tx.chatMessage.deleteMany({ where: { userId } });
+  await tx.assessment.deleteMany({ where: { userId } });
 }
 
 export async function restoreBackup(userId: string, archive: Buffer): Promise<RestoreResult> {
@@ -246,191 +262,239 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
     written++;
   }
 
-  await wipe(userId);
+  /**
+   * One transaction for the whole rewrite. The wipe used to commit on its own
+   * and everything after it ran unprotected, so a single row Prisma refused —
+   * a data.json from a newer version of the app, say — left the account
+   * emptied with nothing written back. Now either all of it lands or none of
+   * it does, and the file is still on the user's disk either way.
+   *
+   * The timeout is generous because this writes a whole account's history row
+   * by row, and the default five seconds is a limit on the restore, not on
+   * anything going wrong.
+   */
+  await prisma.$transaction(
+    async (tx) => {
+    await wipe(tx, userId);
 
-  // The account's own settings. Never the email or the password: this restores
-  // data into whoever is signed in, it does not turn them into someone else.
-  const profile = scalars(data);
-  if (profile) {
-    const settings = omit(profile, ["id", "email", "passwordHash", "emailVerified", "createdAt", "footballProfile"]);
-    await prisma.user.update({ where: { id: userId }, data: settings });
-  }
+    // The account's own settings. Never the email or the password: this restores
+    // data into whoever is signed in, it does not turn them into someone else.
+    const profile = scalars(data);
+    if (profile) {
+      const settings = omit(profile, ["id", "email", "passwordHash", "emailVerified", "createdAt", "footballProfile"]);
+      await tx.user.update({ where: { id: userId }, data: settings });
+    }
 
-  const school = scalars(data.school, owned);
-  if (school) {
-    await create((row) => prisma.school.create({ data: row as never }), { ...omit(school, ["id"]), userId });
-  }
+    const school = scalars(data.school, owned);
+    if (school) {
+      await create((row) => tx.school.create({ data: row as never }), { ...omit(school, ["id"]), userId });
+    }
 
-  // Parents before children, and a child whose parent didn't make it is
-  // skipped rather than re-parented to something arbitrary.
-  for (const subject of rows(data.subjects)) {
-    const row = scalars(subject, owned);
-    if (!row) continue;
-    await create((r) => prisma.subject.create({ data: r as never }), withNewId(row));
-  }
+    // Parents before children, and a child whose parent didn't make it is
+    // skipped rather than re-parented to something arbitrary.
+    for (const subject of rows(data.subjects)) {
+      const row = scalars(subject, owned);
+      if (!row) continue;
+      await create((r) => tx.subject.create({ data: r as never }), withNewId(row));
+    }
 
-  for (const subject of rows(data.subjects)) {
-    for (const slot of rows(subject.timetableSlots)) {
-      const row = scalars(slot);
+    for (const subject of rows(data.subjects)) {
+      for (const topic of rows(subject.topics)) {
+        const row = scalars(topic);
+        if (!row || !link(row, "subjectId")) continue;
+        await create((r) => tx.topic.create({ data: r as never }), withNewId(row));
+      }
+    }
+
+    /**
+     * The timetable, from the top-level list this app now exports and from the
+     * per-subject lists older archives carry, by id so nothing is written
+     * twice.
+     *
+     * `owned` is the part that matters. Every other row is tied to the account
+     * by a foreign key Prisma would refuse to get wrong; TimetableSlot has a
+     * plain userId column and no relation, so writing the backup's userId
+     * succeeds silently and every timetable query — all of which filter on
+     * userId — then returns nothing. The rows are there, counted as restored,
+     * and the timetable is blank.
+     */
+    const slotsById = new Map<string, Record<string, unknown>>();
+    for (const slot of [...rows(data.timetableSlots), ...rows(data.subjects).flatMap((s) => rows(s.timetableSlots))]) {
+      if (typeof slot.id === "string" && !slotsById.has(slot.id)) slotsById.set(slot.id, slot);
+    }
+    for (const slot of slotsById.values()) {
+      const row = scalars(slot, owned);
       if (!row) continue;
       if (!link(row, "subjectId")) row.subjectId = null;
-      await create((r) => prisma.timetableSlot.create({ data: r as never }), withNewId(row));
+      await create((r) => tx.timetableSlot.create({ data: r as never }), withNewId(row));
     }
-    for (const topic of rows(subject.topics)) {
-      const row = scalars(topic);
-      if (!row || !link(row, "subjectId")) continue;
-      await create((r) => prisma.topic.create({ data: r as never }), withNewId(row));
-    }
-  }
 
-  for (const [key, write] of [
-    ["homework", (row: Record<string, unknown>) => prisma.homework.create({ data: row as never })],
-    ["exams", (row: Record<string, unknown>) => prisma.exam.create({ data: row as never })],
-    ["studySessions", (row: Record<string, unknown>) => prisma.studySession.create({ data: row as never })],
-    ["flashcards", (row: Record<string, unknown>) => prisma.flashcard.create({ data: row as never })],
-  ] as const) {
-    for (const entry of rows(data[key])) {
+    for (const [key, write] of [
+      ["homework", (row: Record<string, unknown>) => tx.homework.create({ data: row as never })],
+      ["exams", (row: Record<string, unknown>) => tx.exam.create({ data: row as never })],
+      ["studySessions", (row: Record<string, unknown>) => tx.studySession.create({ data: row as never })],
+    ] as const) {
+      for (const entry of rows(data[key])) {
+        const row = scalars(entry, owned);
+        if (!row) continue;
+        if (!link(row, "subjectId")) row.subjectId = null;
+        await create(write, withNewId(row));
+      }
+    }
+
+    for (const habit of rows(data.schoolHabits)) {
+      const row = scalars(habit, owned);
+      if (!row) continue;
+      await create((r) => tx.schoolHabit.create({ data: r as never }), withNewId(row));
+      for (const log of rows(habit.logs)) {
+        const logRow = scalars(log);
+        if (!logRow || !link(logRow, "habitId")) continue;
+        await create((r) => tx.schoolHabitLog.create({ data: r as never }), withNewId(logRow));
+      }
+    }
+
+    // The topic-level lists are restored from the top-level copies, which the
+    // export includes precisely so an entry whose topic is gone still survives.
+    for (const [key, write] of [
+      ["learningLogEntries", (row: Record<string, unknown>) => tx.learningLogEntry.create({ data: row as never })],
+      ["classRecordings", (row: Record<string, unknown>) => tx.classRecording.create({ data: row as never })],
+      ["tutorMessages", (row: Record<string, unknown>) => tx.tutorMessage.create({ data: row as never })],
+    ] as const) {
+      for (const entry of rows(data[key])) {
+        const row = scalars(entry, owned);
+        if (!row || !link(row, "topicId")) continue;
+        await create(write, withNewId(row));
+      }
+    }
+
+    /**
+     * Flashcards come after the learning log on purpose: a card generated from
+     * something you marked as not understood remembers which entry it came
+     * from, and that is what stops "generate from what I didn't understand"
+     * making a second copy of every card. Restored before the entries, the
+     * link would point at an id that no longer exists and every card would be
+     * generated again.
+     */
+    for (const entry of rows(data.flashcards)) {
       const row = scalars(entry, owned);
       if (!row) continue;
       if (!link(row, "subjectId")) row.subjectId = null;
-      await create(write, withNewId(row));
+      if (row.sourceLogEntryId != null && !link(row, "sourceLogEntryId")) row.sourceLogEntryId = null;
+      await create((r) => tx.flashcard.create({ data: r as never }), withNewId(row));
     }
-  }
 
-  for (const habit of rows(data.schoolHabits)) {
-    const row = scalars(habit, owned);
-    if (!row) continue;
-    await create((r) => prisma.schoolHabit.create({ data: r as never }), withNewId(row));
-    for (const log of rows(habit.logs)) {
-      const logRow = scalars(log);
-      if (!logRow || !link(logRow, "habitId")) continue;
-      await create((r) => prisma.schoolHabitLog.create({ data: r as never }), withNewId(logRow));
-    }
-  }
-
-  // The topic-level lists are restored from the top-level copies, which the
-  // export includes precisely so an entry whose topic is gone still survives.
-  for (const [key, write] of [
-    ["learningLogEntries", (row: Record<string, unknown>) => prisma.learningLogEntry.create({ data: row as never })],
-    ["classRecordings", (row: Record<string, unknown>) => prisma.classRecording.create({ data: row as never })],
-    ["tutorMessages", (row: Record<string, unknown>) => prisma.tutorMessage.create({ data: row as never })],
-  ] as const) {
-    for (const entry of rows(data[key])) {
+    for (const entry of rows(data.notePhotos)) {
       const row = scalars(entry, owned);
       if (!row || !link(row, "topicId")) continue;
-      await create(write, withNewId(row));
+      const rewritten = rewriteImagePath(row.imagePath, userId, photos);
+      // A note photo is its picture — without the file there is nothing to show.
+      if (!rewritten) continue;
+      await create((r) => tx.notePhoto.create({ data: r as never }), withNewId({ ...row, imagePath: rewritten }));
     }
-  }
 
-  for (const entry of rows(data.notePhotos)) {
-    const row = scalars(entry, owned);
-    if (!row || !link(row, "topicId")) continue;
-    const rewritten = rewriteImagePath(row.imagePath, userId, photos);
-    // A note photo is its picture — without the file there is nothing to show.
-    if (!rewritten) continue;
-    await create((r) => prisma.notePhoto.create({ data: r as never }), withNewId({ ...row, imagePath: rewritten }));
-  }
-
-  for (const workout of rows(data.workouts)) {
-    const row = scalars(workout, owned);
-    if (!row) continue;
-    await create((r) => prisma.workout.create({ data: r as never }), withNewId(row));
-    for (const exercise of rows(workout.exercises)) {
-      const exerciseRow = scalars(exercise);
-      if (!exerciseRow || !link(exerciseRow, "workoutId")) continue;
-      await create((r) => prisma.exercise.create({ data: r as never }), withNewId(exerciseRow));
-    }
-  }
-
-  for (const session of rows(data.workoutSessions)) {
-    const row = scalars(session, owned);
-    if (!row) continue;
-    if (!link(row, "workoutId")) row.workoutId = null;
-    await create((r) => prisma.workoutSession.create({ data: r as never }), withNewId(row));
-    for (const log of rows(session.setLogs)) {
-      const logRow = scalars(log);
-      if (!logRow) continue;
-      if (!link(logRow, "sessionId") || !link(logRow, "exerciseId")) continue;
-      await create((r) => prisma.setLog.create({ data: r as never }), withNewId(logRow));
-    }
-  }
-
-  for (const meal of rows(data.meals)) {
-    const row = scalars(meal, owned);
-    if (!row) continue;
-    // A meal is still a meal without its photo, so the row is kept either way.
-    row.imagePath = rewriteImagePath(row.imagePath, userId, photos);
-    await create((r) => prisma.meal.create({ data: r as never }), withNewId(row));
-  }
-
-  for (const photo of rows(data.bodyPhotos)) {
-    const row = scalars(photo, owned);
-    if (!row) continue;
-    const rewritten = rewriteImagePath(row.imagePath, userId, photos);
-    if (!rewritten) continue;
-    await create((r) => prisma.bodyPhoto.create({ data: r as never }), withNewId({ ...row, imagePath: rewritten }));
-  }
-
-  for (const [key, write] of [
-    ["waterLogs", (row: Record<string, unknown>) => prisma.waterLog.create({ data: row as never })],
-    ["weightLogs", (row: Record<string, unknown>) => prisma.bodyWeightLog.create({ data: row as never })],
-    ["scannedProducts", (row: Record<string, unknown>) => prisma.scannedProduct.create({ data: row as never })],
-    ["goals", (row: Record<string, unknown>) => prisma.goal.create({ data: row as never })],
-    ["tasks", (row: Record<string, unknown>) => prisma.task.create({ data: row as never })],
-    ["calendarEvents", (row: Record<string, unknown>) => prisma.calendarEvent.create({ data: row as never })],
-    ["recommendations", (row: Record<string, unknown>) => prisma.aIRecommendation.create({ data: row as never })],
-    ["progressEntries", (row: Record<string, unknown>) => prisma.progress.create({ data: row as never })],
-    ["chatMessages", (row: Record<string, unknown>) => prisma.chatMessage.create({ data: row as never })],
-    ["assessments", (row: Record<string, unknown>) => prisma.assessment.create({ data: row as never })],
-  ] as const) {
-    for (const entry of rows(data[key])) {
-      const row = scalars(entry, owned);
+    for (const workout of rows(data.workouts)) {
+      const row = scalars(workout, owned);
       if (!row) continue;
-      await create(write, withNewId(row));
+      await create((r) => tx.workout.create({ data: r as never }), withNewId(row));
+      for (const exercise of rows(workout.exercises)) {
+        const exerciseRow = scalars(exercise);
+        if (!exerciseRow || !link(exerciseRow, "workoutId")) continue;
+        await create((r) => tx.exercise.create({ data: r as never }), withNewId(exerciseRow));
+      }
     }
-  }
 
-  const football = data.footballProfile;
-  if (football && typeof football === "object" && !Array.isArray(football)) {
-    const profileRow = scalars(football, owned);
-    const teamSource = (football as Record<string, unknown>).team;
-    const teamRow = scalars(teamSource);
+    for (const session of rows(data.workoutSessions)) {
+      const row = scalars(session, owned);
+      if (!row) continue;
+      if (!link(row, "workoutId")) row.workoutId = null;
+      await create((r) => tx.workoutSession.create({ data: r as never }), withNewId(row));
+      for (const log of rows(session.setLogs)) {
+        const logRow = scalars(log);
+        if (!logRow) continue;
+        if (!link(logRow, "sessionId") || !link(logRow, "exerciseId")) continue;
+        await create((r) => tx.setLog.create({ data: r as never }), withNewId(logRow));
+      }
+    }
 
-    if (profileRow) {
-      if (teamRow && typeof teamRow.id === "string") {
-        // A team row is shared between teammates, so it may already exist.
-        // Then it is joined rather than duplicated, and its standings are left
-        // exactly as they are — they are not this backup's to overwrite.
-        const existing = await prisma.footballTeam.findUnique({ where: { id: teamRow.id } });
-        if (existing) {
-          ids.set(teamRow.id, existing.id);
-        } else {
-          const oldTeamId = teamRow.id;
-          await create((r) => prisma.footballTeam.create({ data: r as never }), withNewId(teamRow));
-          for (const standing of rows((teamSource as Record<string, unknown>).standings)) {
-            const row = scalars(standing);
-            if (!row || row.teamId !== oldTeamId || !link(row, "teamId")) continue;
-            await create((r) => prisma.teamStanding.create({ data: r as never }), withNewId(row));
+    for (const meal of rows(data.meals)) {
+      const row = scalars(meal, owned);
+      if (!row) continue;
+      // A meal is still a meal without its photo, so the row is kept either way.
+      row.imagePath = rewriteImagePath(row.imagePath, userId, photos);
+      await create((r) => tx.meal.create({ data: r as never }), withNewId(row));
+    }
+
+    for (const photo of rows(data.bodyPhotos)) {
+      const row = scalars(photo, owned);
+      if (!row) continue;
+      const rewritten = rewriteImagePath(row.imagePath, userId, photos);
+      if (!rewritten) continue;
+      await create((r) => tx.bodyPhoto.create({ data: r as never }), withNewId({ ...row, imagePath: rewritten }));
+    }
+
+    for (const [key, write] of [
+      ["waterLogs", (row: Record<string, unknown>) => tx.waterLog.create({ data: row as never })],
+      ["weightLogs", (row: Record<string, unknown>) => tx.bodyWeightLog.create({ data: row as never })],
+      ["scannedProducts", (row: Record<string, unknown>) => tx.scannedProduct.create({ data: row as never })],
+      ["goals", (row: Record<string, unknown>) => tx.goal.create({ data: row as never })],
+      ["tasks", (row: Record<string, unknown>) => tx.task.create({ data: row as never })],
+      ["calendarEvents", (row: Record<string, unknown>) => tx.calendarEvent.create({ data: row as never })],
+      ["recommendations", (row: Record<string, unknown>) => tx.aIRecommendation.create({ data: row as never })],
+      ["progressEntries", (row: Record<string, unknown>) => tx.progress.create({ data: row as never })],
+      ["chatMessages", (row: Record<string, unknown>) => tx.chatMessage.create({ data: row as never })],
+      ["assessments", (row: Record<string, unknown>) => tx.assessment.create({ data: row as never })],
+    ] as const) {
+      for (const entry of rows(data[key])) {
+        const row = scalars(entry, owned);
+        if (!row) continue;
+        await create(write, withNewId(row));
+      }
+    }
+
+    const football = data.footballProfile;
+    if (football && typeof football === "object" && !Array.isArray(football)) {
+      const profileRow = scalars(football, owned);
+      const teamSource = (football as Record<string, unknown>).team;
+      const teamRow = scalars(teamSource);
+
+      if (profileRow) {
+        if (teamRow && typeof teamRow.id === "string") {
+          // A team row is shared between teammates, so it may already exist.
+          // Then it is joined rather than duplicated, and its standings are left
+          // exactly as they are — they are not this backup's to overwrite.
+          const existing = await tx.footballTeam.findUnique({ where: { id: teamRow.id } });
+          if (existing) {
+            ids.set(teamRow.id, existing.id);
+          } else {
+            const oldTeamId = teamRow.id;
+            await create((r) => tx.footballTeam.create({ data: r as never }), withNewId(teamRow));
+            for (const standing of rows((teamSource as Record<string, unknown>).standings)) {
+              const row = scalars(standing);
+              if (!row || row.teamId !== oldTeamId || !link(row, "teamId")) continue;
+              await create((r) => tx.teamStanding.create({ data: r as never }), withNewId(row));
+            }
+          }
+        }
+
+        if (!link(profileRow, "teamId")) profileRow.teamId = null;
+        const oldProfileId = profileRow.id;
+        await create((r) => tx.footballProfile.create({ data: r as never }), withNewId(profileRow));
+
+        for (const [key, write] of [
+          ["trainings", (row: Record<string, unknown>) => tx.footballTraining.create({ data: row as never })],
+          ["matches", (row: Record<string, unknown>) => tx.footballMatch.create({ data: row as never })],
+        ] as const) {
+          for (const entry of rows((football as Record<string, unknown>)[key])) {
+            const row = scalars(entry);
+            if (!row || row.profileId !== oldProfileId || !link(row, "profileId")) continue;
+            await create(write, withNewId(row));
           }
         }
       }
-
-      if (!link(profileRow, "teamId")) profileRow.teamId = null;
-      const oldProfileId = profileRow.id;
-      await create((r) => prisma.footballProfile.create({ data: r as never }), withNewId(profileRow));
-
-      for (const [key, write] of [
-        ["trainings", (row: Record<string, unknown>) => prisma.footballTraining.create({ data: row as never })],
-        ["matches", (row: Record<string, unknown>) => prisma.footballMatch.create({ data: row as never })],
-      ] as const) {
-        for (const entry of rows((football as Record<string, unknown>)[key])) {
-          const row = scalars(entry);
-          if (!row || row.profileId !== oldProfileId || !link(row, "profileId")) continue;
-          await create(write, withNewId(row));
-        }
-      }
     }
-  }
+    },
+    { timeout: 180_000, maxWait: 20_000 }
+  );
 
   // The files last: a photo on disk with no row is invisible, a row with no
   // file is a broken image, and the rows above only kept paths for files this

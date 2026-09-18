@@ -119,10 +119,33 @@ export function readTar(archive: Buffer): TarEntry[] {
   return entries;
 }
 
-export function readTarGz(archive: Buffer): TarEntry[] {
+/**
+ * The largest archive this will unpack, in bytes once decompressed.
+ *
+ * Compression ratios are unbounded, so a small upload can decompress to
+ * anything: a few hundred kilobytes of gzipped zeros becomes gigabytes, and
+ * unpacking it into memory takes the whole app down with it. A limit on the
+ * uploaded file says nothing about that — only a limit on the output does.
+ * 200MB is far more than a real backup of one person's school years, photos
+ * included.
+ */
+export const MAX_UNPACKED_BYTES = 200 * 1024 * 1024;
+
+export function readTarGz(archive: Buffer, maxUnpackedBytes = MAX_UNPACKED_BYTES): TarEntry[] {
   // Not a gzip file? Then it was never one of ours.
   if (archive.length < 2 || archive[0] !== 0x1f || archive[1] !== 0x8b) {
     throw new Error("That file isn't a .tar.gz archive.");
   }
-  return readTar(gunzipSync(archive));
+  let unpacked: Buffer;
+  try {
+    unpacked = gunzipSync(archive, { maxOutputLength: maxUnpackedBytes });
+  } catch (err) {
+    // Node throws ERR_BUFFER_TOO_LARGE once the output passes the limit, which
+    // is a different thing from a corrupt file and worth saying separately.
+    if (err instanceof Error && "code" in err && err.code === "ERR_BUFFER_TOO_LARGE") {
+      throw new Error("That backup unpacks to more than this app will read at once.");
+    }
+    throw new Error("That file isn't a .tar.gz archive.");
+  }
+  return readTar(unpacked);
 }

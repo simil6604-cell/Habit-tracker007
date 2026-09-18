@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { createTar, createTarGz, readTar, readTarGz } from "@/lib/export/tar";
 
 /**
@@ -99,5 +100,21 @@ describe("readTar", () => {
   it("refuses a truncated archive instead of returning half a file", () => {
     const full = createTar([{ name: "backup/data.json", body: Buffer.alloc(2000, 1) }]);
     expect(() => readTar(full.subarray(0, 900))).toThrow(/truncated/);
+  });
+});
+
+describe("readTarGz size limit", () => {
+  it("refuses an archive that unpacks to more than the limit", () => {
+    // A gzip bomb in miniature: the compressed form is tiny, the unpacked form
+    // is not. Only a limit on the output catches this — the uploaded file is
+    // small by every measure.
+    const bomb = gzipSync(Buffer.alloc(4 * 1024 * 1024, 0));
+    expect(bomb.length).toBeLessThan(64 * 1024);
+    expect(() => readTarGz(bomb, 1024 * 1024)).toThrow(/more than this app will read/);
+  });
+
+  it("still reads an archive that fits", () => {
+    const archive = createTarGz([{ name: "backup/data.json", body: Buffer.alloc(200_000, 0x41) }]);
+    expect(readTarGz(archive, 1024 * 1024)[0].body.length).toBe(200_000);
   });
 });

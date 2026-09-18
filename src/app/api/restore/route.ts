@@ -4,6 +4,9 @@ import { restoreBackup } from "@/lib/export/restore";
 
 export const dynamic = "force-dynamic";
 
+/** A real backup of one person is far below this, photos and all. */
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 /**
  * Restores an uploaded backup into the signed-in account.
  *
@@ -16,6 +19,14 @@ export async function POST(request: Request) {
   const userId = session?.user?.id;
   if (!userId) return Response.json({ error: "Not signed in." }, { status: 401 });
 
+  // Refused before the body is read into memory at all. The unpack limit in
+  // the tar reader covers what a small file can expand into; this covers the
+  // upload itself.
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (declared > MAX_UPLOAD_BYTES) {
+    return Response.json({ error: "That file is too large to restore from." }, { status: 413 });
+  }
+
   let file: unknown;
   try {
     file = (await request.formData()).get("backup");
@@ -24,6 +35,9 @@ export async function POST(request: Request) {
   }
   if (!(file instanceof File) || file.size === 0) {
     return Response.json({ error: "Pick your backup file first." }, { status: 400 });
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return Response.json({ error: "That file is too large to restore from." }, { status: 413 });
   }
 
   let result;

@@ -104,6 +104,20 @@ describe("scalars", () => {
     });
   });
 
+  it("keeps a plain column that happens to share a name with a relation", () => {
+    // Flashcard.topic is a String? column, not the Topic relation. Dropping it
+    // by name cost every restored card its topic label.
+    expect(scalars({ id: "f1", topic: "Vectors", front: "a", back: "b" })).toEqual({
+      id: "f1",
+      topic: "Vectors",
+      front: "a",
+      back: "b",
+    });
+    // The same name holding an actual relation is still dropped.
+    expect(scalars({ id: "n1", topic: { id: "t1", name: "Vectors" } })).toEqual({ id: "n1" });
+    expect(scalars({ id: "n1", topic: null })).toEqual({ id: "n1" });
+  });
+
   it("adds the owner, and refuses anything that is not a row", () => {
     expect(scalars({ name: "x" }, { userId: "me" })).toEqual({ name: "x", userId: "me" });
     expect(scalars(null)).toBeNull();

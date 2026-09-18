@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createTarGz } from "@/lib/export/tar";
 
 // The Web Speech API has no official TS DOM typings, so `tsc --noEmit` rejects
 // these reads even though every browser that supports voice exposes them.
@@ -220,6 +221,38 @@ test.describe.serial("full app walkthrough", () => {
     // quietly doing nothing or inventing cards.
     await button.click();
     await expect(page.getByText(/Nothing marked as not understood yet|needs a real AI/)).toBeVisible({ timeout: 60000 });
+  });
+
+  test("school: a timetable holds both lessons and the gaps between them", async () => {
+    await page.goto("/school/timetable");
+
+    const rowCells = (row: ReturnType<typeof page.locator>) =>
+      row.locator('input:not([type="time"]):not([type="checkbox"])');
+
+    // A lesson period: this one links to a real subject.
+    const lesson = page.locator("tbody tr").first();
+    await rowCells(lesson).first().fill("P1");
+    await lesson.locator('input[type="time"]').first().fill("08:00");
+    await lesson.locator('input[type="time"]').nth(1).fill("09:00");
+    await lesson.locator("select").selectOption("LESSON");
+    await rowCells(lesson).nth(1).fill("Chemistry"); // Monday
+
+    // And a break: no subject at all, which is most of a real timetable —
+    // registration, breaks, lunch, study periods, free lessons.
+    await page.getByRole("button", { name: "Add period" }).click();
+    const breakRow = page.locator("tbody tr").nth(1);
+    await rowCells(breakRow).first().fill("Break");
+    await breakRow.locator('input[type="time"]').first().fill("09:00");
+    await breakRow.locator('input[type="time"]').nth(1).fill("09:20");
+    await breakRow.locator("select").selectOption("BREAK");
+    await rowCells(breakRow).nth(1).fill("Morning break"); // Monday
+
+    await page.getByRole("button", { name: "Save timetable" }).click();
+    await expect(page.getByText("Saved")).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator('input[value="Chemistry"]')).toBeVisible();
+    await expect(page.locator('input[value="Morning break"]')).toBeVisible();
   });
 
   test("gym: create a workout plan", async () => {
@@ -667,6 +700,13 @@ test.describe.serial("full app walkthrough", () => {
     await freshPage.goto("/onboarding");
     await freshPage.waitForURL("/");
 
+    // The timetable too — both halves of it. The lesson proves the link to its
+    // subject was rewritten; the break proves a slot with no subject at all
+    // made it into the backup, which is most of a real week.
+    await freshPage.goto("/school/timetable");
+    await expect(freshPage.locator('input[value="Chemistry"]')).toBeVisible();
+    await expect(freshPage.locator('input[value="Morning break"]')).toBeVisible();
+
     // The photo came back as a file, not just as a row: this is a real
     // request through the serving route, which only answers for the owner.
     await freshPage.goto("/gym/history");
@@ -679,6 +719,15 @@ test.describe.serial("full app walkthrough", () => {
     // Restoring the same file again replaces rather than piles up: this is the
     // "I wasn't sure it worked, let me do it again" case, and it must not end
     // with two of everything.
+    //
+    // Counted through the account's own export rather than by looking at the
+    // page: a duplicated timetable slot is invisible in the editor, which
+    // groups the week by period, and invisible in a count of subjects. The row
+    // count is the one place every doubled row shows up.
+    const afterFirst = await freshPage.request.get("/api/export");
+    const rowsAfterFirst = Number(afterFirst.headers()["x-momentum-rows"]);
+    expect(rowsAfterFirst).toBeGreaterThan(0);
+
     await freshPage.goto("/onboarding");
     await freshPage.waitForURL("/");
     await freshPage.goto("/settings");
@@ -692,6 +741,11 @@ test.describe.serial("full app walkthrough", () => {
     await freshPage.goto("/school");
     await expect(freshPage.getByRole("link", { name: /Chemistry/ })).toHaveCount(1);
 
+    const afterSecond = await freshPage.request.get("/api/export");
+    expect(Number(afterSecond.headers()["x-momentum-rows"]), "rows after restoring the same file twice").toBe(
+      rowsAfterFirst
+    );
+
     // Restoring data is not becoming that person: the account is still theirs.
     await freshPage.goto("/settings");
     await expect(freshPage.getByText(freshEmail)).toBeVisible();
@@ -701,6 +755,45 @@ test.describe.serial("full app walkthrough", () => {
     expect((await outsider.request.get(src!, { maxRedirects: 0 })).status()).not.toBe(200);
     await outsider.close();
     await fresh.close();
+  });
+
+  test("settings: a restore that fails partway leaves the account exactly as it was", async () => {
+    // The dangerous shape of failure: the account is emptied, then something in
+    // the file is refused, and the user is left with neither version. A backup
+    // written by a newer build of the app is the realistic way in — here, a
+    // column this build has never heard of.
+    const dir = mkdtempSync(path.join(tmpdir(), "momentum-e2e-halfway-"));
+    const file = path.join(dir, "from-the-future.tar.gz");
+    writeFileSync(
+      file,
+      createTarGz([
+        {
+          name: "momentum-backup-2099-01-01/data.json",
+          body: Buffer.from(
+            JSON.stringify({
+              id: "someone",
+              email: "someone@example.com",
+              subjects: [{ id: "s1", name: "Should never appear", columnFromTheFuture: true }],
+            }),
+            "utf8"
+          ),
+        },
+      ])
+    );
+
+    await page.goto("/settings");
+    await page.setInputFiles('input[type="file"][accept*="gzip"]', file);
+    await page.getByTestId("restore-confirm").check();
+    await page.getByRole("button", { name: "Restore this backup" }).click();
+    await expect(page.getByTestId("restore-error")).toBeVisible();
+
+    // Nothing of the file landed...
+    await page.goto("/school");
+    await expect(page.getByRole("link", { name: /Should never appear/ })).toHaveCount(0);
+    // ...and nothing of this account was lost on the way to finding that out.
+    await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+    await page.goto("/school/timetable");
+    await expect(page.locator('input[value="Chemistry"]')).toBeVisible();
   });
 
   test("settings: a file that is not a backup is refused with a reason", async () => {

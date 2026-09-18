@@ -76,7 +76,6 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
       school: true,
       subjects: {
         include: {
-          timetableSlots: true,
           topics: { include: { learningLog: true, notePhotos: true, classRecordings: true, tutorMessages: true } },
         },
       },
@@ -112,7 +111,14 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
   });
 
   if (!user) return null;
-  return stripSensitive(user) as Record<string, unknown>;
+
+  // TimetableSlot is the one table with a userId and no relation to User, so
+  // it cannot be included above — and reaching it through subjects would miss
+  // most of a real timetable: every break, lunch, study period and free lesson
+  // has no subject at all.
+  const timetableSlots = await prisma.timetableSlot.findMany({ where: { userId }, orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] });
+
+  return stripSensitive({ ...user, timetableSlots }) as Record<string, unknown>;
 }
 
 /**
