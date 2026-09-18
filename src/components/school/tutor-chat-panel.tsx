@@ -1,0 +1,210 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { format } from "date-fns";
+import { Sparkles, Trash2, HelpCircle, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  getTutorMessages,
+  sendTutorMessage,
+  startTutorTopic,
+  clearTutorChat,
+  getNotUnderstoodQuestions,
+  markReplyNotUnderstood,
+  unmarkNotUnderstood,
+  type TutorMessageEntry,
+} from "@/lib/school/tutor-actions";
+import { AIMessageContent } from "@/components/shared/ai-message";
+
+export function TutorChatPanel({ topicId }: { topicId: string }) {
+  const [messages, setMessages] = useState<TutorMessageEntry[] | null>(null);
+  const [input, setInput] = useState("");
+  // The questions already marked "didn't get this", so the flag survives a
+  // reload instead of living only in this component's memory.
+  const [notUnderstood, setNotUnderstood] = useState<string[]>([]);
+  const [pending, startTransition] = useTransition();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    startTransition(async () => {
+      const [msgs, flagged] = await Promise.all([getTutorMessages(topicId), getNotUnderstoodQuestions(topicId)]);
+      setMessages(msgs);
+      setNotUnderstood(flagged);
+    });
+  }, [topicId]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  function optimisticallyAppend(content: string) {
+    const optimistic: TutorMessageEntry = { id: `pending-${Date.now()}`, role: "USER", content, createdAt: new Date() };
+    setMessages((prev) => [...(prev ?? []), optimistic]);
+  }
+
+  function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || pending) return;
+    setInput("");
+    optimisticallyAppend(trimmed);
+    startTransition(async () => setMessages(await sendTutorMessage(topicId, trimmed)));
+  }
+
+  function quickStart(kind: "explain" | "exam") {
+    optimisticallyAppend(
+      kind === "explain"
+        ? "Can you explain this topic to me, step by step, the way you'd introduce it to someone learning it for the first time?"
+        : "What do I specifically need to know about this topic for the exam?"
+    );
+    startTransition(async () => setMessages(await startTutorTopic(topicId, kind)));
+  }
+
+  function clear() {
+    startTransition(async () => setMessages(await clearTutorChat(topicId)));
+  }
+
+  /** The question a given reply was answering — what gets saved for revision. */
+  function questionBehind(replyId: string): string | null {
+    if (!messages) return null;
+    const i = messages.findIndex((m) => m.id === replyId);
+    for (let j = i - 1; j >= 0; j--) if (messages[j].role === "USER") return messages[j].content.trim();
+    return null;
+  }
+
+  /**
+   * A stored entry matches the question it came from. Long questions are stored
+   * truncated with an ellipsis, so those match on their prefix — but only
+   * those: matching every entry by prefix would flag a longer question that
+   * merely starts with a shorter flagged one, and un-flagging would then delete
+   * the wrong entry.
+   */
+  function matchesStored(stored: string, question: string): boolean {
+    if (stored === question) return true;
+    return stored.endsWith("…") && question.startsWith(stored.slice(0, -1));
+  }
+
+  function isFlagged(replyId: string): boolean {
+    const q = questionBehind(replyId);
+    return q !== null && notUnderstood.some((n) => matchesStored(n, q));
+  }
+
+  function toggleNotUnderstood(replyId: string) {
+    if (pending) return;
+    const q = questionBehind(replyId);
+    if (!q) return;
+    const existing = notUnderstood.find((n) => matchesStored(n, q));
+    startTransition(async () => {
+      setNotUnderstood(existing ? await unmarkNotUnderstood(topicId, existing) : await markReplyNotUnderstood(topicId, replyId));
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
+          <Sparkles size={13} className="text-accent" /> AI Tutor — a real back-and-forth conversation
+        </p>
+        {messages && messages.length > 0 && (
+          <button onClick={clear} disabled={pending} className="text-muted hover:text-danger" title="Clear conversation">
+            <Trash2 size={13} />
+          </button>
+        )}
+      </div>
+
+      {messages === null ? (
+        <p className="text-xs text-muted">Loading…</p>
+      ) : messages.length === 0 ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3">
+          <p className="text-xs text-muted">
+            Start a conversation — ask anything, or use a quick start. When a diagram genuinely helps explain
+            something, the tutor draws one.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => quickStart("explain")}>
+              Explain this topic
+            </Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => quickStart("exam")}>
+              What do I need for the exam?
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div ref={scrollRef} className="flex max-h-96 flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-surface p-3">
+          {messages.map((m) => (
+            <div key={m.id} className={`flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
+              <div
+                className={`max-w-[85%] rounded-xl px-3 py-2 ${
+                  m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
+                }`}
+              >
+                <AIMessageContent content={m.content} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
+                {m.role === "ASSISTANT" && !m.id.startsWith("pending-") && questionBehind(m.id) && (
+                  <button
+                    onClick={() => toggleNotUnderstood(m.id)}
+                    disabled={pending}
+                    className={`flex items-center gap-1 text-[10px] ${isFlagged(m.id) ? "text-warning" : "text-muted hover:text-warning"}`}
+                    title={isFlagged(m.id) ? "Remove from your revision list" : "Save what you asked here to your revision list"}
+                  >
+                    <HelpCircle size={11} />
+                    {isFlagged(m.id) ? "On your revision list" : "I didn't get this"}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {pending && <p className="text-xs text-muted">Tutor is thinking…</p>}
+        </div>
+      )}
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          send(input);
+        }}
+        className="flex gap-2"
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask anything about this topic…"
+          disabled={pending}
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+        />
+        <Button type="submit" size="sm" disabled={pending || !input.trim()}>
+          Send
+        </Button>
+      </form>
+
+      {notUnderstood.length > 0 && (
+        <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+          <p className="text-xs font-medium">
+            🔁 Still to revise ({notUnderstood.length}) — the quiz for this subject weights its questions towards these
+          </p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {notUnderstood.map((q) => (
+              <li key={q} className="flex items-start gap-2 text-xs text-muted">
+                <span className="flex-1">• {q}</span>
+                <button
+                  onClick={() => startTransition(async () => setNotUnderstood(await unmarkNotUnderstood(topicId, q)))}
+                  disabled={pending}
+                  className="text-muted hover:text-danger"
+                  title="I get this now — take it off the list"
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[11px] text-muted">
+        Every question you ask here is saved to this topic&apos;s learning log, and anything you mark as not understood
+        is what the subject quiz comes back to.
+      </p>
+    </div>
+  );
+}

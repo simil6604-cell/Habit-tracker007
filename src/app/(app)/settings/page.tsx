@@ -1,0 +1,225 @@
+import Link from "next/link";
+import { auth } from "@/lib/auth/auth";
+import { prisma } from "@/lib/db/prisma";
+import { updateProfileName, updateOptimizationDomains, updateNutritionSettings, updateSchoolSettings } from "@/lib/settings/actions";
+import { isRealAIConfigured } from "@/lib/ai/provider";
+import { EDUCATION_SYSTEMS } from "@/lib/data/cambridge";
+import { parseEducationSystems } from "@/lib/ai/academic-prompt";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { DeleteAccountButton } from "@/components/settings/danger-zone";
+import { AIConnectionTest } from "@/components/settings/ai-connection-test";
+import { MicrophoneCheck } from "@/components/settings/microphone-check";
+import { RestoreBackupPanel } from "@/components/settings/restore-backup-panel";
+import { Badge } from "@/components/ui/badge";
+
+export default async function SettingsPage() {
+  const session = await auth();
+  const userId = session!.user.id;
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const school = await prisma.school.findUnique({ where: { userId } });
+  const selectedSystems = parseEducationSystems(school?.educationSystem);
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+      <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+
+      <Card className="mt-6">
+        <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
+        <CardContent>
+          <form action={updateProfileName} className="flex flex-wrap items-end gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs text-muted">Name</label>
+              <input name="name" defaultValue={user.name ?? ""} className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <Button type="submit" size="sm" variant="secondary">Save</Button>
+          </form>
+          <p className="mt-2 text-xs text-muted">{user.email}</p>
+        </CardContent>
+      </Card>
+
+      {school && (
+        <Card className="mt-4">
+          <CardHeader><CardTitle>Your school</CardTitle></CardHeader>
+          <CardContent>
+            <form action={updateSchoolSettings} className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-muted">School name</label>
+                <input name="schoolName" defaultValue={school.name} className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-muted">Education system — tick every level you&rsquo;re taking</label>
+                <div className="flex flex-col gap-2">
+                  {EDUCATION_SYSTEMS.map((sys) => (
+                    <label key={sys.value} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" name="educationSystems" value={sys.value} defaultChecked={selectedSystems.includes(sys.value)} />
+                      {sys.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-muted">
+                  Taking IGCSE and A Level subjects side by side? Tick both — the AI then asks which level a question
+                  is at instead of guessing.
+                </p>
+              </div>
+              <Button type="submit" size="sm" variant="secondary" className="self-start">Save</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>What are you optimizing?</CardTitle></CardHeader>
+        <CardContent>
+          <form action={updateOptimizationDomains} className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeSchool" defaultChecked={user.optimizeSchool} /> 🎓 School</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeGym" defaultChecked={user.optimizeGym} /> 🏋️ Gym</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="optimizeFootball" defaultChecked={user.optimizeFootball} /> ⚽ Football</label>
+            <div className="mt-2 border-t border-border pt-3">
+              <label className="mb-1.5 block text-xs font-medium text-muted" htmlFor="mainFocus">
+                Main focus — where most of your effort goes
+              </label>
+              <select
+                id="mainFocus"
+                name="mainFocus"
+                defaultValue={user.mainFocus}
+                className="w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              >
+                <option value="balanced">⚖️ Balanced — keep all equal</option>
+                <option value="school">🎓 School</option>
+                <option value="gym">🏋️ Gym</option>
+                <option value="football">⚽ Football</option>
+              </select>
+              <p className="mt-1.5 text-xs text-muted">
+                The AI Coach leans this way when school, gym and football want the same hours.
+              </p>
+            </div>
+            <Button type="submit" size="sm" variant="secondary" className="self-start">Save</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Nutrition & Calorie Estimates</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted">
+            Optional — used only to roughly estimate calories burned per workout and show a daily balance. Never a
+            diet target the app pushes on you.
+          </p>
+          <form action={updateNutritionSettings} className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted">Body weight (kg)</label>
+              <input name="weightKg" type="number" min={20} max={250} defaultValue={user.weightKg ?? ""} className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Target weight (kg, your own goal)</label>
+              <input name="targetWeightKg" type="number" min={20} max={250} defaultValue={user.targetWeightKg ?? ""} className="w-28 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily calorie goal (optional, your own number)</label>
+              <input name="dailyCalorieGoal" type="number" min={0} defaultValue={user.dailyCalorieGoal ?? ""} className="w-40 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily protein goal (g)</label>
+              <input name="dailyProteinGoalG" type="number" min={0} defaultValue={user.dailyProteinGoalG} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily carbs goal (g)</label>
+              <input name="dailyCarbsGoalG" type="number" min={0} defaultValue={user.dailyCarbsGoalG} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily fat goal (g)</label>
+              <input name="dailyFatGoalG" type="number" min={0} defaultValue={user.dailyFatGoalG} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Daily water goal (ml)</label>
+              <input name="dailyWaterGoalMl" type="number" min={0} step={250} defaultValue={user.dailyWaterGoalMl} className="w-32 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+            </div>
+            <Button type="submit" size="sm" variant="secondary">Save</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Baseline Assessments</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <p className="text-sm text-muted">See or retake your &quot;where do you stand&quot; self-assessment for each area.</p>
+          <Link href="/assessment"><Button variant="outline" size="sm">Open</Button></Link>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Appearance</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <p className="text-sm text-muted">Light / dark mode</p>
+          <ThemeToggle />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>AI Coach</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+          <p className="text-sm text-muted">
+            {isRealAIConfigured
+              ? "Connected to a real Claude-backed AI — genuine subject tutoring in School (framed for your Cambridge IGCSE/AS/A-Level level) plus richer AI Coach chat replies."
+              : "Running on the built-in rule-based coach — it only ever reasons over your own stored data. Set ANTHROPIC_API_KEY in your .env to enable real subject tutoring and chat."}
+          </p>
+            <Badge variant={isRealAIConfigured ? "success" : "accent"}>{isRealAIConfigured ? "LLM connected" : "Rule-based"}</Badge>
+          </div>
+          <AIConnectionTest />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Microphone</CardTitle></CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted">
+            Dictation is used by the AI Coach and by the class recorder in School. It depends on the device you&apos;re
+            holding, not on this app — so check it here, on that device.
+          </p>
+          <MicrophoneCheck />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Data & Privacy</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted">
+            Your data is stored in this app&apos;s own database and is never used to generate fake syllabus content,
+            league data, or medical advice. This app does not diagnose health conditions or recommend extreme diets or
+            training — if something feels physically or mentally off, please talk to a parent, coach, or doctor.
+          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Download everything</p>
+              <p className="text-xs text-muted">
+                One file with all your data and photos — keep it somewhere else, so this app is never the only copy.
+              </p>
+            </div>
+            <a
+              href="/api/export"
+              download
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-surface-muted"
+            >
+              Download backup
+            </a>
+          </div>
+          <div className="border-t border-border pt-3">
+            <p className="text-sm font-medium">Restore a backup</p>
+            <p className="mb-2 text-xs text-muted">
+              Put a downloaded backup back in — after a new install, a lost phone, or a bad day. It replaces what
+              this account holds now with what is in the file.
+            </p>
+            <RestoreBackupPanel />
+          </div>
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <p className="text-sm font-medium">Delete account</p>
+            <DeleteAccountButton />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
