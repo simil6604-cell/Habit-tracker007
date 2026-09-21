@@ -827,6 +827,30 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
   });
 
+  test("settings: one card says whether this deployment will keep your data", async () => {
+    await page.goto("/settings");
+    const card = page.getByTestId("setup-checks");
+    await expect(card).toBeVisible();
+
+    // The suite runs a production build with UPLOAD_DIR outside the repo and
+    // the test database inside it — one safe path and one unsafe one, on
+    // purpose, so both halves of the check are exercised in the same run.
+    await expect(page.getByTestId("check-photo-storage")).toContainText(/outside the app directory/);
+    await expect(page.getByTestId("check-database")).toContainText(/deploy/);
+
+    // A photo was uploaded earlier in this run, and its file is really there.
+    await expect(page.getByTestId("check-photo-files")).toContainText(/where the app expects/);
+
+    // No AI key in CI, so it says which key is missing rather than "error".
+    await expect(page.getByTestId("check-ai")).toContainText(/key/i);
+
+    // A backup was downloaded earlier in this run, so this one is satisfied.
+    await expect(page.getByTestId("check-backup")).toContainText(/Last backup/);
+
+    // The headline leads with the worst row, and says it in words.
+    await expect(card).toContainText(/lose data|worth fixing|checks out/);
+  });
+
   test("offline: the installed app says the signal is gone, and keeps nothing personal to say it", async () => {
     // Installed to a home screen, this app is one dropped signal away from
     // looking broken. The service worker's whole job is to make that moment

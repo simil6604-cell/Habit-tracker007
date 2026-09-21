@@ -13,6 +13,17 @@ import { AIConnectionTest } from "@/components/settings/ai-connection-test";
 import { MicrophoneCheck } from "@/components/settings/microphone-check";
 import { RestoreBackupPanel } from "@/components/settings/restore-backup-panel";
 import { backupStatus } from "@/lib/export/backup-status";
+import {
+  aiCheck,
+  backupCheck,
+  databaseCheck,
+  photoFilesCheck,
+  photoStorageCheck,
+  summarize,
+} from "@/lib/config/setup-checks";
+import { getAIHealth } from "@/lib/ai/health";
+import { UPLOAD_ROOT, uploadedImageExists } from "@/lib/uploads/save-image";
+import { SetupChecksCard } from "@/components/settings/setup-checks-card";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SettingsPage() {
@@ -23,11 +34,46 @@ export default async function SettingsPage() {
   const selectedSystems = parseEducationSystems(school?.educationSystem);
   const backup = backupStatus(user.lastBackupAt);
 
+  // Every stored photo path this account has, checked against the disk. The
+  // rows and the files can disagree, and that disagreement is the failure this
+  // app has actually shipped — so it is measured rather than assumed.
+  const [notePhotos, bodyPhotos, mealPhotos] = await Promise.all([
+    prisma.notePhoto.findMany({ where: { userId }, select: { imagePath: true } }),
+    prisma.bodyPhoto.findMany({ where: { userId }, select: { imagePath: true } }),
+    prisma.meal.findMany({ where: { userId, imagePath: { not: null } }, select: { imagePath: true } }),
+  ]);
+  const imagePaths = [...notePhotos, ...bodyPhotos, ...mealPhotos]
+    .map((row) => row.imagePath)
+    .filter((imagePath): imagePath is string => typeof imagePath === "string");
+  const present = await Promise.all(imagePaths.map((imagePath) => uploadedImageExists(imagePath)));
+  const missingPhotos = present.filter((exists) => !exists).length;
+
+  const isProduction = process.env.NODE_ENV === "production";
+  const checks = [
+    photoStorageCheck(UPLOAD_ROOT, isProduction),
+    photoFilesCheck(imagePaths.length, missingPhotos),
+    databaseCheck(process.env.DATABASE_URL, isProduction),
+    aiCheck(getAIHealth()),
+    backupCheck(user.lastBackupAt),
+  ];
+  const summary = summarize(checks);
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
 
       <Card className="mt-6">
+        <CardHeader><CardTitle>Is everything set up right?</CardTitle></CardHeader>
+        <CardContent>
+          <p className="mb-3 text-xs text-muted">
+            What survives the next deploy, and what doesn&apos;t. If something here is red, fix that before adding
+            anything you would miss.
+          </p>
+          <SetupChecksCard checks={checks} summary={summary} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
         <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
         <CardContent>
           <form action={updateProfileName} className="flex flex-wrap items-end gap-2">
