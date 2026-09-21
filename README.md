@@ -1,5 +1,7 @@
 # Momentum — School, Gym & Football
 
+[![CI](https://github.com/simil6604-cell/Habit-tracker007/actions/workflows/ci.yml/badge.svg)](https://github.com/simil6604-cell/Habit-tracker007/actions/workflows/ci.yml)
+
 An all-in-one personal optimization app that connects three areas of life —
 🎓 **School**, 🏋️ **Gym**, and ⚽ **Football** — behind a single AI Coach that
 balances all of them together.
