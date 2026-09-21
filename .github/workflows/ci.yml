@@ -1,11 +1,11 @@
 name: CI
 
-# Every push and every pull request. The tests in this repo are the reason it
-# is safe to change anything here — running them only on a laptop means the
-# one time they are skipped is the time they would have mattered.
+# Pull requests, and pushes to main. Not every push to every branch: while a
+# branch has an open pull request, both events fire for the same commit and the
+# whole suite runs twice side by side — twice the minutes, no more information.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
 
 # A second push to the same branch makes the first run pointless.
