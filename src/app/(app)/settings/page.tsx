@@ -12,6 +12,7 @@ import { DeleteAccountButton } from "@/components/settings/danger-zone";
 import { AIConnectionTest } from "@/components/settings/ai-connection-test";
 import { MicrophoneCheck } from "@/components/settings/microphone-check";
 import { RestoreBackupPanel } from "@/components/settings/restore-backup-panel";
+import { backupStatus } from "@/lib/export/backup-status";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SettingsPage() {
@@ -20,6 +21,7 @@ export default async function SettingsPage() {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   const school = await prisma.school.findUnique({ where: { userId } });
   const selectedSystems = parseEducationSystems(school?.educationSystem);
+  const backup = backupStatus(user.lastBackupAt);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
@@ -196,6 +198,13 @@ export default async function SettingsPage() {
               <p className="text-sm font-medium">Download everything</p>
               <p className="text-xs text-muted">
                 One file with all your data and photos — keep it somewhere else, so this app is never the only copy.
+              </p>
+              <p
+                className={`mt-1 text-xs ${backup.stale ? "text-warning" : "text-muted"}`}
+                data-testid="backup-age"
+              >
+                {backup.label}
+                {backup.stale && backup.kind === "done" ? " — worth doing again" : ""}
               </p>
             </div>
             <a

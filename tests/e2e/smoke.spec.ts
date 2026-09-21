@@ -578,6 +578,11 @@ test.describe.serial("full app walkthrough", () => {
     await page.getByRole("button", { name: "Add photo" }).click();
     await expect(page.getByText("Backup test photo")).toBeVisible();
 
+    // Before the first download the app says so plainly, rather than showing a
+    // date that would suggest a safety net nobody has actually made.
+    await page.goto("/settings");
+    await expect(page.getByTestId("backup-age")).toContainText(/never/i);
+
     const download = await page.request.get("/api/export");
     expect(download.status()).toBe(200);
     expect(download.headers()["content-disposition"]).toContain("momentum-backup-");
@@ -608,6 +613,11 @@ test.describe.serial("full app walkthrough", () => {
     expect(data.passwordHash).toBeUndefined();
     expect(data.accounts).toBeUndefined();
     expect(data.sessions).toBeUndefined();
+
+    // And afterwards it knows when. The date comes from handing over a real
+    // archive, not from clicking the button.
+    await page.goto("/settings");
+    await expect(page.getByTestId("backup-age")).toContainText("Last backup: today");
 
     // Somebody else's account gets their own backup, not this one's.
     const otherEmail = `e2e_backup_${Date.now()}@example.com`;

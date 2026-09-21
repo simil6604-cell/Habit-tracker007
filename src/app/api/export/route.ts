@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth/auth";
+import { prisma } from "@/lib/db/prisma";
 import { buildBackup } from "@/lib/export/backup";
 
 // Built per request from the signed-in account's own rows — never cached.
@@ -18,6 +19,10 @@ export async function GET() {
 
   const backup = await buildBackup(userId);
   if (!backup) return new Response("Not found", { status: 404 });
+
+  // Recorded only once the archive exists: a failed export is not a backup,
+  // and a date that says otherwise is worse than no date at all.
+  await prisma.user.update({ where: { id: userId }, data: { lastBackupAt: new Date() } });
 
   return new Response(new Uint8Array(backup.body), {
     headers: {
