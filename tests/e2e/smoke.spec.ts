@@ -822,13 +822,22 @@ test.describe.serial("full app walkthrough", () => {
     // looking broken. The service worker's whole job is to make that moment
     // read as the app speaking rather than as the browser giving up.
     await page.goto("/");
-    // serviceWorker.ready only resolves once one is actually active, so this
-    // waits for the real thing rather than for a promise that always exists.
-    const registration = await page.evaluate(async () => {
+    // serviceWorker.ready resolves as soon as there IS an active worker, which
+    // is while it is still "activating" — and this one's activate handler does
+    // several async cache operations. So wait for the state itself.
+    const state = await page.evaluate(async () => {
       const reg = await navigator.serviceWorker.ready;
-      return { scope: reg.scope, active: reg.active?.state ?? null };
+      const worker = reg.active;
+      if (!worker) return null;
+      if (worker.state === "activated") return worker.state;
+      await new Promise<void>((resolve) => {
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "activated") resolve();
+        });
+      });
+      return worker.state;
     });
-    expect(registration.active, "a service worker is registered and running").toBe("activated");
+    expect(state, "a service worker is registered and running").toBe("activated");
 
     // Visit pages full of personal data, so that anything the worker was going
     // to keep, it has now had every chance to keep.
@@ -869,6 +878,47 @@ test.describe.serial("full app walkthrough", () => {
     // And back online it is the real app again, not a cached shell.
     await page.goto("/school");
     await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+  });
+
+  test("offline: a phone that has only ever opened the app once still gets the offline page", async ({
+    browser,
+  }: {
+    browser: Browser;
+  }) => {
+    // The case the precache is for. A fresh install, one visit — the login
+    // screen, before anyone has signed in — and then no signal. Whatever the
+    // offline page needs has to have been stored during that one visit, not
+    // collected while browsing around.
+    const fresh = await browser.newContext();
+    const freshPage = await fresh.newPage();
+    await freshPage.goto("/login");
+    await freshPage.evaluate(async () => {
+      const reg = await navigator.serviceWorker.ready;
+      const worker = reg.active;
+      if (!worker || worker.state === "activated") return;
+      await new Promise<void>((resolve) => {
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "activated") resolve();
+        });
+      });
+    });
+
+    const failed: string[] = [];
+    freshPage.on("requestfailed", (request) => failed.push(new URL(request.url()).pathname));
+
+    await fresh.setOffline(true);
+    try {
+      await freshPage.goto("/");
+      await expect(freshPage.getByRole("heading", { name: /You're offline/ })).toBeVisible();
+      // Styled and complete: nothing the page itself asked for was missing.
+      expect(
+        failed.filter((pathname) => pathname.startsWith("/_next/static/")),
+        "build files the offline page needed were not in the cache"
+      ).toEqual([]);
+    } finally {
+      await fresh.setOffline(false);
+      await fresh.close();
+    }
   });
 
   test("settings: toggle theme and sign out", async () => {

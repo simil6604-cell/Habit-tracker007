@@ -11,8 +11,23 @@ import { useEffect } from "react";
  */
 export function ServiceWorker() {
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
+
+    if (process.env.NODE_ENV !== "production") {
+      // Skipping registration is not enough. A production build run earlier on
+      // this same origin — localhost:3000 for both `npm start` and `npm run
+      // dev` — leaves a worker installed that keeps controlling the dev
+      // server, caching its unhashed chunks on first hit and serving them
+      // forever. That is exactly the broken Fast Refresh this guard is
+      // supposed to prevent, so the worker is removed rather than ignored.
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) registration.unregister();
+      });
+      if ("caches" in window) {
+        caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+      }
+      return;
+    }
 
     const register = () => {
       navigator.serviceWorker.register("/sw.js").catch(() => {
