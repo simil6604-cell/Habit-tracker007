@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { computeDomainScores } from "@/lib/planner/scores";
 import { getAgendaForDay } from "@/lib/planner/agenda";
 import { pickPriorityReminder } from "@/lib/planner/priority-reminder";
+import { backupStatus, shouldNudgeAboutBackup } from "@/lib/export/backup-status";
 import { DomainCard } from "@/components/home/domain-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScoreRow } from "@/components/ui/progress-bar";
@@ -35,6 +36,7 @@ export default async function HomePage() {
   const gymToday = today.find((i) => i.category === "GYM");
   const footballToday = today.find((i) => i.category === "FOOTBALL");
   const reminder = pickPriorityReminder(today, tomorrow);
+  const nudgeAboutBackup = shouldNudgeAboutBackup(user?.lastBackupAt, user?.createdAt);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -63,6 +65,21 @@ export default async function HomePage() {
           <p className="mt-0.5 text-sm">{reminder.text}</p>
         </div>
       </div>
+
+      {nudgeAboutBackup && (
+        <Link
+          href="/settings"
+          className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-dashed border-warning/50 bg-warning/5 px-4 py-3 text-sm"
+          data-testid="backup-nudge"
+        >
+          <span>
+            {backupStatus(user?.lastBackupAt).kind === "never"
+              ? "Everything you've put in here lives in one place. Download a backup so it isn't the only copy."
+              : `${backupStatus(user?.lastBackupAt).label} — a lot has happened since. Worth downloading a fresh one.`}
+          </span>
+          <span className="shrink-0 font-medium text-warning">Settings →</span>
+        </Link>
+      )}
 
       {assessmentCount === 0 && (
         <Link
