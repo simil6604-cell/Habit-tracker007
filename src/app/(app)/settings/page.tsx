@@ -13,6 +13,17 @@ import { AIConnectionTest } from "@/components/settings/ai-connection-test";
 import { MicrophoneCheck } from "@/components/settings/microphone-check";
 import { RestoreBackupPanel } from "@/components/settings/restore-backup-panel";
 import { backupStatus } from "@/lib/export/backup-status";
+import {
+  aiCheck,
+  backupCheck,
+  databaseCheck,
+  photoFilesCheck,
+  photoStorageCheck,
+  summarize,
+} from "@/lib/config/setup-checks";
+import { getAIHealth } from "@/lib/ai/health";
+import { UPLOAD_ROOT, uploadedImageExists } from "@/lib/uploads/save-image";
+import { SetupChecksCard } from "@/components/settings/setup-checks-card";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SettingsPage() {
@@ -23,11 +34,73 @@ export default async function SettingsPage() {
   const selectedSystems = parseEducationSystems(school?.educationSystem);
   const backup = backupStatus(user.lastBackupAt);
 
+  /**
+   * The photo paths this account has, checked against the disk.
+   *
+   * Capped, and newest first. This runs on every visit to Settings, and an
+   * unbounded stat per photo turns a page into a filesystem sweep on the one
+   * account that has years of them. The newest are also where a deploy's
+   * damage shows first, and the card says how many it looked at rather than
+   * implying it looked at everything.
+   */
+  const PHOTOS_TO_CHECK = 200;
+  const [notePhotos, notePhotoCount, bodyPhotos, bodyPhotoCount, mealPhotos, mealPhotoCount] = await Promise.all([
+    prisma.notePhoto.findMany({
+      where: { userId },
+      select: { imagePath: true },
+      orderBy: { createdAt: "desc" },
+      take: PHOTOS_TO_CHECK,
+    }),
+    prisma.notePhoto.count({ where: { userId } }),
+    prisma.bodyPhoto.findMany({
+      where: { userId },
+      select: { imagePath: true },
+      orderBy: { date: "desc" },
+      take: PHOTOS_TO_CHECK,
+    }),
+    prisma.bodyPhoto.count({ where: { userId } }),
+    prisma.meal.findMany({
+      where: { userId, imagePath: { not: null } },
+      select: { imagePath: true },
+      orderBy: { date: "desc" },
+      take: PHOTOS_TO_CHECK,
+    }),
+    prisma.meal.count({ where: { userId, imagePath: { not: null } } }),
+  ]);
+
+  const imagePaths = [...notePhotos, ...bodyPhotos, ...mealPhotos]
+    .map((row) => row.imagePath)
+    .filter((imagePath): imagePath is string => typeof imagePath === "string");
+  const totalPhotos = notePhotoCount + bodyPhotoCount + mealPhotoCount;
+  const present = await Promise.all(imagePaths.map((imagePath) => uploadedImageExists(imagePath)));
+  const missingPhotos = present.filter((exists) => !exists).length;
+
+  const isProduction = process.env.NODE_ENV === "production";
+  const checks = [
+    photoStorageCheck(UPLOAD_ROOT, isProduction),
+    photoFilesCheck({ total: totalPhotos, missing: missingPhotos, checked: imagePaths.length }),
+    databaseCheck(process.env.DATABASE_URL, isProduction),
+    aiCheck(getAIHealth()),
+    backupCheck(user.lastBackupAt),
+  ];
+  const summary = summarize(checks);
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
 
       <Card className="mt-6">
+        <CardHeader><CardTitle>Is everything set up right?</CardTitle></CardHeader>
+        <CardContent>
+          <p className="mb-3 text-xs text-muted">
+            What survives the next deploy, and what doesn&apos;t. If something here is red, fix that before adding
+            anything you would miss.
+          </p>
+          <SetupChecksCard checks={checks} summary={summary} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
         <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
         <CardContent>
           <form action={updateProfileName} className="flex flex-wrap items-end gap-2">

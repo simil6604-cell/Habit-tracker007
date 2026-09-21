@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -106,4 +106,26 @@ export async function readUploadedImage(imagePath: string): Promise<Buffer | nul
     }
   }
   return null;
+}
+
+/**
+ * Whether the file behind a stored path is actually on disk.
+ *
+ * The rows and the files can disagree — a deploy that rebuilds the app
+ * directory deletes the photos while every row still points at them, and the
+ * app looks fine until you open a gallery of broken images. This is what makes
+ * that visible before you go looking for a photo that is gone.
+ */
+export async function uploadedImageExists(imagePath: string): Promise<boolean> {
+  const segments = uploadSegments(imagePath);
+  if (!segments) return false;
+  for (const root of [UPLOAD_ROOT, LEGACY_UPLOAD_ROOT]) {
+    try {
+      const info = await stat(path.join(root, ...segments));
+      if (info.isFile()) return true;
+    } catch {
+      // try the other root
+    }
+  }
+  return false;
 }
