@@ -31,6 +31,12 @@ describe("photoStorageCheck", () => {
     expect(photoStorageCheck("/var/data/uploads", true, cwd).status).toBe("ok");
   });
 
+  it("judges a relative path against the directory it is comparing to", () => {
+    // Resolving the target against the real working directory while comparing
+    // it to another one calls the app's own folder "outside the app".
+    expect(photoStorageCheck(".data/uploads", true, cwd).status).toBe("fail");
+  });
+
   it("does not complain on a developer's own machine", () => {
     // Writing inside the project is exactly what you want locally.
     expect(photoStorageCheck("/srv/app/.data/uploads", false, cwd).status).toBe("ok");
@@ -39,25 +45,34 @@ describe("photoStorageCheck", () => {
 
 describe("photoFilesCheck", () => {
   it("says nothing is at risk when there are no photos", () => {
-    expect(photoFilesCheck(0, 0).status).toBe("ok");
+    expect(photoFilesCheck({ total: 0, missing: 0 }).status).toBe("ok");
   });
 
   it("confirms the files are there when they are", () => {
-    const check = photoFilesCheck(12, 0);
+    const check = photoFilesCheck({ total: 12, missing: 0 });
     expect(check.status).toBe("ok");
     expect(check.detail).toContain("12");
   });
 
   it("fails loudly when rows point at files that are gone", () => {
-    const check = photoFilesCheck(12, 3);
+    const check = photoFilesCheck({ total: 12, missing: 3 });
     expect(check.status).toBe("fail");
     expect(check.detail).toContain("3 of 12");
     expect(check.fix).toContain("backup");
   });
 
+  it("says how many it looked at when it did not look at all of them", () => {
+    // "All 4000 are fine" after checking 600 is exactly the false reassurance
+    // this card exists to replace.
+    const check = photoFilesCheck({ total: 4000, missing: 0, checked: 600 });
+    expect(check.status).toBe("ok");
+    expect(check.detail).toContain("600 most recent");
+    expect(check.detail).toContain("4000");
+  });
+
   it("reads correctly for a single photo", () => {
-    expect(photoFilesCheck(1, 0).detail).toMatch(/1 saved photo is/);
-    expect(photoFilesCheck(1, 1).detail).toMatch(/1 of 1 saved photo is missing/);
+    expect(photoFilesCheck({ total: 1, missing: 0 }).detail).toMatch(/1 saved photo is/);
+    expect(photoFilesCheck({ total: 1, missing: 1 }).detail).toMatch(/1 of 1 saved photo is missing/);
   });
 });
 

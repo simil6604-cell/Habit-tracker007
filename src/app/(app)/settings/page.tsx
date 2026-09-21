@@ -34,24 +34,51 @@ export default async function SettingsPage() {
   const selectedSystems = parseEducationSystems(school?.educationSystem);
   const backup = backupStatus(user.lastBackupAt);
 
-  // Every stored photo path this account has, checked against the disk. The
-  // rows and the files can disagree, and that disagreement is the failure this
-  // app has actually shipped — so it is measured rather than assumed.
-  const [notePhotos, bodyPhotos, mealPhotos] = await Promise.all([
-    prisma.notePhoto.findMany({ where: { userId }, select: { imagePath: true } }),
-    prisma.bodyPhoto.findMany({ where: { userId }, select: { imagePath: true } }),
-    prisma.meal.findMany({ where: { userId, imagePath: { not: null } }, select: { imagePath: true } }),
+  /**
+   * The photo paths this account has, checked against the disk.
+   *
+   * Capped, and newest first. This runs on every visit to Settings, and an
+   * unbounded stat per photo turns a page into a filesystem sweep on the one
+   * account that has years of them. The newest are also where a deploy's
+   * damage shows first, and the card says how many it looked at rather than
+   * implying it looked at everything.
+   */
+  const PHOTOS_TO_CHECK = 200;
+  const [notePhotos, notePhotoCount, bodyPhotos, bodyPhotoCount, mealPhotos, mealPhotoCount] = await Promise.all([
+    prisma.notePhoto.findMany({
+      where: { userId },
+      select: { imagePath: true },
+      orderBy: { createdAt: "desc" },
+      take: PHOTOS_TO_CHECK,
+    }),
+    prisma.notePhoto.count({ where: { userId } }),
+    prisma.bodyPhoto.findMany({
+      where: { userId },
+      select: { imagePath: true },
+      orderBy: { date: "desc" },
+      take: PHOTOS_TO_CHECK,
+    }),
+    prisma.bodyPhoto.count({ where: { userId } }),
+    prisma.meal.findMany({
+      where: { userId, imagePath: { not: null } },
+      select: { imagePath: true },
+      orderBy: { date: "desc" },
+      take: PHOTOS_TO_CHECK,
+    }),
+    prisma.meal.count({ where: { userId, imagePath: { not: null } } }),
   ]);
+
   const imagePaths = [...notePhotos, ...bodyPhotos, ...mealPhotos]
     .map((row) => row.imagePath)
     .filter((imagePath): imagePath is string => typeof imagePath === "string");
+  const totalPhotos = notePhotoCount + bodyPhotoCount + mealPhotoCount;
   const present = await Promise.all(imagePaths.map((imagePath) => uploadedImageExists(imagePath)));
   const missingPhotos = present.filter((exists) => !exists).length;
 
   const isProduction = process.env.NODE_ENV === "production";
   const checks = [
     photoStorageCheck(UPLOAD_ROOT, isProduction),
-    photoFilesCheck(imagePaths.length, missingPhotos),
+    photoFilesCheck({ total: totalPhotos, missing: missingPhotos, checked: imagePaths.length }),
     databaseCheck(process.env.DATABASE_URL, isProduction),
     aiCheck(getAIHealth()),
     backupCheck(user.lastBackupAt),

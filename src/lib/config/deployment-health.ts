@@ -1,5 +1,9 @@
-import path from "node:path";
 import { UPLOAD_ROOT } from "@/lib/uploads/save-image";
+// The same two rules the Settings setup card uses. Kept in one place on
+// purpose: two copies of "is this inside the app directory?" drift, and then
+// the banner and the card contradict each other about whether your data is
+// safe.
+import { insideAppDirectory, sqliteFilePath } from "./setup-checks";
 
 /**
  * Catches a deployment that will lose your data, while there is still time to
@@ -14,27 +18,6 @@ import { UPLOAD_ROOT } from "@/lib/uploads/save-image";
  * want on your own machine.
  */
 export type DeploymentWarning = { problem: string; fix: string };
-
-/** True when `target` sits inside the app directory, which every deploy rebuilds. */
-function insideAppDirectory(target: string): boolean {
-  const relative = path.relative(process.cwd(), path.resolve(target));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-/**
- * The filesystem path a SQLite DATABASE_URL points at, or null for other
- * databases.
- *
- * A relative path is resolved against the prisma/ directory, not the working
- * directory, because that is where Prisma resolves it from — resolving it the
- * other way puts the file somewhere it isn't and can miss a database that
- * really does sit inside the repo.
- */
-function sqliteFilePath(databaseUrl: string | undefined): string | null {
-  if (!databaseUrl?.startsWith("file:")) return null;
-  const raw = databaseUrl.slice("file:".length);
-  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), "prisma", raw);
-}
 
 export function getDeploymentWarnings(): DeploymentWarning[] {
   if (process.env.NODE_ENV !== "production") return [];

@@ -215,6 +215,9 @@ model NotePhoto {
   createdAt DateTime @default(now())
 
   @@index([topicId])
+  // The setup card reads every photo this user owns; without this that is a
+  // full table scan on a page anyone can open.
+  @@index([userId])
 }
 
 // A transcript captured live in class via the browser's own speech-to-text

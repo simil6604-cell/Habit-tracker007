@@ -19,6 +19,9 @@ test("the setup card notices a photo whose file has been deleted", async ({ page
   await page.getByRole("button", { name: /create account/i }).click();
   await page.waitForURL("**/onboarding");
   await page.click('button:has-text("Continue")');
+  // Wait for the focus step before clicking "School": the step before it has a
+  // School toggle too, and clicking that one turns the domain off instead.
+  await expect(page.getByText("Where does most of your effort go?")).toBeVisible();
   await page.click('button:has-text("School")');
   await page.click('button:has-text("Continue")');
   await page.fill('input[placeholder*="Riverside"]', "Test School");

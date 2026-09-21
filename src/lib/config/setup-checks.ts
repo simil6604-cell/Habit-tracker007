@@ -1,5 +1,4 @@
 import path from "node:path";
-import { UPLOAD_ROOT } from "@/lib/uploads/save-image";
 import { backupStatus } from "@/lib/export/backup-status";
 import type { AIHealth } from "@/lib/ai/health";
 
@@ -28,10 +27,28 @@ export type SetupCheck = {
   fix?: string;
 };
 
-/** True when `target` sits inside the app directory, which a deploy rebuilds. */
+/**
+ * True when `target` sits inside the app directory, which a deploy rebuilds.
+ *
+ * Both paths resolve against the same base. Resolving the target against the
+ * real working directory while comparing it to a different one is how a
+ * relative path gets called "outside the app" when it is the app.
+ */
 export function insideAppDirectory(target: string, cwd: string = process.cwd()): boolean {
-  const relative = path.relative(cwd, path.resolve(target));
+  const relative = path.relative(cwd, path.resolve(cwd, target));
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+/**
+ * The filesystem path a SQLite DATABASE_URL points at, or null for any other
+ * database. A relative path resolves against prisma/, because that is where
+ * Prisma resolves it from — resolving it against the working directory checks
+ * a file that isn't there and passes by accident.
+ */
+export function sqliteFilePath(databaseUrl: string | undefined, cwd: string = process.cwd()): string | null {
+  if (!databaseUrl?.startsWith("file:")) return null;
+  const raw = databaseUrl.slice("file:".length);
+  return path.isAbsolute(raw) ? raw : path.resolve(cwd, "prisma", raw);
 }
 
 /**
@@ -55,9 +72,12 @@ export function photoStorageCheck(uploadRoot: string, isProduction: boolean, cwd
     id: "photo-storage",
     label: "Photo storage",
     status: "ok",
+    // No path when nothing is wrong. Anyone can register on this app, and the
+    // server's own directory layout is not theirs to read; when something IS
+    // wrong the path is what makes the fix possible, so it stays in that case.
     detail: isProduction
-      ? `Photos are written to ${uploadRoot}, outside the app directory, so a deploy leaves them alone.`
-      : `Photos are written to ${uploadRoot}. On your own machine that is exactly right.`,
+      ? "Photos are written outside the app directory, so a deploy leaves them alone."
+      : "Photos are written inside the project. On your own machine that is exactly right.",
   };
 }
 
@@ -65,7 +85,18 @@ export function photoStorageCheck(uploadRoot: string, isProduction: boolean, cwd
  * Rows and files can disagree. This compares them, which is the difference
  * between finding out now and finding out when you open an empty gallery.
  */
-export function photoFilesCheck(total: number, missing: number): SetupCheck {
+export function photoFilesCheck({
+  total,
+  missing,
+  checked,
+}: {
+  total: number;
+  missing: number;
+  /** How many were actually looked at — fewer than `total` on a big account. */
+  checked?: number;
+}): SetupCheck {
+  const looked = checked ?? total;
+
   if (total === 0) {
     return {
       id: "photo-files",
@@ -80,17 +111,20 @@ export function photoFilesCheck(total: number, missing: number): SetupCheck {
       id: "photo-files",
       label: "Photos on disk",
       status: "fail",
-      detail: `${missing} of ${total} saved photo${total === 1 ? "" : "s"} ${missing === 1 ? "is" : "are"} missing from disk — the entry is still here, the picture is gone. This is what a deploy does when photos are stored inside the app directory.`,
+      detail: `${missing} of ${looked} saved photo${looked === 1 ? "" : "s"} ${missing === 1 ? "is" : "are"} missing from disk — the entry is still here, the picture is gone. This is what a deploy does when photos are stored inside the app directory.`,
       fix: "Fix the storage location first, then restore from your most recent backup — it carries the photo files as well as the data.",
     };
   }
 
-  return {
-    id: "photo-files",
-    label: "Photos on disk",
-    status: "ok",
-    detail: `All ${total} saved photo${total === 1 ? "" : "s"} ${total === 1 ? "is" : "are"} where the app expects ${total === 1 ? "it" : "them"}.`,
-  };
+  // Said precisely when not everything was looked at: claiming all 4,000 are
+  // fine after checking 600 would be the kind of false reassurance this card
+  // exists to replace.
+  const scope =
+    looked < total
+      ? `The ${looked} most recent of your ${total} photos are all where the app expects them.`
+      : `All ${total} saved photo${total === 1 ? "" : "s"} ${total === 1 ? "is" : "are"} where the app expects ${total === 1 ? "it" : "them"}.`;
+
+  return { id: "photo-files", label: "Photos on disk", status: "ok", detail: scope };
 }
 
 /** The same question for the database file, where the answer is everything else you own. */
@@ -104,10 +138,7 @@ export function databaseCheck(databaseUrl: string | undefined, isProduction: boo
     };
   }
 
-  const raw = databaseUrl.slice("file:".length);
-  // Prisma resolves a relative path against the prisma/ directory, not the
-  // working directory. Resolving it any other way checks a file that isn't there.
-  const file = path.isAbsolute(raw) ? raw : path.resolve(cwd ?? process.cwd(), "prisma", raw);
+  const file = sqliteFilePath(databaseUrl, cwd) ?? "";
 
   if (isProduction && insideAppDirectory(file, cwd)) {
     return {
@@ -123,7 +154,9 @@ export function databaseCheck(databaseUrl: string | undefined, isProduction: boo
     id: "database",
     label: "Database",
     status: "ok",
-    detail: isProduction ? `The database is at ${file}, outside the app directory.` : `The database is at ${file}.`,
+    detail: isProduction
+      ? "The database is outside the app directory, so a deploy leaves it alone."
+      : `The database is at ${file}.`,
   };
 }
 
@@ -184,5 +217,3 @@ export function summarize(checks: SetupCheck[]): { status: CheckStatus; label: s
   }
   return { status: "ok", label: "Everything checks out" };
 }
-
-export { UPLOAD_ROOT };
