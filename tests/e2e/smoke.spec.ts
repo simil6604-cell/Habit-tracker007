@@ -140,12 +140,17 @@ test.describe.serial("full app walkthrough", () => {
     const topicUrl = "https://www.savemyexams.com/igcse/chemistry/cie/revision-notes/the-periodic-table/";
     const topicForm = page.locator('form:has(input[name="revisionUrl"])').last();
     await topicForm.locator('input[name="revisionUrl"]').fill(topicUrl);
-    // Wait for the save itself before reloading. Reloading straight after the
-    // click races the server action, and a page rebuilt from the state before
-    // it lands still shows the inherited link — which is how this test failed
-    // once in a run where nothing about the app had changed.
+    // Wait for this save before reloading. Reloading straight after the click
+    // races the server action, and a page rebuilt from the state before it
+    // lands still shows the inherited link.
+    //
+    // Matched on the body, not just "a POST to this page": the subject's own
+    // save a few lines above is still in flight, and waiting for whichever POST
+    // finishes first let the reload race the one that mattered. That is why
+    // this test still flaked after the first attempt at fixing it.
     const saved = page.waitForResponse(
-      (response) => response.request().method() === "POST" && response.url().includes("/school/subjects")
+      (response) =>
+        response.request().method() === "POST" && (response.request().postData() ?? "").includes("the-periodic-table")
     );
     await topicForm.locator('button[type="submit"]').click();
     await saved;
@@ -808,6 +813,60 @@ test.describe.serial("full app walkthrough", () => {
 
     await expect(page.getByTestId("restore-error")).toBeVisible();
     // And it said so without touching anything.
+    await page.goto("/school");
+    await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+  });
+
+  test("offline: the installed app says the signal is gone, and keeps nothing personal to say it", async () => {
+    // Installed to a home screen, this app is one dropped signal away from
+    // looking broken. The service worker's whole job is to make that moment
+    // read as the app speaking rather than as the browser giving up.
+    await page.goto("/");
+    // serviceWorker.ready only resolves once one is actually active, so this
+    // waits for the real thing rather than for a promise that always exists.
+    const registration = await page.evaluate(async () => {
+      const reg = await navigator.serviceWorker.ready;
+      return { scope: reg.scope, active: reg.active?.state ?? null };
+    });
+    expect(registration.active, "a service worker is registered and running").toBe("activated");
+
+    // Visit pages full of personal data, so that anything the worker was going
+    // to keep, it has now had every chance to keep.
+    await page.goto("/school");
+    await page.goto("/gym/history");
+    await page.goto("/settings");
+
+    const cached = await page.evaluate(async () => {
+      const names = await caches.keys();
+      const urls: string[] = [];
+      for (const name of names) {
+        const cache = await caches.open(name);
+        for (const request of await cache.keys()) urls.push(new URL(request.url).pathname);
+      }
+      return urls;
+    });
+
+    // The cache outlives signing out, and on a shared or borrowed phone that
+    // is the whole risk. Build files and the offline page only.
+    const personal = cached.filter(
+      (url) => !url.startsWith("/_next/static/") && !["/offline", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"].includes(url)
+    );
+    expect(personal, "pages or photos left in the offline cache").toEqual([]);
+    expect(cached).toContain("/offline");
+
+    // Now pull the plug.
+    await page.context().setOffline(true);
+    try {
+      await page.goto("/school");
+      await expect(page.getByRole("heading", { name: /You're offline/ })).toBeVisible();
+      await expect(page.getByText(/needs a connection/)).toBeVisible();
+      // It says the app is fine, not that the data is gone.
+      await expect(page.getByText(/Nothing has been lost/)).toBeVisible();
+    } finally {
+      await page.context().setOffline(false);
+    }
+
+    // And back online it is the real app again, not a cached shell.
     await page.goto("/school");
     await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
   });
