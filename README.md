@@ -189,10 +189,15 @@ npm run test:e2e  # end-to-end — the whole app in a real browser
 
 The unit tests cover the code where a wrong answer is *confidently* wrong and
 invisible to a browser test: a title race declared over, a day that misses its
-protein goal, a flashcard scheduled for the wrong week, markup that should
-never have been let through. Several of them exist because that exact bug
-shipped once — they were each checked by reintroducing the bug and confirming
-the test fails.
+protein goal, a flashcard scheduled for the wrong week, an exam countdown that
+says "0 days" about tomorrow, markup that should never have been let through.
+Several of them exist because that exact bug shipped once — they were each
+checked by reintroducing the bug and confirming the test fails.
+
+251 unit tests and 32 end-to-end tests at the time of writing. Both run on
+every pull request and every push to `main` (`.github/workflows/ci.yml`), so
+the badge at the top of this file is the current answer rather than the last
+time someone remembered to run them.
 
 ## Safety
 
@@ -239,7 +244,48 @@ there, because the app directory itself is rebuilt from git every time.
 | `ANTHROPIC_API_KEY` | your key | Enables the real AI. Without it the app falls back to its own rule-based logic and says so rather than inventing answers. Settings → **Test AI connection** reports what is actually wrong if it isn't working. |
 | `AUTH_SECRET` | a long random string | Signs session cookies. |
 | `NEXTAUTH_URL` / `AUTH_URL` | your app's URL | Auth redirects are built from this. |
+| `TZ` | `Europe/Zurich` | The server counts days in its own time zone, and a container is UTC by default. Without this, anything logged between midnight and 02:00 is filed under the previous day and "today" on the dashboard is yesterday until the small hours pass. |
 
 Uploaded photos are served by an authenticated route rather than as static
 files, so a progress photo is not readable by anyone who happens to have the
 link.
+
+### After deploying, check one card
+
+Settings opens with **"Is everything set up right?"** — five rows that answer
+it: where photos are written, whether the photo files are still on disk, where
+the database lives, whether the AI can answer, and how old the backup is. Each
+row names a state and, when something is wrong, the exact change to make.
+
+The photo row is the one worth reading twice. Database rows and image files can
+disagree — a deploy that rebuilds the app directory deletes the photos while
+every row still points at them, and nothing looks wrong until you open a
+gallery of broken images. That row counts the stored paths and checks them
+against the disk, so the answer arrives before the photos are missed.
+
+## Your data is yours, and it can leave
+
+**Settings → Download backup** produces one `.tar.gz`: `data.json` with every
+row this account holds, `photos/` with every image the data refers to, and a
+README naming what is inside. It carries no password and no session data — a
+backup you might email yourself should not be a way into the account.
+
+**Settings → Restore a backup** puts it back, and so does the onboarding screen
+of a fresh install, which is where a new account is held until it is set up.
+Restoring replaces what the account currently holds rather than merging: two
+half-versions of the same diary, with no way to tell which half is right, is
+worse than either. It runs as one transaction, so a file the app cannot read
+leaves the account exactly as it was.
+
+Settings also says how old the last backup is, and the home page asks for a
+fresh one once there is a week of use behind it and no backup — not on day one,
+because an app that nags from the first minute is furniture by the time the
+warning means something.
+
+## Offline
+
+The app installs to a phone's home screen, and a service worker makes a dropped
+signal read as the app saying so rather than as the browser giving up. It
+caches the build's own files and one offline page that knows nothing — pages,
+uploaded photos and every API route are never stored, because a cache outlives
+the sign-out that was supposed to end the session.
