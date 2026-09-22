@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { daysUntil } from "@/lib/planner/days-until";
 import { explainApproach, examChecklist, respondToMistake, type TopicContext } from "./learning-assistant";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
@@ -33,7 +34,7 @@ async function loadTopicContext(
   });
 
   const daysUntilExam = nearestExam
-    ? Math.max(0, Math.round((nearestExam.date.getTime() - Date.now()) / 86400000))
+    ? daysUntil(nearestExam.date)
     : null;
 
   return {

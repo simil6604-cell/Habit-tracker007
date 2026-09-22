@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { daysUntil } from "@/lib/planner/days-until";
 import { addDays, addMinutes, differenceInCalendarDays, format, setHours, setMinutes, startOfDay } from "date-fns";
 
 export type PlannedBlock = {
@@ -111,14 +112,14 @@ export async function generateDayPlan(userId: string, date: Date): Promise<DayPl
       continue;
     }
     const c = candidates[ci];
-    const daysUntil = differenceInCalendarDays(c.examDate, date);
+    const daysToExam = daysUntil(c.examDate, date);
     blocks.push({
       start: cursor,
       end: blockEnd,
       label: `${c.subjectName} – ${c.topicName}`,
       category: "STUDY",
       subjectId: c.subjectId,
-      reason: `${c.subjectName} exam in ${daysUntil} day${daysUntil === 1 ? "" : "s"}; "${c.topicName}" is at ${c.progress}% and marked ${c.relevance.toLowerCase()} exam relevance.`,
+      reason: `${c.subjectName} exam in ${daysToExam} day${daysToExam === 1 ? "" : "s"}; "${c.topicName}" is at ${c.progress}% and marked ${c.relevance.toLowerCase()} exam relevance.`,
     });
     usedMinutes += STUDY_BLOCK_MIN;
     cursor = addMinutes(blockEnd, BREAK_MIN);
