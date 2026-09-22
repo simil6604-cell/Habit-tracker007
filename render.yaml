@@ -44,6 +44,15 @@ services:
       - key: UPLOAD_DIR
         value: /var/data/uploads
 
+      # The server counts days in its own time zone, and a hosted container is
+      # UTC by default. For someone in Switzerland that means everything
+      # logged between midnight and 02:00 is filed under the previous day, and
+      # "today" on the dashboard is yesterday until the small hours pass. This
+      # app has one user in one country, so the honest fix is to run the server
+      # in that country's time rather than to pretend it handles all of them.
+      - key: TZ
+        value: Europe/Zurich
+
       # Prompted for in the dashboard, never stored in the repo.
       - key: ANTHROPIC_API_KEY
         sync: false

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { daysUntil } from "@/lib/planner/days-until";
 import { format, addDays, startOfDay, endOfDay } from "date-fns";
 import { generateDayPlan } from "./schedule-generator";
 import { computeDomainScores } from "@/lib/planner/scores";
@@ -136,10 +137,10 @@ export async function generateCoachReply(userId: string, userMessage: string): P
       lines.push(`${fmtTime(cursor)} – ${fmtTime(new Date(cursor.getTime() + 45 * 60 * 1000))}\n${exam.subject?.name ?? "Exam"} revision${topic ? ` – ${topic.name}` : ""}`);
     }
 
-    const daysUntil = Math.max(0, Math.round((exam.date.getTime() - Date.now()) / 86400000));
+    const daysToExam = daysUntil(exam.date);
     lines.push(
       "",
-      `Why: your ${exam.subject?.name ?? ""} exam is in ${daysUntil} day${daysUntil === 1 ? "" : "s"}${topic ? `, and "${topic.name}" is currently at ${topic.progressPct}%` : ""}. I kept your training in place and built revision around it instead of replacing it — recovery and match/training performance matter too.`
+      `Why: your ${exam.subject?.name ?? ""} exam is in ${daysToExam} day${daysToExam === 1 ? "" : "s"}${topic ? `, and "${topic.name}" is currently at ${topic.progressPct}%` : ""}. I kept your training in place and built revision around it instead of replacing it — recovery and match/training performance matter too.`
     );
 
     return lines.join("\n");
@@ -148,9 +149,9 @@ export async function generateCoachReply(userId: string, userMessage: string): P
   if (mentionsExam) {
     const exam = await nearestExam(userId);
     if (!exam) return "I don't see any upcoming exams logged yet — add one under School → Upcoming Exams and I'll help you prepare.";
-    const daysUntil = Math.max(0, Math.round((exam.date.getTime() - Date.now()) / 86400000));
+    const daysToExam = daysUntil(exam.date);
     const weakest = (exam.subject?.topics ?? []).sort((a, b) => a.progressPct - b.progressPct)[0];
-    return `Your next exam is ${exam.subject?.name ?? exam.title} in ${daysUntil} day${daysUntil === 1 ? "" : "s"}.${weakest ? ` Your weakest topic there is "${weakest.name}" at ${weakest.progressPct}% — that's where I'd focus first.` : ""} Check the Study Planner for a full day-by-day plan.`;
+    return `Your next exam is ${exam.subject?.name ?? exam.title} in ${daysToExam} day${daysToExam === 1 ? "" : "s"}.${weakest ? ` Your weakest topic there is "${weakest.name}" at ${weakest.progressPct}% — that's where I'd focus first.` : ""} Check the Study Planner for a full day-by-day plan.`;
   }
 
   if (mentionsFootball || mentionsGym) {
@@ -188,13 +189,13 @@ async function askCoachAI(userId: string, userMessage: string): Promise<CoachAIR
       nearestExam(userId),
       prisma.user.findUnique({ where: { id: userId }, select: { mainFocus: true } }),
     ]);
-    const daysUntil = exam ? Math.max(0, Math.round((exam.date.getTime() - Date.now()) / 86400000)) : null;
+    const daysToExam = exam ? daysUntil(exam.date) : null;
     const system = [
       "You are the AI Coach inside a personal School/Gym/Football optimization app, talking directly to the student.",
       buildAcademicSystemPrompt(school?.educationSystem),
       "You also help balance training, recovery and school workload. Reason honestly from the real data below — never invent numbers, results, or syllabus content.",
       `Current scores — School ${scores.school}%, Gym ${scores.gym}%, Football ${scores.football}%, Recovery ${scores.recovery}%.`,
-      exam ? `Next exam: ${exam.subject?.name ?? exam.title} in ${daysUntil} day${daysUntil === 1 ? "" : "s"}.` : "No upcoming exam logged yet.",
+      exam ? `Next exam: ${exam.subject?.name ?? exam.title} in ${daysToExam} day${daysToExam === 1 ? "" : "s"}.` : "No upcoming exam logged yet.",
       describeMainFocus(user?.mainFocus),
       COACH_DIAGRAM_PROMPT,
     ].join("\n");
