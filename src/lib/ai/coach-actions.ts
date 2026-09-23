@@ -16,11 +16,16 @@ export type CoachMessage = { id: string; role: "USER" | "ASSISTANT"; content: st
 
 export async function getCoachMessages(): Promise<CoachMessage[]> {
   const userId = await requireUserId();
-  const messages = await prisma.chatMessage.findMany({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
-    take: 100,
-  });
+  // Newest first, then reversed. `orderBy: asc` with a `take` returns the
+  // OLDEST 100, so past that the chat stops showing anything new — the replies
+  // are written, they just never reach the screen.
+  const messages = (
+    await prisma.chatMessage.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 100,
+    })
+  ).reverse();
   return messages.map((m) => ({
     id: m.id,
     role: m.role as "USER" | "ASSISTANT",

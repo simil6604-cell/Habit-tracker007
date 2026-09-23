@@ -356,6 +356,24 @@ test.describe.serial("full app walkthrough", () => {
     await page.waitForURL("**/school/ai");
     await expect(page.getByRole("heading", { name: "School AI", exact: true })).toBeVisible();
 
+    // An unrelated photo of this account's, in the same upload directory, put
+    // there before any of the school-AI work. Discarding a staged photo is a
+    // delete driven by a path from the browser, and "under your own folder" is
+    // just as true of this one — so it is here to show the delete cannot reach
+    // a photo the school AI never staged.
+    await page.goto("/gym/history");
+    await page.setInputFiles('input[name="photo"]', {
+      name: "unrelated.png",
+      mimeType: "image/png",
+      buffer: makeNoisyPng(80, 80),
+    });
+    await page.fill('input[name="caption"]', "Not the school AI's photo");
+    await page.getByRole("button", { name: "Add photo" }).click();
+    await expect(page.getByText("Not the school AI's photo")).toBeVisible();
+    const unrelated = await page.locator('img[src^="/uploads/"]').first().getAttribute("src");
+    expect(unrelated, "the unrelated progress photo just uploaded").toBeTruthy();
+
+    await page.goto("/school/ai");
     const input = page.getByTestId("school-ai-photo-input");
 
     // First, one photo the size a phone actually takes. Every upload in this
@@ -378,9 +396,16 @@ test.describe.serial("full app walkthrough", () => {
     const staged = page.getByTestId("school-ai-staged");
     await expect(staged.locator("img")).toHaveCount(3);
 
-    // Drop one, and it is gone from what will be sent.
+    // Drop one, and it is gone from what will be sent — and the file itself is
+    // deleted, not just hidden. A discarded photo that stayed on disk could
+    // never be identified again, because nothing else knows it was staged.
+    const dropped = await staged.locator("img").first().getAttribute("src");
+    expect((await page.request.get(dropped!)).status()).toBe(200);
     await staged.locator("button").first().click();
     await expect(staged.locator("img")).toHaveCount(2);
+    await expect
+      .poll(async () => (await page.request.get(dropped!)).status())
+      .not.toBe(200);
 
     // An iPhone's default format uploads fine and the AI cannot read it, so it
     // has to be refused out loud here rather than silently never looked at.
@@ -415,6 +440,9 @@ test.describe.serial("full app walkthrough", () => {
       expect(src.startsWith("/uploads/"), src).toBe(true);
       expect((await page.request.get(src)).status(), src).toBe(200);
     }
+
+    // And the unrelated photo is untouched by everything above.
+    expect((await page.request.get(unrelated!)).status(), unrelated!).toBe(200);
 
     // The point of this page: it is a different conversation from the
     // all-domains coach, not a second window onto the same one.
