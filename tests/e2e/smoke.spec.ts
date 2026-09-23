@@ -260,6 +260,88 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.locator('input[value="Morning break"]')).toBeVisible();
   });
 
+  test("school: the habit tracker is a checklist per day, and each day scores itself", async () => {
+    await page.goto("/school/habits");
+    await expect(page.getByText("Add a habit above to start tracking.")).toBeVisible();
+
+    for (const [emoji, name] of [
+      ["📘", "Reviewed today's lessons"],
+      ["📖", "Read 20 minutes"],
+      ["🎒", "Packed the bag"],
+      ["✏️", "Did the homework"],
+    ] as const) {
+      await page.fill('input[name="emoji"]', emoji);
+      await page.fill('input[name="name"]', name);
+      await page.getByRole("button", { name: "Add habit" }).click();
+      await expect(page.getByTestId("habit-analysis").getByText(name)).toBeVisible();
+    }
+
+    // Seven cards, one per day of the week, each holding the whole checklist.
+    const cards = page.getByTestId("habit-day-cards").locator("> div");
+    await expect(cards).toHaveCount(7);
+
+    // Today's card is the one you actually tick, so it is marked and enabled.
+    // Matched on the exact badge, not hasText: "Today" is a substring of
+    // "Reviewed today's lessons", which sits in all seven cards.
+    const todayBadge = page.getByText("Today", { exact: true });
+    const today = page.locator('[data-testid^="habit-card-"]').filter({ has: todayBadge });
+    await expect(today).toHaveCount(1);
+
+    const todayKey = (await today.getAttribute("data-testid"))!.replace("habit-card-", "");
+    const pct = page.getByTestId(`habit-pct-${todayKey}`);
+    await expect(pct).toHaveText("0%");
+    await expect(today.getByText("0 of 4")).toBeVisible();
+
+    // Each tick is a real write, and the day's own score moves with it.
+    await today.getByRole("button", { name: /Reviewed today's lessons/ }).click();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("25%");
+    await today.getByRole("button", { name: /Read 20 minutes/ }).click();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("50%");
+
+    // It scores that day, not the week: the other days are untouched.
+    const otherScores = await page
+      .locator('[data-testid^="habit-pct-"]')
+      .evaluateAll((els) => els.map((e) => e.textContent));
+    expect(otherScores.filter((t) => t === "50%")).toHaveLength(1);
+
+    // Ticking again unticks — the checklist is not one-way.
+    await today.getByRole("button", { name: /Read 20 minutes/ }).click();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("25%");
+
+    // It really saved, rather than only looking ticked.
+    await page.reload();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("25%");
+
+    // A day that hasn't happened can't be ticked — in the browser, and on the
+    // server, which is the half a disabled button doesn't cover.
+    const tomorrow = page.locator('[data-testid^="habit-card-"]').filter({ hasText: "Not yet" }).first();
+    await expect(tomorrow.getByRole("button", { name: /Read 20 minutes/ })).toBeDisabled();
+
+    // The analysis underneath: the chart, and a rate per habit.
+    await expect(page.getByText(/Daily completion — last 28 days/)).toBeVisible();
+    await expect(page.getByTestId("habit-analysis").locator("li")).toHaveCount(4);
+
+    // Last week's cards are all in the past, so none of them is "Today" and
+    // none is disabled as "Not yet".
+    await page.getByRole("link", { name: "Previous week" }).click();
+    await expect(page.getByText("Last week")).toBeVisible();
+    await expect(page.getByTestId("habit-day-cards").locator("> div")).toHaveCount(7);
+    await expect(page.getByText("Today", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Not yet")).toHaveCount(0);
+
+    // A week nobody meant to ask for doesn't break the page.
+    await page.goto("/school/habits?week=banana");
+    await expect(page.getByText("This week")).toBeVisible();
+    await page.goto("/school/habits?week=-9");
+    await expect(page.getByText("This week")).toBeVisible();
+
+    // And a habit can be removed, from the analysis list where it is named.
+    await page.goto("/school/habits");
+    await page.getByTitle('Delete "Packed the bag"').click();
+    await expect(page.getByTestId("habit-analysis").locator("li")).toHaveCount(3);
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("33%");
+  });
+
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
     // A 1x1 PNG. The point is which files are accepted and where they end up,
     // not what is in them.

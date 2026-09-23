@@ -97,9 +97,12 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   illegible handwriting called out rather than guessed) and a class recorder (live speech-to-text via the browser's own
   engine where supported, or type/paste as a fallback, then a real AI
   summary plus a quiz built only from what the transcript actually covers),
-  a habit-tracker grid for your own recurring school habits
-  (fully custom rows, a 4-week checkbox grid with per-habit success rates
-  and a daily-completion trend chart), baseline "where do you stand"
+  a habit tracker for your own recurring school habits — a card per day with
+  the whole checklist on it and that day's own score at the bottom, a week of
+  cards side by side with arrows back through previous weeks, and the analysis
+  underneath: a 28-day daily-completion trend chart plus a success rate and a
+  current streak per habit (a day that hasn't happened yet has no score rather
+  than a zero one, and can't be ticked — in the browser or on the server), baseline "where do you stand"
   self-assessments for School/Gym/Football that feed the score engine
   until real activity data exists, an "AI Coach — before you dive in" banner
   at the top of the home page that picks the single most important thing to
