@@ -74,6 +74,14 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
     startTransition(async () => setMessages(await sendSchoolAIMessage(trimmed, photos)));
   }
 
+  /**
+   * One photo per call, not one call per batch.
+   *
+   * Twelve phone photos in a single request is tens of megabytes, and a
+   * Server Action body has a hard limit — one that a batch would have to be
+   * absurdly large to clear. One at a time keeps every request the size of a
+   * single photo, and a long batch shows progress instead of one silent wait.
+   */
   async function addPhotos(files: FileList | null) {
     if (!files || files.length === 0) return;
     const room = MAX_PHOTOS_PER_MESSAGE - staged.length;
@@ -82,21 +90,30 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
       return;
     }
 
-    const formData = new FormData();
-    for (const file of Array.from(files).slice(0, room)) formData.append("photos", file);
-
+    const chosen = Array.from(files).slice(0, room);
     setUploading(true);
-    setNotice(null);
-    try {
-      const result = await uploadSchoolAIPhotos(formData);
-      if (result.paths.length > 0) setStaged((prev) => [...prev, ...result.paths]);
-      setNotice(result.error ?? null);
-    } catch {
-      setNotice("Those photos couldn't be uploaded — check your connection and try again.");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+    setNotice(chosen.length > 1 ? `Uploading 1 of ${chosen.length}…` : null);
+    const problems: string[] = [];
+
+    for (const [index, file] of chosen.entries()) {
+      if (chosen.length > 1) setNotice(`Uploading ${index + 1} of ${chosen.length}…`);
+      const formData = new FormData();
+      formData.append("photos", file);
+      try {
+        const result = await uploadSchoolAIPhotos(formData);
+        if (result.paths.length > 0) setStaged((prev) => [...prev, ...result.paths]);
+        if (result.error) problems.push(result.error);
+      } catch {
+        // The upload reached the server and was refused, or never got there.
+        // Either way, naming the photo is the useful part — blaming the
+        // connection is a guess, and usually a wrong one.
+        problems.push(`${file.name || "One photo"} couldn't be uploaded. If it's very large, try a smaller one.`);
+      }
     }
+
+    setUploading(false);
+    setNotice(problems.length > 0 ? problems.join(" ") : null);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function removeStaged(path: string) {
@@ -210,7 +227,7 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
         </p>
       )}
       {mic.error && <p className="mb-2 text-xs text-danger">{mic.error}</p>}
-      {notice && <p className="mb-2 text-xs text-danger">{notice}</p>}
+      {notice && <p className={`mb-2 text-xs ${uploading ? "text-muted" : "text-danger"}`}>{notice}</p>}
       {!mic.supported && (
         <p className="mb-2 text-xs text-muted">
           Voice input needs Chrome, Edge or Safari — this browser doesn&apos;t offer it, so type instead.

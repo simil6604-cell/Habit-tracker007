@@ -21,7 +21,15 @@ export const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), ".
 /** Files written before UPLOAD_DIR existed, still served for anyone upgrading. */
 export const LEGACY_UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+/**
+ * The biggest photo this app accepts.
+ *
+ * Exported because it is half of a pair: Next.js has its own Server Action
+ * body limit, set in next.config.ts, and if that one is smaller the upload is
+ * rejected with a 413 before this check ever runs — the student sees a failure
+ * the app can't explain, about a photo well inside the limit it advertises.
+ */
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 
 const EXT_BY_TYPE: Record<string, string> = {
@@ -39,7 +47,7 @@ const EXT_BY_TYPE: Record<string, string> = {
  */
 export async function saveUploadedImage(file: File, userId: string): Promise<string | null> {
   if (!file || file.size === 0) return null;
-  if (file.size > MAX_BYTES) throw new Error("Image is too large (max 10MB).");
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Image is too large (max 10MB).");
   if (!ALLOWED_TYPES.has(file.type)) throw new Error("Unsupported image type.");
 
   const ext = EXT_BY_TYPE[file.type] ?? "jpg";

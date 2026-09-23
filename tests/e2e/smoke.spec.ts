@@ -4,6 +4,7 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createTarGz } from "@/lib/export/tar";
+import { makeNoisyPng } from "./big-image";
 
 // The Web Speech API has no official TS DOM typings, so `tsc --noEmit` rejects
 // these reads even though every browser that supports voice exposes them.
@@ -355,10 +356,20 @@ test.describe.serial("full app walkthrough", () => {
     await page.waitForURL("**/school/ai");
     await expect(page.getByRole("heading", { name: "School AI", exact: true })).toBeVisible();
 
+    const input = page.getByTestId("school-ai-photo-input");
+
+    // First, one photo the size a phone actually takes. Every upload in this
+    // app is a Server Action, and Next.js rejects a Server Action body over
+    // 1MB with a 413 — so the 1x1 PNGs everywhere else in this suite prove
+    // nothing about whether a real photograph can be sent at all.
+    await input.setInputFiles([{ name: "real-size.png", mimeType: "image/png", buffer: makeNoisyPng(900, 900) }]);
+    await expect(page.getByTestId("school-ai-staged").locator("img")).toHaveCount(1);
+    await page.getByTestId("school-ai-staged").locator("button").first().click();
+    await expect(page.getByTestId("school-ai-staged")).toHaveCount(0);
+
     // Two pages of the same question go up together, and both come back as
     // thumbnails before anything is sent — the whole reason upload and ask are
     // two steps is being able to drop the blurry one.
-    const input = page.getByTestId("school-ai-photo-input");
     await input.setInputFiles([
       { name: "page1.png", mimeType: "image/png", buffer: png },
       { name: "page2.png", mimeType: "image/png", buffer: png },
@@ -762,12 +773,12 @@ test.describe.serial("full app walkthrough", () => {
   }: {
     browser: Browser;
   }) => {
-    // A real photo first, so the archive has something to carry. This is the
-    // smallest valid PNG — 1x1, transparent.
-    const png = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwACRgFxfyRfSwAAAABJRU5ErkJggg==",
-      "base64"
-    );
+    // A real photo first, so the archive has something to carry — and one over
+    // a megabyte, because the progress-photo form is a plain Server Action
+    // post and that is where the 1MB body limit used to reject it. A 1x1 PNG
+    // here proved the backup worked for a photo nobody could have uploaded.
+    const png = makeNoisyPng(700, 700);
+    expect(png.byteLength, "the test photo must exceed the old 1MB limit").toBeGreaterThan(1024 * 1024);
     await page.goto("/gym/history");
     await page.setInputFiles('input[name="photo"]', { name: "progress.png", mimeType: "image/png", buffer: png });
     await page.fill('input[name="caption"]', "Backup test photo");

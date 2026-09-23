@@ -30,6 +30,13 @@ balances all of them together.
   honestly instead of faking a conversation. Any real-AI call failure (bad
   key, network, rate limit) falls back to the same honest response instead
   of crashing or faking an answer.
+- **Photo uploads are sized for a real phone.** Every upload here is a Next.js
+  Server Action, and those cap the request body at 1MB by default — smaller
+  than any photo a phone takes, so uploads failed with a 413 long before the
+  app's own 10MB check ran. `next.config.ts` raises the limit to 12MB (the
+  10MB the UI promises, plus the multipart envelope) and a unit test keeps the
+  two numbers in agreement. Batches upload one photo per request, so a stack of
+  twelve is twelve ordinary requests with live progress, not one enormous one.
 - PWA-ready (`manifest.json`, icons, "Add to Home Screen" on iOS/Android)
 
 ## Getting started
