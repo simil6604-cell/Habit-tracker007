@@ -1088,6 +1088,16 @@ test.describe.serial("full app walkthrough", () => {
     // A backup was downloaded earlier in this run, so this one is satisfied.
     await expect(page.getByTestId("check-backup")).toContainText(/Last backup/);
 
+    // The test server has no TZ set, like a fresh Render deployment, so this
+    // row says what a UTC clock does to every date in the app rather than
+    // reporting a zone name and leaving the reader to work it out.
+    const timezone = page.getByTestId("check-timezone");
+    await expect(timezone).toContainText(/UTC/);
+    await expect(timezone).toContainText(/Today/);
+    // The fix is its own line in the card, so it is asserted on the row, not
+    // on the detail paragraph.
+    await expect(timezone.locator("xpath=..")).toContainText(/TZ=Europe\/Zurich/);
+
     // The headline leads with the worst row, and says it in words.
     await expect(card).toContainText(/lose data|worth fixing|checks out/);
   });

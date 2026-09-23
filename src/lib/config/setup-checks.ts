@@ -207,6 +207,48 @@ export function backupCheck(lastBackupAt: Date | string | null | undefined, now?
   };
 }
 
+/**
+ * Which day the server thinks it is.
+ *
+ * Everything dated in this app is worked out on the server: which card says
+ * "Today", which day a ticked habit is logged against, how many days until an
+ * exam, what the daily checklist is for. A hosted server runs on UTC unless it
+ * is told otherwise, and a student in central Europe is one or two hours ahead
+ * of it — so from midnight until 01:00 or 02:00 local, the app is still on
+ * yesterday. Late-night revision is exactly when this app gets opened, and
+ * exactly when it is wrong.
+ *
+ * It cannot be called broken without knowing where the person lives, which the
+ * app does not. So it reports the zone and what follows from it, and names the
+ * one environment variable that fixes every dated thing at once.
+ */
+export function timezoneCheck(timeZone: string | undefined, now: Date = new Date()): SetupCheck {
+  const zone = timeZone || "UTC";
+  const offsetMinutes = -now.getTimezoneOffset();
+
+  if (zone === "UTC" || zone === "Etc/UTC" || zone === "Etc/GMT") {
+    return {
+      id: "timezone",
+      label: "Time zone",
+      status: "warn",
+      detail:
+        "This server runs on UTC, and every date in the app is worked out here rather than on your phone. If you are ahead of UTC, then between midnight and the start of your day the app is still on yesterday — the habit card marked “Today” is the wrong day, and ticking it logs the wrong day.",
+      fix: "Set TZ to your own zone where your app's environment variables are set — for Switzerland, TZ=Europe/Zurich — and redeploy. That fixes every date at once; nothing in your data changes.",
+    };
+  }
+
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const abs = Math.abs(offsetMinutes);
+  const offset = `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+
+  return {
+    id: "timezone",
+    label: "Time zone",
+    status: "ok",
+    detail: `Dates are worked out in ${zone} (${offset}), so “today” here means the same day it does where you are.`,
+  };
+}
+
 /** The headline: what the whole list adds up to. */
 export function summarize(checks: SetupCheck[]): { status: CheckStatus; label: string } {
   if (checks.some((check) => check.status === "fail")) {

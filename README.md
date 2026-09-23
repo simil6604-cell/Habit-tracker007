@@ -278,10 +278,17 @@ link.
 
 ### After deploying, check one card
 
-Settings opens with **"Is everything set up right?"** — five rows that answer
+Settings opens with **"Is everything set up right?"** — six rows that answer
 it: where photos are written, whether the photo files are still on disk, where
-the database lives, whether the AI can answer, and how old the backup is. Each
-row names a state and, when something is wrong, the exact change to make.
+the database lives, which time zone dates are counted in, whether the AI can
+answer, and how old the backup is. Each row names a state and, when something
+is wrong, the exact change to make.
+
+The time-zone row is there because the table above can be read and not acted
+on. A container is UTC unless told otherwise, and every date in this app is
+worked out on the server — so without `TZ`, the habit card marked "Today" is
+the wrong day from midnight until your morning, and ticking it logs the wrong
+day. The row says so in those words, rather than printing a zone name.
 
 The photo row is the one worth reading twice. Database rows and image files can
 disagree — a deploy that rebuilds the app directory deletes the photos while
