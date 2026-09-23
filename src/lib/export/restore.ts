@@ -225,10 +225,11 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   await tx.progress.deleteMany({ where: { userId } });
   await tx.chatMessage.deleteMany({ where: { userId } });
   await tx.schoolAIMessage.deleteMany({ where: { userId } });
-  // Not carried in a backup — photos staged but never sent are scratch. Wiped
-  // anyway, so a restored account doesn't hold rows pointing at files that the
-  // restore never wrote.
-  await tx.schoolAIUpload.deleteMany({ where: { userId } });
+  // SchoolAIUpload is deliberately NOT wiped. A restore never deletes photo
+  // files, so wiping the rows would strand their files on disk with nothing
+  // left that knows they exist — the exact leak that table was added to close.
+  // Left alone, they point at files that are still there and the sweep removes
+  // both within a day.
   await tx.drillVideo.deleteMany({ where: { userId } });
   await tx.assessment.deleteMany({ where: { userId } });
 }

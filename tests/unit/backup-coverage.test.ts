@@ -43,8 +43,8 @@ const EXCLUDED: Record<string, { reason: string; skip: Skip[] }> = {
   },
   SchoolAIUpload: {
     reason:
-      "photos uploaded to the school AI but not yet sent — scratch that lives for hours, so backing it up would carry rows whose files a restore never writes. Still wiped, so a restored account starts clean.",
-    skip: ["backup", "restore"],
+      "photos uploaded to the school AI but not yet sent — scratch that lives for hours, so backing it up would carry rows whose files a restore never writes. Not wiped either: a restore deletes no photo files, so dropping the rows would strand their files with nothing left that knows they exist. Left alone, the sweep takes row and file together within a day.",
+    skip: ["backup", "wipe", "restore"],
   },
 };
 
@@ -118,11 +118,34 @@ describe("every table this account owns is in the backup", () => {
     }
   });
 
-  // An exclusion that skipped everything would be indistinguishable from the
-  // table not existing, which is the failure this whole file exists to catch.
+  // An exclusion that skips everything is indistinguishable from the table not
+  // existing, so a full opt-out has to be a deliberate, stated decision rather
+  // than the easy way past a failing row.
   it("keeps checking the parts an exclusion did not opt out of", () => {
-    expect(wiped).toContain("SchoolAIUpload");
-    expect(backedUp).not.toContain("SchoolAIUpload");
+    // TimetableSlot opts out of the backup query it cannot be reached through,
+    // and is still required to be wiped.
     expect(wiped).toContain("TimetableSlot");
+    expect(backedUp).not.toContain("TimetableSlot");
+  });
+
+  // Skipping the wipe check only says "don't require it" — it does not stop
+  // someone adding one back, and adding one here looks like tidying up. It
+  // isn't: a restore deletes no photo files, so dropping these rows strands
+  // their files with nothing left that knows they exist.
+  it("does not wipe staged uploads, because a restore would strand their files", () => {
+    expect(restoreSrc).not.toContain("tx.schoolAIUpload.deleteMany");
+    expect(restoreSrc, "the reason has to survive next to the code").toMatch(
+      /SchoolAIUpload is deliberately NOT wiped/
+    );
+  });
+
+  it("spells out the reasoning for the tables that opt out of everything", () => {
+    const total = Object.entries(EXCLUDED).filter(([, e]) => e.skip.length === 3);
+    for (const [model, { reason }] of total) {
+      // Three checks skipped is the strongest claim on this list, so the
+      // reason has to account for all three, not wave at one of them.
+      expect(reason.length, `${model} opts out of everything on a one-liner`).toBeGreaterThan(80);
+    }
+    expect(total.map(([m]) => m).sort()).toEqual(["Account", "SchoolAIUpload", "Session"]);
   });
 });
