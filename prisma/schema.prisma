@@ -76,6 +76,7 @@ model User {
   classRecordings    ClassRecording[]
   tutorMessages      TutorMessage[]
   drillVideos        DrillVideo[]
+  schoolAIUploads    SchoolAIUpload[]
 }
 
 model Account {
@@ -671,6 +672,29 @@ model DrillVideo {
   createdAt DateTime @default(now())
 
   @@index([userId, skill])
+}
+
+/**
+ * A photo uploaded to the school AI but not yet attached to a question.
+ *
+ * It exists so the app can tell those files apart from every other photo in
+ * the same directory. Without it, "discard this staged photo" could only check
+ * that the path is under your own upload folder — which is also true of your
+ * progress photos and your note photos — and a staged photo you never sent
+ * could never be identified again, so it stayed on the disk forever.
+ *
+ * Rows live for hours, not for keeps: sending the question clears them, and a
+ * sweep removes whatever was abandoned.
+ */
+model SchoolAIUpload {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  path      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, path])
+  @@index([userId, createdAt])
 }
 
 model SchoolAIMessage {

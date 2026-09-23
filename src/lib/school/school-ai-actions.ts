@@ -38,6 +38,9 @@ export type SchoolAIMessageEntry = {
  */
 const MAX_IMAGE_BYTES = 18 * 1024 * 1024;
 
+/** How much of the conversation is kept on screen and available to the tutor. */
+const HISTORY_LIMIT = 200;
+
 function toEntry(m: { id: string; role: string; content: string; imagePaths: string | null; createdAt: Date }): SchoolAIMessageEntry {
   return {
     id: m.id,
@@ -48,14 +51,25 @@ function toEntry(m: { id: string; role: string; content: string; imagePaths: str
   };
 }
 
+/**
+ * The conversation, oldest turn first.
+ *
+ * Fetched newest-first and then reversed, because `orderBy: asc` with a `take`
+ * returns the OLDEST 200 rows, not the newest. Past that many messages the
+ * chat would have frozen: new replies land in the database and never appear,
+ * and nothing about it looks like a bug from the outside.
+ *
+ * The id breaks a tie on createdAt — two rows written in the same millisecond
+ * could otherwise come back with the answer above the question.
+ */
 export async function getSchoolAIMessages(): Promise<SchoolAIMessageEntry[]> {
   const userId = await requireUserId();
   const messages = await prisma.schoolAIMessage.findMany({
     where: { userId },
-    orderBy: { createdAt: "asc" },
-    take: 200,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: HISTORY_LIMIT,
   });
-  return messages.map(toEntry);
+  return messages.reverse().map(toEntry);
 }
 
 export type UploadResult = { paths: string[]; error?: string };
@@ -75,6 +89,8 @@ export async function uploadSchoolAIPhotos(formData: FormData): Promise<UploadRe
     return { paths: [], error: `That's ${files.length} photos — send up to ${MAX_PHOTOS_PER_MESSAGE} at a time.` };
   }
 
+  await sweepAbandonedUploads(userId);
+
   const paths: string[] = [];
   const problems: string[] = [];
 
@@ -90,7 +106,12 @@ export async function uploadSchoolAIPhotos(formData: FormData): Promise<UploadRe
     }
     try {
       const path = await saveUploadedImage(file, userId);
-      if (path) paths.push(path);
+      if (path) {
+        // Recorded as staged, which is what later tells this file apart from
+        // every other photo sitting in the same directory.
+        await prisma.schoolAIUpload.create({ data: { userId, path } });
+        paths.push(path);
+      }
     } catch (err) {
       problems.push(`${file.name || "a photo"}: ${err instanceof Error ? err.message : "couldn't be saved"}`);
     }
@@ -99,17 +120,43 @@ export async function uploadSchoolAIPhotos(formData: FormData): Promise<UploadRe
   return { paths, error: problems.length > 0 ? problems.join(" ") : undefined };
 }
 
-/** Drops a photo that was uploaded but not yet sent. */
+/**
+ * Drops a photo that was uploaded but not yet sent.
+ *
+ * The path arrives from the browser, so it is caller-supplied input reaching a
+ * delete. Being under this user's own upload directory is not enough to act
+ * on: that is equally true of their progress photos and their note photos, and
+ * a crafted call would have deleted one of those, leaving the row behind and
+ * the picture gone. The staged row is the proof, and it only exists for a file
+ * this user uploaded here and has not sent.
+ */
 export async function discardSchoolAIPhoto(imagePath: string): Promise<void> {
   const userId = await requireUserId();
-  // Only ever a file under this user's own upload directory, and only one that
-  // no message refers to — otherwise this would delete a photo out of the
-  // conversation, or someone else's.
   const [owned] = ownedUploadPaths([imagePath], userId);
   if (!owned) return;
-  const used = await prisma.schoolAIMessage.findFirst({ where: { userId, imagePaths: { contains: owned } } });
-  if (used) return;
+
+  const { count } = await prisma.schoolAIUpload.deleteMany({ where: { userId, path: owned } });
+  if (count === 0) return;
   await deleteUploadedImage(owned);
+}
+
+/** Staged photos older than this were abandoned — the tab was closed, or the question never got asked. */
+const STAGED_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Deletes staged photos nobody came back for.
+ *
+ * Only ever rows in this table, so it can never reach a photo that belongs to
+ * something else. Without it every abandoned upload stays on the disk for the
+ * life of the deployment, unreachable and unnameable.
+ */
+async function sweepAbandonedUploads(userId: string): Promise<void> {
+  const cutoff = new Date(Date.now() - STAGED_UPLOAD_TTL_MS);
+  const stale = await prisma.schoolAIUpload.findMany({ where: { userId, createdAt: { lt: cutoff } } });
+  if (stale.length === 0) return;
+
+  await prisma.schoolAIUpload.deleteMany({ where: { id: { in: stale.map((row) => row.id) } } });
+  for (const row of stale) await deleteUploadedImage(row.path);
 }
 
 async function loadImages(paths: string[]): Promise<{ images: ProviderImage[]; skipped: number }> {
@@ -144,7 +191,16 @@ export async function sendSchoolAIMessage(content: string, imagePaths: string[] 
   // empty box is only empty when nothing is attached either.
   if (!trimmed && photos.length === 0) return getSchoolAIMessages();
 
-  const history = await prisma.schoolAIMessage.findMany({ where: { userId }, orderBy: { createdAt: "asc" }, take: 200 });
+  // Newest first then reversed, for the same reason as getSchoolAIMessages:
+  // taken ascending, the tutor's "recent context" freezes at the first 200
+  // messages ever sent and never moves again.
+  const history = (
+    await prisma.schoolAIMessage.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: HISTORY_LIMIT,
+    })
+  ).reverse();
 
   await prisma.schoolAIMessage.create({
     data: {
@@ -154,6 +210,11 @@ export async function sendSchoolAIMessage(content: string, imagePaths: string[] 
       imagePaths: photos.length > 0 ? JSON.stringify(photos) : null,
     },
   });
+  // They belong to the question now, so they are no longer staged — and the
+  // sweep must never come back for them.
+  if (photos.length > 0) {
+    await prisma.schoolAIUpload.deleteMany({ where: { userId, path: { in: photos } } });
+  }
 
   let reply: string;
   if (!isRealAIConfigured) {

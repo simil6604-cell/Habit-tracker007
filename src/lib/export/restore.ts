@@ -225,6 +225,10 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   await tx.progress.deleteMany({ where: { userId } });
   await tx.chatMessage.deleteMany({ where: { userId } });
   await tx.schoolAIMessage.deleteMany({ where: { userId } });
+  // Not carried in a backup — photos staged but never sent are scratch. Wiped
+  // anyway, so a restored account doesn't hold rows pointing at files that the
+  // restore never wrote.
+  await tx.schoolAIUpload.deleteMany({ where: { userId } });
   await tx.drillVideo.deleteMany({ where: { userId } });
   await tx.assessment.deleteMany({ where: { userId } });
 }
