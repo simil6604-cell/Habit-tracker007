@@ -2,12 +2,13 @@ export type NavItem = {
   href: string;
   label: string;
   emoji?: string;
-  icon?: "home" | "calendar" | "tasks" | "analytics" | "settings" | "coach";
+  icon?: "home" | "calendar" | "tasks" | "analytics" | "settings" | "coach" | "schoolai";
 };
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: "home" },
   { href: "/school", label: "School", emoji: "🎓" },
+  { href: "/school/ai", label: "School AI", icon: "schoolai" },
   { href: "/gym", label: "Gym", emoji: "🏋️" },
   { href: "/football", label: "Football", emoji: "⚽" },
   { href: "/coach", label: "AI Coach", icon: "coach" },

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { toggleTrainingCompleted, deleteTraining, updateTrainingDiary, attachDrillVideo, removeDrillVideo } from "@/lib/football/actions";
 import { generateTrainingDiaryTip } from "@/lib/football/diary-assistant";
-import { DRILL_VIDEOS } from "@/lib/data/football";
+import { suggestedDrillVideos } from "@/lib/data/football";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VideoReference } from "@/components/shared/video-reference";
@@ -103,10 +103,14 @@ export function TrainingList({ trainings }: { trainings: Training[] }) {
                               </div>
                             </div>
                           )}
-                          {saved.length === 0 && DRILL_VIDEOS[d.name] && (
+                          {saved.length === 0 && suggestedDrillVideos(d.name).length > 0 && (
                             <div className="mt-1">
-                              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Example drill video</p>
-                              <VideoReference url={DRILL_VIDEOS[d.name]} />
+                              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">Example drill videos</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {suggestedDrillVideos(d.name).map((url) => (
+                                  <VideoReference key={url} url={url} />
+                                ))}
+                              </div>
                             </div>
                           )}
                           <form action={attachDrillVideo.bind(null, t.id, i)} className="mt-1 flex gap-1">

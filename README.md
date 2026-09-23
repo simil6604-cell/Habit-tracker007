@@ -30,6 +30,13 @@ balances all of them together.
   honestly instead of faking a conversation. Any real-AI call failure (bad
   key, network, rate limit) falls back to the same honest response instead
   of crashing or faking an answer.
+- **Photo uploads are sized for a real phone.** Every upload here is a Next.js
+  Server Action, and those cap the request body at 1MB by default — smaller
+  than any photo a phone takes, so uploads failed with a 413 long before the
+  app's own 10MB check ran. `next.config.ts` raises the limit to 12MB (the
+  10MB the UI promises, plus the multipart envelope) and a unit test keeps the
+  two numbers in agreement. Batches upload one photo per request, so a stack of
+  twelve is twelve ordinary requests with live progress, not one enormous one.
 - PWA-ready (`manifest.json`, icons, "Add to Home Screen" on iOS/Android)
 
 ## Getting started
@@ -69,6 +76,18 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   subject's topics — click "🧠 Quiz" on any subject card), the
   study planner, a daily School checklist that suggests a concrete time
   (a free/Study period today, or after training) for anything not done yet,
+  a **dedicated School AI** on its own page (`/school/ai`) — a tutor that
+  does school and nothing else, pitched at Cambridge IGCSE and A Level from
+  the levels you set per subject, and briefed with your own subjects,
+  upcoming exams, weakest topics and the questions you marked as not
+  understood. Same one-to-one voice as the AI Coach (press Talk, speak, and
+  have answers read back), and it takes a whole stack of photos in one
+  question — up to 12 at a time, staged as thumbnails so you can drop the
+  blurry one before sending, so a three-page past-paper question or your own
+  handwritten working goes up as one thing and comes back marked. Kept
+  deliberately separate from the all-domains AI Coach: different
+  conversation, different prompt, no school question competing with training
+  load for attention,
   an AI Tutor per topic — a real persistent, multi-turn conversation (not
   one-shot Q&A) that remembers earlier turns, answers follow-ups in
   context, and draws a sanitized AI-generated SVG diagram inline when one
@@ -85,9 +104,12 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   illegible handwriting called out rather than guessed) and a class recorder (live speech-to-text via the browser's own
   engine where supported, or type/paste as a fallback, then a real AI
   summary plus a quiz built only from what the transcript actually covers),
-  a habit-tracker grid for your own recurring school habits
-  (fully custom rows, a 4-week checkbox grid with per-habit success rates
-  and a daily-completion trend chart), baseline "where do you stand"
+  a habit tracker for your own recurring school habits — a card per day with
+  the whole checklist on it and that day's own score at the bottom, a week of
+  cards side by side with arrows back through previous weeks, and the analysis
+  underneath: a 28-day daily-completion trend chart plus a success rate and a
+  current streak per habit (a day that hasn't happened yet has no score rather
+  than a zero one, and can't be ticked — in the browser or on the server), baseline "where do you stand"
   self-assessments for School/Gym/Football that feed the score engine
   until real activity data exists, an "AI Coach — before you dive in" banner
   at the top of the home page that picks the single most important thing to
@@ -111,9 +133,13 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   calories evenly across the week (with a regenerate option), training
   diaries with rule-based tips ("what went well / to
   improve") for both gym and football, football profile/training/matches
-  with a browsable Drill Library (all 16 skills, each with a coaching cue
-  and one real, verified example YouTube video — a starting point, never a
-  replacement for a coach) plus saved videos and diary, a league table you
+  with a browsable Drill Library (all 16 skills, each with a coaching cue,
+  up to 3 real, verified example YouTube videos, and room to save 3 of your
+  own per skill with a note — a starting point, never a replacement for a
+  coach). A skill the app has no verified video for says so and offers a
+  YouTube search for it rather than a guessed link: a made-up 11-character
+  video id isn't a broken link you can spot, it plays a different video.
+  Plus saved videos and diary, a league table you
   can either enter manually or sync by pasting your league's own table page
   URL (fetches the real page and has the connected AI read off the actual
   standings — never invented; falls back to manual entry if the page can't
@@ -252,10 +278,17 @@ link.
 
 ### After deploying, check one card
 
-Settings opens with **"Is everything set up right?"** — five rows that answer
+Settings opens with **"Is everything set up right?"** — six rows that answer
 it: where photos are written, whether the photo files are still on disk, where
-the database lives, whether the AI can answer, and how old the backup is. Each
-row names a state and, when something is wrong, the exact change to make.
+the database lives, which time zone dates are counted in, whether the AI can
+answer, and how old the backup is. Each row names a state and, when something
+is wrong, the exact change to make.
+
+The time-zone row is there because the table above can be read and not acted
+on. A container is UTC unless told otherwise, and every date in this app is
+worked out on the server — so without `TZ`, the habit card marked "Today" is
+the wrong day from midnight until your morning, and ticking it logs the wrong
+day. The row says so in those words, rather than printing a zone name.
 
 The photo row is the one worth reading twice. Database rows and image files can
 disagree — a deploy that rebuilds the app directory deletes the photos while

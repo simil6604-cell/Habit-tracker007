@@ -41,10 +41,11 @@ yarn-error.log*
 next-env.d.ts
 
 # database
-/prisma/dev.db
-/prisma/dev.db-journal
-/prisma/test.db
-/prisma/test.db-journal
+# Any local SQLite file — dev.db, test.db, and whatever throwaway database a
+# debugging session creates. A database is never repository content, and one
+# that slips in carries whatever data was in it at the time.
+/prisma/*.db
+/prisma/*.db-journal
 
 # playwright
 /test-results/

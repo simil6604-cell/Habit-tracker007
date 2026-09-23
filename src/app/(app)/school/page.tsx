@@ -71,9 +71,10 @@ export default async function SchoolPage() {
         subtitle="Timetable, subjects, homework and exams — all in one place."
         actions={
           <>
+            <Link href="/school/ai"><Button className="bg-white text-indigo-700 hover:opacity-90">🎓 School AI</Button></Link>
             <Link href="/school/habits"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Habit tracker</Button></Link>
             <Link href="/school/planner"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Study planner</Button></Link>
-            <Link href="/school/flashcards"><Button className="bg-white text-indigo-700 hover:opacity-90">Flashcards</Button></Link>
+            <Link href="/school/flashcards"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Flashcards</Button></Link>
           </>
         }
       />

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { parseHabitDate } from "./habit-tracker";
 
 async function requireUserId() {
   const session = await auth();
@@ -35,7 +36,8 @@ export async function toggleSchoolHabitLog(habitId: string, dateKey: string) {
   const habit = await prisma.schoolHabit.findFirst({ where: { id: habitId, userId } });
   if (!habit) return;
 
-  const date = new Date(`${dateKey}T00:00:00`);
+  const date = parseHabitDate(dateKey);
+  if (!date) return;
   const existing = await prisma.schoolHabitLog.findUnique({ where: { habitId_date: { habitId, date } } });
   if (existing) {
     await prisma.schoolHabitLog.delete({ where: { id: existing.id } });

@@ -18,6 +18,7 @@ import {
   backupCheck,
   databaseCheck,
   photoFilesCheck,
+  timezoneCheck,
   photoStorageCheck,
   summarize,
 } from "@/lib/config/setup-checks";
@@ -80,6 +81,9 @@ export default async function SettingsPage() {
     photoStorageCheck(UPLOAD_ROOT, isProduction),
     photoFilesCheck({ total: totalPhotos, missing: missingPhotos, checked: imagePaths.length }),
     databaseCheck(process.env.DATABASE_URL, isProduction),
+    // Resolved rather than read from TZ: the server may have been given a zone
+    // some other way, and what matters is the one dates are actually built in.
+    timezoneCheck(Intl.DateTimeFormat().resolvedOptions().timeZone),
     aiCheck(getAIHealth()),
     backupCheck(user.lastBackupAt),
   ];

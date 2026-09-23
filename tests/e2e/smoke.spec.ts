@@ -4,6 +4,7 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createTarGz } from "@/lib/export/tar";
+import { makeNoisyPng } from "./big-image";
 
 // The Web Speech API has no official TS DOM typings, so `tsc --noEmit` rejects
 // these reads even though every browser that supports voice exposes them.
@@ -260,6 +261,167 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.locator('input[value="Morning break"]')).toBeVisible();
   });
 
+  test("school: the habit tracker is a checklist per day, and each day scores itself", async () => {
+    await page.goto("/school/habits");
+    await expect(page.getByText("Add a habit above to start tracking.")).toBeVisible();
+
+    for (const [emoji, name] of [
+      ["📘", "Reviewed today's lessons"],
+      ["📖", "Read 20 minutes"],
+      ["🎒", "Packed the bag"],
+      ["✏️", "Did the homework"],
+    ] as const) {
+      await page.fill('input[name="emoji"]', emoji);
+      await page.fill('input[name="name"]', name);
+      await page.getByRole("button", { name: "Add habit" }).click();
+      await expect(page.getByTestId("habit-analysis").getByText(name)).toBeVisible();
+    }
+
+    // Seven cards, one per day of the week, each holding the whole checklist.
+    const cards = page.getByTestId("habit-day-cards").locator("> div");
+    await expect(cards).toHaveCount(7);
+
+    // Today's card is the one you actually tick, so it is marked and enabled.
+    // Matched on the exact badge, not hasText: "Today" is a substring of
+    // "Reviewed today's lessons", which sits in all seven cards.
+    const todayBadge = page.getByText("Today", { exact: true });
+    const today = page.locator('[data-testid^="habit-card-"]').filter({ has: todayBadge });
+    await expect(today).toHaveCount(1);
+
+    const todayKey = (await today.getAttribute("data-testid"))!.replace("habit-card-", "");
+    const pct = page.getByTestId(`habit-pct-${todayKey}`);
+    await expect(pct).toHaveText("0%");
+    await expect(today.getByText("0 of 4")).toBeVisible();
+
+    // Each tick is a real write, and the day's own score moves with it.
+    await today.getByRole("button", { name: /Reviewed today's lessons/ }).click();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("25%");
+    await today.getByRole("button", { name: /Read 20 minutes/ }).click();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("50%");
+
+    // It scores that day, not the week: the other days are untouched.
+    const otherScores = await page
+      .locator('[data-testid^="habit-pct-"]')
+      .evaluateAll((els) => els.map((e) => e.textContent));
+    expect(otherScores.filter((t) => t === "50%")).toHaveLength(1);
+
+    // Ticking again unticks — the checklist is not one-way.
+    await today.getByRole("button", { name: /Read 20 minutes/ }).click();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("25%");
+
+    // It really saved, rather than only looking ticked.
+    await page.reload();
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("25%");
+
+    // A day that hasn't happened can't be ticked — in the browser, and on the
+    // server, which is the half a disabled button doesn't cover.
+    const tomorrow = page.locator('[data-testid^="habit-card-"]').filter({ hasText: "Not yet" }).first();
+    await expect(tomorrow.getByRole("button", { name: /Read 20 minutes/ })).toBeDisabled();
+
+    // The analysis underneath: the chart, and a rate per habit.
+    await expect(page.getByText(/Daily completion — last 28 days/)).toBeVisible();
+    await expect(page.getByTestId("habit-analysis").locator("li")).toHaveCount(4);
+
+    // Last week's cards are all in the past, so none of them is "Today" and
+    // none is disabled as "Not yet".
+    await page.getByRole("link", { name: "Previous week" }).click();
+    await expect(page.getByText("Last week")).toBeVisible();
+    await expect(page.getByTestId("habit-day-cards").locator("> div")).toHaveCount(7);
+    await expect(page.getByText("Today", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Not yet")).toHaveCount(0);
+
+    // A week nobody meant to ask for doesn't break the page.
+    await page.goto("/school/habits?week=banana");
+    await expect(page.getByText("This week")).toBeVisible();
+    await page.goto("/school/habits?week=-9");
+    await expect(page.getByText("This week")).toBeVisible();
+
+    // And a habit can be removed, from the analysis list where it is named.
+    await page.goto("/school/habits");
+    await page.getByTitle('Delete "Packed the bag"').click();
+    await expect(page.getByTestId("habit-analysis").locator("li")).toHaveCount(3);
+    await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("33%");
+  });
+
+  test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
+    // A 1x1 PNG. The point is which files are accepted and where they end up,
+    // not what is in them.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64"
+    );
+
+    await page.goto("/school");
+    await page.click('a[href="/school/ai"]');
+    await page.waitForURL("**/school/ai");
+    await expect(page.getByRole("heading", { name: "School AI", exact: true })).toBeVisible();
+
+    const input = page.getByTestId("school-ai-photo-input");
+
+    // First, one photo the size a phone actually takes. Every upload in this
+    // app is a Server Action, and Next.js rejects a Server Action body over
+    // 1MB with a 413 — so the 1x1 PNGs everywhere else in this suite prove
+    // nothing about whether a real photograph can be sent at all.
+    await input.setInputFiles([{ name: "real-size.png", mimeType: "image/png", buffer: makeNoisyPng(900, 900) }]);
+    await expect(page.getByTestId("school-ai-staged").locator("img")).toHaveCount(1);
+    await page.getByTestId("school-ai-staged").locator("button").first().click();
+    await expect(page.getByTestId("school-ai-staged")).toHaveCount(0);
+
+    // Two pages of the same question go up together, and both come back as
+    // thumbnails before anything is sent — the whole reason upload and ask are
+    // two steps is being able to drop the blurry one.
+    await input.setInputFiles([
+      { name: "page1.png", mimeType: "image/png", buffer: png },
+      { name: "page2.png", mimeType: "image/png", buffer: png },
+      { name: "page3.png", mimeType: "image/png", buffer: png },
+    ]);
+    const staged = page.getByTestId("school-ai-staged");
+    await expect(staged.locator("img")).toHaveCount(3);
+
+    // Drop one, and it is gone from what will be sent.
+    await staged.locator("button").first().click();
+    await expect(staged.locator("img")).toHaveCount(2);
+
+    // An iPhone's default format uploads fine and the AI cannot read it, so it
+    // has to be refused out loud here rather than silently never looked at.
+    await input.setInputFiles([{ name: "photo.heic", mimeType: "image/heic", buffer: png }]);
+    await expect(page.getByText(/Most Compatible/)).toBeVisible();
+    await expect(staged.locator("img")).toHaveCount(2);
+
+    const question = `Mark my working on this ${Date.now()}`;
+    await page.fill('input[name="message"]', question);
+    // Scoped to the chat's own form: `form button[type="submit"]` also matches
+    // the sidebar's sign-out form, and clicking that ends the session instead
+    // of sending the question.
+    await page.locator('form:has(input[name="message"]) button[type="submit"]').click();
+
+    // The reply can only come from the server, so waiting for it is what marks
+    // the end of the round trip. Without a connected AI it says so plainly
+    // rather than inventing an answer.
+    await expect(page.getByText(/school AI needs a connected AI service/)).toBeVisible();
+
+    // Then reload, and assert against what actually persisted. The panel shows
+    // the question and its thumbnails optimistically the moment you press send,
+    // so asserting before a reload passes even when the server stored neither —
+    // which is exactly what happened the first time this test was written.
+    await page.reload();
+    await expect(page.getByText(question)).toBeVisible();
+    const thumbnails = page.getByAltText("Photo sent to your school AI");
+    await expect(thumbnails).toHaveCount(2);
+
+    // And the files behind them are really there, served by the app's own
+    // owner-checked route rather than showing as two broken images.
+    for (const src of await thumbnails.evaluateAll((imgs) => imgs.map((i) => i.getAttribute("src") ?? ""))) {
+      expect(src.startsWith("/uploads/"), src).toBe(true);
+      expect((await page.request.get(src)).status(), src).toBe(200);
+    }
+
+    // The point of this page: it is a different conversation from the
+    // all-domains coach, not a second window onto the same one.
+    await page.goto("/coach");
+    await expect(page.getByText(question)).toHaveCount(0);
+  });
+
   test("gym: create a workout plan", async () => {
     await page.goto("/gym");
     await page.fill('input[placeholder="e.g. Upper Body"]', "Leg Day");
@@ -362,6 +524,51 @@ test.describe.serial("full app walkthrough", () => {
     await page.click('button:has-text("Generate individual training")');
     await page.reload();
     await expect(page.getByText("🎯 Individual Training")).toBeVisible();
+  });
+
+  test("football: every skill has a cue, and the ones without a video say so and take yours", async () => {
+    await page.goto("/football");
+    const library = page.getByTestId("drill-library");
+    // Scoped to the library: the page also has "Save profile" and a "Save" per
+    // generated drill, and an unscoped button:has-text("Save") finds those too.
+    const save = library.locator('form:has(input[name="drillVideoUrl"]) button[type="submit"]');
+
+    // Skills the app can suggest a real video for show one and say how many.
+    await library.getByRole("button", { name: "Tackling", exact: true }).click();
+    await expect(page.getByTestId("drill-suggested").locator("iframe")).toHaveCount(1);
+
+    // Agility was in the skill list with neither a cue nor a video: selecting it
+    // printed "💡 undefined" and "No example video for this one yet."
+    await library.getByRole("button", { name: "Agility", exact: true }).click();
+    await expect(page.getByText(/undefined/)).toHaveCount(0);
+    await expect(page.getByText(/change direction on one step/)).toBeVisible();
+
+    // No suggestion, so it says why rather than pretending — and offers a search.
+    await expect(page.getByText(/never guesses a video link/)).toBeVisible();
+    const search = page.getByRole("link", { name: /Find more Agility drills/ });
+    await expect(search).toHaveAttribute("href", /^https:\/\/www\.youtube\.com\/results\?search_query=/);
+
+    // A link that can run code never becomes an href, even though it is yours.
+    await library.locator('input[name="drillVideoUrl"]').fill("javascript:alert(1)");
+    await save.click();
+    await expect(page.getByText(/Paste a full http\(s\) link/)).toBeVisible();
+
+    // A real one saves, embeds as a video, and survives a reload.
+    await library.locator('input[name="drillVideoUrl"]').fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await library.locator('input[name="drillVideoLabel"]').fill("Coach's ladder drill");
+    await save.click();
+    await expect(page.getByTestId("drill-saved").locator("iframe")).toHaveCount(1);
+
+    await page.reload();
+    await page.getByTestId("drill-library").getByRole("button", { name: "Agility", exact: true }).click();
+    const saved = page.getByTestId("drill-saved");
+    await expect(saved.locator("iframe")).toHaveCount(1);
+    await expect(saved.locator("iframe")).toHaveAttribute("src", "https://www.youtube.com/embed/dQw4w9WgXcQ");
+    await expect(saved.getByText("Coach's ladder drill")).toBeVisible();
+
+    // And it belongs to Agility alone, not to every skill.
+    await page.getByTestId("drill-library").getByRole("button", { name: "Heading", exact: true }).click();
+    await expect(page.getByTestId("drill-saved")).toHaveCount(0);
   });
 
   test("football: league table, race for 1st and opponent scouting", async () => {
@@ -566,12 +773,12 @@ test.describe.serial("full app walkthrough", () => {
   }: {
     browser: Browser;
   }) => {
-    // A real photo first, so the archive has something to carry. This is the
-    // smallest valid PNG — 1x1, transparent.
-    const png = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwACRgFxfyRfSwAAAABJRU5ErkJggg==",
-      "base64"
-    );
+    // A real photo first, so the archive has something to carry — and one over
+    // a megabyte, because the progress-photo form is a plain Server Action
+    // post and that is where the 1MB body limit used to reject it. A 1x1 PNG
+    // here proved the backup worked for a photo nobody could have uploaded.
+    const png = makeNoisyPng(700, 700);
+    expect(png.byteLength, "the test photo must exceed the old 1MB limit").toBeGreaterThan(1024 * 1024);
     await page.goto("/gym/history");
     await page.setInputFiles('input[name="photo"]', { name: "progress.png", mimeType: "image/png", buffer: png });
     await page.fill('input[name="caption"]', "Backup test photo");
@@ -608,6 +815,21 @@ test.describe.serial("full app walkthrough", () => {
     const data = JSON.parse(readFileSync(path.join(dir, root, "data.json"), "utf8"));
     expect(data.email).toBe(email);
     expect(data.subjects.length).toBeGreaterThan(0);
+
+    // The school-AI conversation and the drill videos are newer tables, and a
+    // table that isn't in the backup query is missing without any symptom
+    // until someone restores. Its photos live in a JSON column rather than an
+    // imagePath field, so they have to be collected by a separate rule — and
+    // the two files really are in the archive, not just named in the data.
+    const question = data.schoolAIMessages.find((m: { content: string }) => m.content.startsWith("Mark my working"));
+    expect(question, "the school AI conversation is in the backup").toBeTruthy();
+    const questionPhotos: string[] = JSON.parse(question.imagePaths);
+    expect(questionPhotos).toHaveLength(2);
+    const archivedPhotos = readdirSync(path.join(dir, root, "photos"));
+    for (const photo of questionPhotos) {
+      expect(archivedPhotos, photo).toContain(photo.split("/").pop());
+    }
+    expect(data.drillVideos.some((v: { skill: string }) => v.skill === "Agility")).toBe(true);
     // Credentials are not data, and a backup you might email yourself must not
     // carry them.
     expect(data.passwordHash).toBeUndefined();
@@ -731,6 +953,25 @@ test.describe.serial("full app walkthrough", () => {
     const src = await img.getAttribute("src");
     expect((await freshPage.request.get(src!)).status()).toBe(200);
 
+    // The school-AI question comes back with both its photos, under this
+    // account's own paths. Its photo paths live in a JSON column, so they need
+    // rewriting as a list — get that wrong and the question restores pointing
+    // at the exporting account's folder, where this one is refused and every
+    // picture renders broken.
+    await freshPage.goto("/school/ai");
+    await expect(freshPage.getByText(/Mark my working on this/)).toBeVisible();
+    const restoredPhotos = freshPage.getByAltText("Photo sent to your school AI");
+    await expect(restoredPhotos).toHaveCount(2);
+    for (const restoredSrc of await restoredPhotos.evaluateAll((imgs) => imgs.map((i) => i.getAttribute("src") ?? ""))) {
+      expect(restoredSrc, restoredSrc).toContain("/uploads/");
+      expect((await freshPage.request.get(restoredSrc)).status(), restoredSrc).toBe(200);
+    }
+
+    // And the drill video saved for Agility is back on the skill it belongs to.
+    await freshPage.goto("/football");
+    await freshPage.getByTestId("drill-library").getByRole("button", { name: "Agility", exact: true }).click();
+    await expect(freshPage.getByTestId("drill-saved").getByText("Coach's ladder drill")).toBeVisible();
+
     // Restoring the same file again replaces rather than piles up: this is the
     // "I wasn't sure it worked, let me do it again" case, and it must not end
     // with two of everything.
@@ -846,6 +1087,16 @@ test.describe.serial("full app walkthrough", () => {
 
     // A backup was downloaded earlier in this run, so this one is satisfied.
     await expect(page.getByTestId("check-backup")).toContainText(/Last backup/);
+
+    // The test server has no TZ set, like a fresh Render deployment, so this
+    // row says what a UTC clock does to every date in the app rather than
+    // reporting a zone name and leaving the reader to work it out.
+    const timezone = page.getByTestId("check-timezone");
+    await expect(timezone).toContainText(/UTC/);
+    await expect(timezone).toContainText(/Today/);
+    // The fix is its own line in the card, so it is asserted on the row, not
+    // on the detail paragraph.
+    await expect(timezone.locator("xpath=..")).toContainText(/TZ=Europe\/Zurich/);
 
     // The headline leads with the worst row, and says it in words.
     await expect(card).toContainText(/lose data|worth fixing|checks out/);

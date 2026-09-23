@@ -68,12 +68,14 @@ model User {
   recommendations    AIRecommendation[]
   progressEntries    Progress[]
   chatMessages       ChatMessage[]
+  schoolAIMessages   SchoolAIMessage[]
   assessments        Assessment[]
   schoolHabits       SchoolHabit[]
   learningLogEntries LearningLogEntry[]
   notePhotos         NotePhoto[]
   classRecordings    ClassRecording[]
   tutorMessages      TutorMessage[]
+  drillVideos        DrillVideo[]
 }
 
 model Account {
@@ -645,6 +647,44 @@ model Assessment {
   createdAt    DateTime @default(now())
 
   @@index([userId, category, createdAt])
+}
+
+/**
+ * The School-only AI conversation.
+ * Separate from ChatMessage, which is the coach that weighs school, gym and
+ * football against each other. This one only ever talks about school, at the
+ * student's own Cambridge level, and it is where photographed notes and past
+ * papers are sent — so it needs somewhere to keep them with the question they
+ * belong to.
+ */
+model DrillVideo {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The skill this is an example of, as named in FOOTBALL_SKILLS.
+  skill  String
+  // A link YOU paste. The app never invents one and never fetches the page —
+  // the same rule the saved exercise and revision links follow.
+  url    String
+  // Your own note: "the one my coach showed us", "warm-up version".
+  label     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, skill])
+}
+
+model SchoolAIMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       String // USER | ASSISTANT
+  content    String
+  // The /uploads paths of any photos sent with this message, as JSON. A
+  // question about three pages of a past paper is one message, not three.
+  imagePaths String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model ChatMessage {
