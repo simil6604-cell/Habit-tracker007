@@ -20,6 +20,17 @@ const EXCLUDED = new Set(["passwordHash", "accounts", "sessions"]);
 export type BackupSummary = { rows: number; photos: number; missingPhotos: number };
 
 /** Every stored image path in the export, in the order they appear. */
+/** The `/uploads/...` entries of a JSON-array column, or none if it isn't one. */
+function parseJsonPaths(stored: string): string[] {
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((p): p is string => typeof p === "string" && p.startsWith("/uploads/"));
+  } catch {
+    return [];
+  }
+}
+
 function collectPhotoPaths(data: Record<string, unknown>): string[] {
   const found: string[] = [];
   const walk = (value: unknown): void => {
@@ -30,7 +41,13 @@ function collectPhotoPaths(data: Record<string, unknown>): string[] {
     if (value && typeof value === "object") {
       for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
         if (key === "imagePath" && typeof child === "string" && child.startsWith("/uploads/")) found.push(child);
-        else walk(child);
+        // A school-AI question carries several photos at once, stored as a JSON
+        // array in one column. Walking only `imagePath` would leave every one
+        // of them out of the archive while the message that refers to them is
+        // in it — a backup that restores into broken images.
+        else if (key === "imagePaths" && typeof child === "string") {
+          for (const path of parseJsonPaths(child)) found.push(path);
+        } else walk(child);
       }
     }
   };
@@ -100,6 +117,8 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
       recommendations: true,
       progressEntries: true,
       chatMessages: true,
+      schoolAIMessages: true,
+      drillVideos: true,
       assessments: true,
       // These hang off topics as well, and are included there. Kept at the top
       // level too so an entry whose topic was deleted is still in the backup.

@@ -9,6 +9,7 @@ import { TrainingList } from "@/components/football/training-list";
 import { MatchList } from "@/components/football/match-list";
 import { GoalsPanel } from "@/components/shared/goals-panel";
 import { DrillLibraryPanel } from "@/components/football/drill-library-panel";
+import { getSavedDrillVideos } from "@/lib/football/drill-video-actions";
 import { Sparkles } from "lucide-react";
 import { DomainHero } from "@/components/layout/domain-hero";
 import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
@@ -39,13 +40,14 @@ export default async function FootballPage() {
 
   const now = new Date();
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(now), i));
-  const [footballTasks, weekItems] = await Promise.all([
+  const [footballTasks, weekItems, savedDrillVideos] = await Promise.all([
     prisma.task.findMany({
       where: { userId, category: "FOOTBALL" },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }],
       take: 20,
     }),
     getCalendarItems(userId, weekDays[0], addDays(weekDays[6], 1)),
+    getSavedDrillVideos(),
   ]);
   const footballWeekItems = weekItems.filter((i) => i.category === "FOOTBALL");
 
@@ -108,7 +110,7 @@ export default async function FootballPage() {
           <Card className="mt-4">
             <CardHeader><CardTitle>Drill Library</CardTitle></CardHeader>
             <CardContent>
-              <DrillLibraryPanel focusSkills={focusSkills} />
+              <DrillLibraryPanel focusSkills={focusSkills} savedVideos={savedDrillVideos} />
             </CardContent>
           </Card>
 

@@ -123,9 +123,13 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   calories evenly across the week (with a regenerate option), training
   diaries with rule-based tips ("what went well / to
   improve") for both gym and football, football profile/training/matches
-  with a browsable Drill Library (all 16 skills, each with a coaching cue
-  and one real, verified example YouTube video — a starting point, never a
-  replacement for a coach) plus saved videos and diary, a league table you
+  with a browsable Drill Library (all 16 skills, each with a coaching cue,
+  up to 3 real, verified example YouTube videos, and room to save 3 of your
+  own per skill with a note — a starting point, never a replacement for a
+  coach). A skill the app has no verified video for says so and offers a
+  YouTube search for it rather than a guessed link: a made-up 11-character
+  video id isn't a broken link you can spot, it plays a different video.
+  Plus saved videos and diary, a league table you
   can either enter manually or sync by pasting your league's own table page
   URL (fetches the real page and has the connected AI read off the actual
   standings — never invented; falls back to manual entry if the page can't

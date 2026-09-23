@@ -165,6 +165,16 @@ export function parseBackup(archive: Buffer): ParseResult {
   return { ok: true, backup: { data: record, photos, ignored } };
 }
 
+/** The string entries of a JSON-array column, or none if it isn't one. */
+function jsonPaths(stored: string): string[] {
+  try {
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 /** `/uploads/<whoever>/<file>` → the same file under the account restoring it. */
 function rewriteImagePath(imagePath: unknown, userId: string, photos: Map<string, Buffer>): string | null {
   if (typeof imagePath !== "string") return null;
@@ -214,6 +224,8 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   await tx.aIRecommendation.deleteMany({ where: { userId } });
   await tx.progress.deleteMany({ where: { userId } });
   await tx.chatMessage.deleteMany({ where: { userId } });
+  await tx.schoolAIMessage.deleteMany({ where: { userId } });
+  await tx.drillVideo.deleteMany({ where: { userId } });
   await tx.assessment.deleteMany({ where: { userId } });
 }
 
@@ -442,6 +454,7 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       ["recommendations", (row: Record<string, unknown>) => tx.aIRecommendation.create({ data: row as never })],
       ["progressEntries", (row: Record<string, unknown>) => tx.progress.create({ data: row as never })],
       ["chatMessages", (row: Record<string, unknown>) => tx.chatMessage.create({ data: row as never })],
+      ["drillVideos", (row: Record<string, unknown>) => tx.drillVideo.create({ data: row as never })],
       ["assessments", (row: Record<string, unknown>) => tx.assessment.create({ data: row as never })],
     ] as const) {
       for (const entry of rows(data[key])) {
@@ -449,6 +462,25 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
         if (!row) continue;
         await create(write, withNewId(row));
       }
+    }
+
+    // A school-AI question can carry a dozen photos in one JSON column, so its
+    // paths are rewritten as a list rather than one at a time. A photo the
+    // archive doesn't carry drops out and the question keeps the rest, the same
+    // rule every other photo row follows.
+    for (const message of rows(data.schoolAIMessages)) {
+      const row = scalars(message, owned);
+      if (!row) continue;
+      const kept =
+        typeof row.imagePaths === "string"
+          ? jsonPaths(row.imagePaths)
+              .map((path) => rewriteImagePath(path, userId, photos))
+              .filter((path): path is string => path !== null)
+          : [];
+      await create(
+        (r) => tx.schoolAIMessage.create({ data: r as never }),
+        withNewId({ ...row, imagePaths: kept.length > 0 ? JSON.stringify(kept) : null })
+      );
     }
 
     const football = data.footballProfile;

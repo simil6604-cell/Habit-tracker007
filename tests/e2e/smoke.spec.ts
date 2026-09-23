@@ -433,6 +433,51 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText("🎯 Individual Training")).toBeVisible();
   });
 
+  test("football: every skill has a cue, and the ones without a video say so and take yours", async () => {
+    await page.goto("/football");
+    const library = page.getByTestId("drill-library");
+    // Scoped to the library: the page also has "Save profile" and a "Save" per
+    // generated drill, and an unscoped button:has-text("Save") finds those too.
+    const save = library.locator('form:has(input[name="drillVideoUrl"]) button[type="submit"]');
+
+    // Skills the app can suggest a real video for show one and say how many.
+    await library.getByRole("button", { name: "Tackling", exact: true }).click();
+    await expect(page.getByTestId("drill-suggested").locator("iframe")).toHaveCount(1);
+
+    // Agility was in the skill list with neither a cue nor a video: selecting it
+    // printed "💡 undefined" and "No example video for this one yet."
+    await library.getByRole("button", { name: "Agility", exact: true }).click();
+    await expect(page.getByText(/undefined/)).toHaveCount(0);
+    await expect(page.getByText(/change direction on one step/)).toBeVisible();
+
+    // No suggestion, so it says why rather than pretending — and offers a search.
+    await expect(page.getByText(/never guesses a video link/)).toBeVisible();
+    const search = page.getByRole("link", { name: /Find more Agility drills/ });
+    await expect(search).toHaveAttribute("href", /^https:\/\/www\.youtube\.com\/results\?search_query=/);
+
+    // A link that can run code never becomes an href, even though it is yours.
+    await library.locator('input[name="drillVideoUrl"]').fill("javascript:alert(1)");
+    await save.click();
+    await expect(page.getByText(/Paste a full http\(s\) link/)).toBeVisible();
+
+    // A real one saves, embeds as a video, and survives a reload.
+    await library.locator('input[name="drillVideoUrl"]').fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await library.locator('input[name="drillVideoLabel"]').fill("Coach's ladder drill");
+    await save.click();
+    await expect(page.getByTestId("drill-saved").locator("iframe")).toHaveCount(1);
+
+    await page.reload();
+    await page.getByTestId("drill-library").getByRole("button", { name: "Agility", exact: true }).click();
+    const saved = page.getByTestId("drill-saved");
+    await expect(saved.locator("iframe")).toHaveCount(1);
+    await expect(saved.locator("iframe")).toHaveAttribute("src", "https://www.youtube.com/embed/dQw4w9WgXcQ");
+    await expect(saved.getByText("Coach's ladder drill")).toBeVisible();
+
+    // And it belongs to Agility alone, not to every skill.
+    await page.getByTestId("drill-library").getByRole("button", { name: "Heading", exact: true }).click();
+    await expect(page.getByTestId("drill-saved")).toHaveCount(0);
+  });
+
   test("football: league table, race for 1st and opponent scouting", async () => {
     await page.goto("/football");
     await expect(page.getByText("League table & race for 1st")).toBeVisible();
@@ -677,6 +722,21 @@ test.describe.serial("full app walkthrough", () => {
     const data = JSON.parse(readFileSync(path.join(dir, root, "data.json"), "utf8"));
     expect(data.email).toBe(email);
     expect(data.subjects.length).toBeGreaterThan(0);
+
+    // The school-AI conversation and the drill videos are newer tables, and a
+    // table that isn't in the backup query is missing without any symptom
+    // until someone restores. Its photos live in a JSON column rather than an
+    // imagePath field, so they have to be collected by a separate rule — and
+    // the two files really are in the archive, not just named in the data.
+    const question = data.schoolAIMessages.find((m: { content: string }) => m.content.startsWith("Mark my working"));
+    expect(question, "the school AI conversation is in the backup").toBeTruthy();
+    const questionPhotos: string[] = JSON.parse(question.imagePaths);
+    expect(questionPhotos).toHaveLength(2);
+    const archivedPhotos = readdirSync(path.join(dir, root, "photos"));
+    for (const photo of questionPhotos) {
+      expect(archivedPhotos, photo).toContain(photo.split("/").pop());
+    }
+    expect(data.drillVideos.some((v: { skill: string }) => v.skill === "Agility")).toBe(true);
     // Credentials are not data, and a backup you might email yourself must not
     // carry them.
     expect(data.passwordHash).toBeUndefined();
@@ -799,6 +859,25 @@ test.describe.serial("full app walkthrough", () => {
     await expect(img).toBeVisible();
     const src = await img.getAttribute("src");
     expect((await freshPage.request.get(src!)).status()).toBe(200);
+
+    // The school-AI question comes back with both its photos, under this
+    // account's own paths. Its photo paths live in a JSON column, so they need
+    // rewriting as a list — get that wrong and the question restores pointing
+    // at the exporting account's folder, where this one is refused and every
+    // picture renders broken.
+    await freshPage.goto("/school/ai");
+    await expect(freshPage.getByText(/Mark my working on this/)).toBeVisible();
+    const restoredPhotos = freshPage.getByAltText("Photo sent to your school AI");
+    await expect(restoredPhotos).toHaveCount(2);
+    for (const restoredSrc of await restoredPhotos.evaluateAll((imgs) => imgs.map((i) => i.getAttribute("src") ?? ""))) {
+      expect(restoredSrc, restoredSrc).toContain("/uploads/");
+      expect((await freshPage.request.get(restoredSrc)).status(), restoredSrc).toBe(200);
+    }
+
+    // And the drill video saved for Agility is back on the skill it belongs to.
+    await freshPage.goto("/football");
+    await freshPage.getByTestId("drill-library").getByRole("button", { name: "Agility", exact: true }).click();
+    await expect(freshPage.getByTestId("drill-saved").getByText("Coach's ladder drill")).toBeVisible();
 
     // Restoring the same file again replaces rather than piles up: this is the
     // "I wasn't sure it worked, let me do it again" case, and it must not end
