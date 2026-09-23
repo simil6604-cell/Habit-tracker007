@@ -17,6 +17,45 @@ function friendlyAnthropicError(err: unknown): string {
   return err instanceof Error ? err.message : "the AI service could not be reached";
 }
 
+export type ProviderImage = { base64: string; mediaType: ImageMediaType };
+
+export type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
+const MEDIA_TYPES: ImageMediaType[] = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+function asMediaType(value: unknown): ImageMediaType {
+  return MEDIA_TYPES.includes(value as ImageMediaType) ? (value as ImageMediaType) : "image/jpeg";
+}
+
+/**
+ * Both shapes a caller can attach pictures in: `imageBase64`/`imageMediaType`
+ * for a single one, or `images` for several.
+ *
+ * The single-image form came first and a dozen call sites still use it, so it
+ * keeps working exactly as before; asking a question about six photos of the
+ * same worksheet needs the plural one. Anything malformed is dropped rather
+ * than sent — a half-built image block is rejected by the API with an error
+ * that says nothing about which caller built it.
+ */
+export function collectImages(context: Record<string, unknown>): ProviderImage[] {
+  const images: ProviderImage[] = [];
+
+  if (typeof context.imageBase64 === "string" && context.imageBase64) {
+    images.push({ base64: context.imageBase64, mediaType: asMediaType(context.imageMediaType) });
+  }
+
+  if (Array.isArray(context.images)) {
+    for (const entry of context.images) {
+      if (!entry || typeof entry !== "object") continue;
+      const { base64, mediaType } = entry as { base64?: unknown; mediaType?: unknown };
+      if (typeof base64 !== "string" || !base64) continue;
+      images.push({ base64, mediaType: asMediaType(mediaType) });
+    }
+  }
+
+  return images;
+}
+
 export class AnthropicProvider implements AIProvider {
   name = "anthropic";
   private client: Anthropic;
@@ -30,18 +69,20 @@ export class AnthropicProvider implements AIProvider {
   async generate(prompt: string, context: Record<string, unknown> = {}): Promise<string> {
     const system = typeof context.system === "string" ? context.system : undefined;
     const maxTokens = typeof context.maxTokens === "number" ? context.maxTokens : 1024;
-    const imageBase64 = typeof context.imageBase64 === "string" ? context.imageBase64 : undefined;
-    const imageMediaType =
-      typeof context.imageMediaType === "string"
-        ? (context.imageMediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp")
-        : "image/jpeg";
+    const images = collectImages(context);
 
-    const content: Anthropic.MessageParam["content"] = imageBase64
-      ? [
-          { type: "image", source: { type: "base64", media_type: imageMediaType, data: imageBase64 } },
-          { type: "text", text: prompt },
-        ]
-      : prompt;
+    const content: Anthropic.MessageParam["content"] =
+      images.length > 0
+        ? [
+            ...images.map(
+              (image): Anthropic.ImageBlockParam => ({
+                type: "image",
+                source: { type: "base64", media_type: image.mediaType, data: image.base64 },
+              })
+            ),
+            { type: "text", text: prompt },
+          ]
+        : prompt;
 
     let message;
     try {

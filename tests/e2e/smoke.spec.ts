@@ -260,6 +260,75 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.locator('input[value="Morning break"]')).toBeVisible();
   });
 
+  test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
+    // A 1x1 PNG. The point is which files are accepted and where they end up,
+    // not what is in them.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64"
+    );
+
+    await page.goto("/school");
+    await page.click('a[href="/school/ai"]');
+    await page.waitForURL("**/school/ai");
+    await expect(page.getByRole("heading", { name: "School AI", exact: true })).toBeVisible();
+
+    // Two pages of the same question go up together, and both come back as
+    // thumbnails before anything is sent — the whole reason upload and ask are
+    // two steps is being able to drop the blurry one.
+    const input = page.getByTestId("school-ai-photo-input");
+    await input.setInputFiles([
+      { name: "page1.png", mimeType: "image/png", buffer: png },
+      { name: "page2.png", mimeType: "image/png", buffer: png },
+      { name: "page3.png", mimeType: "image/png", buffer: png },
+    ]);
+    const staged = page.getByTestId("school-ai-staged");
+    await expect(staged.locator("img")).toHaveCount(3);
+
+    // Drop one, and it is gone from what will be sent.
+    await staged.locator("button").first().click();
+    await expect(staged.locator("img")).toHaveCount(2);
+
+    // An iPhone's default format uploads fine and the AI cannot read it, so it
+    // has to be refused out loud here rather than silently never looked at.
+    await input.setInputFiles([{ name: "photo.heic", mimeType: "image/heic", buffer: png }]);
+    await expect(page.getByText(/Most Compatible/)).toBeVisible();
+    await expect(staged.locator("img")).toHaveCount(2);
+
+    const question = `Mark my working on this ${Date.now()}`;
+    await page.fill('input[name="message"]', question);
+    // Scoped to the chat's own form: `form button[type="submit"]` also matches
+    // the sidebar's sign-out form, and clicking that ends the session instead
+    // of sending the question.
+    await page.locator('form:has(input[name="message"]) button[type="submit"]').click();
+
+    // The reply can only come from the server, so waiting for it is what marks
+    // the end of the round trip. Without a connected AI it says so plainly
+    // rather than inventing an answer.
+    await expect(page.getByText(/school AI needs a connected AI service/)).toBeVisible();
+
+    // Then reload, and assert against what actually persisted. The panel shows
+    // the question and its thumbnails optimistically the moment you press send,
+    // so asserting before a reload passes even when the server stored neither —
+    // which is exactly what happened the first time this test was written.
+    await page.reload();
+    await expect(page.getByText(question)).toBeVisible();
+    const thumbnails = page.getByAltText("Photo sent to your school AI");
+    await expect(thumbnails).toHaveCount(2);
+
+    // And the files behind them are really there, served by the app's own
+    // owner-checked route rather than showing as two broken images.
+    for (const src of await thumbnails.evaluateAll((imgs) => imgs.map((i) => i.getAttribute("src") ?? ""))) {
+      expect(src.startsWith("/uploads/"), src).toBe(true);
+      expect((await page.request.get(src)).status(), src).toBe(200);
+    }
+
+    // The point of this page: it is a different conversation from the
+    // all-domains coach, not a second window onto the same one.
+    await page.goto("/coach");
+    await expect(page.getByText(question)).toHaveCount(0);
+  });
+
   test("gym: create a workout plan", async () => {
     await page.goto("/gym");
     await page.fill('input[placeholder="e.g. Upper Body"]', "Leg Day");

@@ -69,6 +69,18 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   subject's topics — click "🧠 Quiz" on any subject card), the
   study planner, a daily School checklist that suggests a concrete time
   (a free/Study period today, or after training) for anything not done yet,
+  a **dedicated School AI** on its own page (`/school/ai`) — a tutor that
+  does school and nothing else, pitched at Cambridge IGCSE and A Level from
+  the levels you set per subject, and briefed with your own subjects,
+  upcoming exams, weakest topics and the questions you marked as not
+  understood. Same one-to-one voice as the AI Coach (press Talk, speak, and
+  have answers read back), and it takes a whole stack of photos in one
+  question — up to 12 at a time, staged as thumbnails so you can drop the
+  blurry one before sending, so a three-page past-paper question or your own
+  handwritten working goes up as one thing and comes back marked. Kept
+  deliberately separate from the all-domains AI Coach: different
+  conversation, different prompt, no school question competing with training
+  load for attention,
   an AI Tutor per topic — a real persistent, multi-turn conversation (not
   one-shot Q&A) that remembers earlier turns, answers follow-ups in
   context, and draws a sanitized AI-generated SVG diagram inline when one
