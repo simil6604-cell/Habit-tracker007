@@ -265,6 +265,38 @@ test.describe.serial("full app walkthrough", () => {
     await page.goto("/school/habits");
     await expect(page.getByText("Add a habit above to start tracking.")).toBeVisible();
 
+    // The field has to take words nobody suggested. It used to carry a
+    // <datalist>, which on a phone drops the suggestion list straight over the
+    // input the moment you focus it — so writing your own habit looked
+    // impossible, and for a box whose whole point is "write whatever you want"
+    // looking impossible is the same as being impossible.
+    const ownWords = `Mein eigenes Ziel ${Date.now()}`;
+    await page.fill('input[name="name"]', ownWords);
+    await expect(page.locator('input[name="name"]')).toHaveValue(ownWords);
+    await expect(page.locator('input[name="name"][list]')).toHaveCount(0);
+    await page.getByRole("button", { name: "Add habit" }).click();
+    await expect(page.getByTestId("habit-analysis").getByText(ownWords)).toBeVisible();
+
+    // The suggestions are still there, as buttons under the field, and they
+    // fill the box rather than replacing what it can hold.
+    const suggestion = page.getByTestId("habit-suggestions").getByRole("button").first();
+    const suggestionText = (await suggestion.textContent())!.trim();
+    await suggestion.click();
+    await expect(page.locator('input[name="name"]')).toHaveValue(suggestionText);
+
+    // And a suggestion can be edited before it is added — it is a starting
+    // point, not a fixed choice.
+    await page.fill('input[name="name"]', `${suggestionText} (angepasst)`);
+    await page.getByRole("button", { name: "Add habit" }).click();
+    await expect(page.getByTestId("habit-analysis").getByText(`${suggestionText} (angepasst)`)).toBeVisible();
+
+    // Cleared again, so the day percentages below are arithmetic over exactly
+    // the four habits this test adds next and not over these two as well.
+    for (const name of [ownWords, `${suggestionText} (angepasst)`]) {
+      await page.getByTitle(`Delete "${name}"`).click();
+      await expect(page.getByTestId("habit-analysis").getByText(name)).toHaveCount(0);
+    }
+
     for (const [emoji, name] of [
       ["📘", "Reviewed today's lessons"],
       ["📖", "Read 20 minutes"],
