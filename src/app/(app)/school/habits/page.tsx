@@ -2,10 +2,9 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { auth } from "@/lib/auth/auth";
 import { MAX_WEEKS_BACK, TREND_DAYS, getHabitTrackerData, parseWeekOffset } from "@/lib/school/habit-tracker";
-import { createSchoolHabit } from "@/lib/school/habit-actions";
-import { HABIT_SUGGESTIONS } from "@/lib/data/school-habits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AddHabitForm } from "@/components/school/add-habit-form";
 import { HabitDayCards } from "@/components/school/habit-day-cards";
 import { HabitAnalysis } from "@/components/school/habit-analysis";
 import { HabitTrendChart } from "@/components/charts/habit-trend-chart";
@@ -45,32 +44,7 @@ export default async function SchoolHabitsPage({
           <CardTitle>Add a habit</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={createSchoolHabit} className="flex flex-wrap gap-2">
-            <input
-              name="emoji"
-              placeholder="📘"
-              maxLength={4}
-              className="w-16 rounded-lg border border-border bg-surface px-3 py-2 text-center text-sm"
-            />
-            <input
-              name="name"
-              required
-              list="habit-suggestions"
-              placeholder="e.g. Reviewed today's lessons"
-              className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-            />
-            <datalist id="habit-suggestions">
-              {HABIT_SUGGESTIONS.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-            <Button type="submit" size="sm" variant="secondary">
-              Add habit
-            </Button>
-          </form>
-          <p className="mt-2 text-xs text-muted">
-            Fully your own — pick anything worth tracking daily for school. Nothing here is preset or graded for you.
-          </p>
+          <AddHabitForm />
         </CardContent>
       </Card>
 
