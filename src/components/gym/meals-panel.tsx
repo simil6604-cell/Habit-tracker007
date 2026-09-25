@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { createMeal, deleteMeal } from "@/lib/nutrition/actions";
+import { createMeal, deleteMeal, type MealFormState } from "@/lib/nutrition/actions";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
@@ -53,6 +53,9 @@ function MealTypeRow({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  // A photo that can't be saved has to say so — silently logging the meal
+  // without it is how "I can't add a photo" turns into a mystery.
+  const [mealState, mealAction] = useActionState<MealFormState, FormData>(createMeal, undefined);
   // The parent only learns the time of day after mount, so defaultOpen arrives
   // one render late — useState alone would keep the initial false forever.
   useEffect(() => {
@@ -134,7 +137,7 @@ function MealTypeRow({
               <option key={f.name} value={f.name} />
             ))}
           </datalist>
-          <form action={createMeal} className="flex flex-wrap gap-2">
+          <form action={mealAction} className="flex flex-wrap gap-2">
             <input type="hidden" name="type" value={breakdown.type} />
             <input
               ref={descriptionRef}
@@ -168,6 +171,12 @@ function MealTypeRow({
             </Button>
             <Button type="submit" size="sm" variant="secondary">Log</Button>
           </form>
+
+          {mealState?.error && (
+            <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger" data-testid="meal-error">
+              {mealState.error}
+            </p>
+          )}
 
           {estimateNote && (
             <p className={`text-xs ${estimateError ? "text-danger" : "text-muted"}`}>{estimateNote}</p>

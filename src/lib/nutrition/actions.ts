@@ -11,17 +11,36 @@ async function requireUserId() {
   return session.user.id;
 }
 
-export async function createMeal(formData: FormData) {
+export type MealFormState = { error?: string } | undefined;
+
+/**
+ * Logs a meal, and says so when the photo didn't make it.
+ *
+ * The photo used to be able to fail the whole action — an unsupported format
+ * or an oversized file threw, and what the student saw was a form that did
+ * nothing at all. The meal is the point and the photo is a note attached to
+ * it, so a photo that can't be saved loses the photo, not the meal, and the
+ * reason is handed back rather than swallowed.
+ */
+export async function createMeal(_prevState: MealFormState, formData: FormData): Promise<MealFormState> {
   const userId = await requireUserId();
   const description = String(formData.get("description") ?? "").trim();
-  if (!description) return;
+  if (!description) return { error: "Write what you ate first." };
 
   const kcalRaw = formData.get("kcal");
   const proteinRaw = formData.get("proteinG");
   const carbsRaw = formData.get("carbsG");
   const fatRaw = formData.get("fatG");
   const photo = formData.get("photo") as File | null;
-  const imagePath = photo && photo.size > 0 ? await saveUploadedImage(photo, userId) : null;
+  let imagePath: string | null = null;
+  let photoError: string | undefined;
+  if (photo && photo.size > 0) {
+    try {
+      imagePath = await saveUploadedImage(photo, userId);
+    } catch (err) {
+      photoError = err instanceof Error ? err.message : "That photo couldn't be saved.";
+    }
+  }
 
   await prisma.meal.create({
     data: {
@@ -37,6 +56,7 @@ export async function createMeal(formData: FormData) {
     },
   });
   revalidatePath("/gym");
+  return photoError ? { error: `Meal logged, but the photo wasn't saved: ${photoError}` } : undefined;
 }
 
 export async function deleteMeal(mealId: string) {
