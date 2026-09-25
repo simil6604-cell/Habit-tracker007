@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createTarGz } from "@/lib/export/tar";
 import { makeNoisyPng } from "./big-image";
+import { ean13Png } from "./ean13-png";
 
 // The Web Speech API has no official TS DOM typings, so `tsc --noEmit` rejects
 // these reads even though every browser that supports voice exposes them.
@@ -571,6 +572,35 @@ test.describe.serial("full app walkthrough", () => {
     await page.waitForURL(`**${target}`);
     const after = await weekOf(page.locator("div.rounded-2xl").filter({ hasText: "Day total" }));
     expect(after).not.toBe(before);
+  });
+
+  test("gym: a barcode can be read from a photo, not only from a live camera", async () => {
+    await page.goto("/gym/scanner");
+
+    // Live scanning needs the camera to hold focus on a small striped
+    // rectangle, which on a phone often simply never happens — and a camera
+    // that shows a picture but never reads anything looks broken. So there is
+    // a second way in, and it has to actually decode a real barcode.
+    await expect(page.getByRole("button", { name: /Take a photo/ })).toBeVisible();
+
+    const barcode = "4006381333931";
+    await page.getByTestId("barcode-photo-input").setInputFiles({
+      name: "barcode.png",
+      mimeType: "image/png",
+      buffer: ean13Png(barcode),
+    });
+
+    // Reading the photo fills the barcode box and submits the lookup.
+    await expect(page.locator('input[name="barcode"]')).toHaveValue(barcode, { timeout: 20000 });
+
+    // A photo with no barcode in it says what to do differently rather than
+    // failing silently.
+    await page.getByTestId("barcode-photo-input").setInputFiles({
+      name: "not-a-barcode.png",
+      mimeType: "image/png",
+      buffer: makeNoisyPng(120, 120),
+    });
+    await expect(page.getByText(/No barcode found in that photo/)).toBeVisible({ timeout: 20000 });
   });
 
   test("football: save profile and generate training", async () => {
