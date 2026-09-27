@@ -20,11 +20,13 @@ import {
   photoFilesCheck,
   timezoneCheck,
   photoStorageCheck,
+  signupCheck,
   summarize,
 } from "@/lib/config/setup-checks";
 import { getAIHealth } from "@/lib/ai/health";
 import { UPLOAD_ROOT, uploadedImageExists } from "@/lib/uploads/save-image";
 import { SetupChecksCard } from "@/components/settings/setup-checks-card";
+import { getSignupState } from "@/lib/auth/signup-state";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SettingsPage() {
@@ -77,7 +79,9 @@ export default async function SettingsPage() {
   const missingPhotos = present.filter((exists) => !exists).length;
 
   const isProduction = process.env.NODE_ENV === "production";
+  const signup = await getSignupState();
   const checks = [
+    signupCheck(signup),
     photoStorageCheck(UPLOAD_ROOT, isProduction),
     photoFilesCheck({ total: totalPhotos, missing: missingPhotos, checked: imagePaths.length }),
     databaseCheck(process.env.DATABASE_URL, isProduction),

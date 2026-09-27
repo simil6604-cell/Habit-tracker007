@@ -1,6 +1,7 @@
 import path from "node:path";
 import { backupStatus } from "@/lib/export/backup-status";
 import type { AIHealth } from "@/lib/ai/health";
+import type { SignupState } from "@/lib/auth/invite";
 
 /**
  * One place that answers "is this set up properly?", in the terms the person
@@ -246,6 +247,65 @@ export function timezoneCheck(timeZone: string | undefined, now: Date = new Date
     label: "Time zone",
     status: "ok",
     detail: `Dates are worked out in ${zone} (${offset}), so “today” here means the same day it does where you are.`,
+  };
+}
+
+/**
+ * Who can create an account here.
+ *
+ * This belongs in the same list as the persistence checks because it has the
+ * same shape: something that is fine on a laptop and quietly expensive once the
+ * app is on the internet. Every account that exists uses the owner's Anthropic
+ * key, so an open /register is their bill and their rate limit, handed to
+ * whoever finds the link.
+ *
+ * Nothing here prints the code. Anyone signed in can open Settings, including
+ * the people who were invited — showing them the code would make every guest
+ * able to invite the next one, without limit and without the owner knowing.
+ * They set the code themselves, so they already have it.
+ */
+export function signupCheck(state: SignupState): SetupCheck {
+  const label = "Who can register";
+
+  if (state.kind === "invite-only") {
+    return {
+      id: "signup",
+      label,
+      status: "ok",
+      detail:
+        "New accounts need the invite code you set. Share it with the people you want in, and change INVITE_CODE to lock everyone else out again.",
+    };
+  }
+
+  if (state.kind === "closed-no-code") {
+    return {
+      id: "signup",
+      label,
+      status: "ok",
+      detail:
+        "Nobody can register. No invite code is set on this deployment, so the signup page is closed rather than open to anyone who finds it.",
+      fix: "To let someone in, set INVITE_CODE where your app's environment variables are kept and give them that code.",
+    };
+  }
+
+  if (state.kind === "open-first-account") {
+    return {
+      id: "signup",
+      label,
+      status: "warn",
+      detail:
+        "Registration is open to anyone with the link, because no invite code is set and there is no account yet. The first person to reach the page gets it.",
+      fix: "Set INVITE_CODE now, before anyone else finds the address.",
+    };
+  }
+
+  return {
+    id: "signup",
+    label,
+    status: "warn",
+    detail:
+      "Registration is open to anyone with the link. This is a development build, where that is normally what you want — but every account created uses your AI key.",
+    fix: "Set INVITE_CODE to close it, here and on your deployment.",
   };
 }
 

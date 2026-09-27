@@ -5,6 +5,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { signIn, signOut } from "./auth";
 import { prisma } from "@/lib/db/prisma";
+import { checkInvite } from "./invite";
+import { getSignupState } from "./signup-state";
 
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" });
@@ -44,6 +46,14 @@ export async function registerAction(_prevState: FormState, formData: FormData):
   }
 
   const { name, email, password } = parsed.data;
+
+  // Before anything is written, and before the email is even looked up: a
+  // closed door that still tells you whether an address is taken is a closed
+  // door with a window in it.
+  const invite = checkInvite(String(formData.get("invite") ?? ""), await getSignupState(), process.env.INVITE_CODE);
+  if (!invite.ok) {
+    return { error: invite.error };
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {

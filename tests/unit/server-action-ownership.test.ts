@@ -20,6 +20,13 @@ import path from "node:path";
 /** Actions that run before anyone is signed in, so there is no user to check. */
 const PRE_AUTH: Record<string, string> = {
   registerAction: "creates the account — by definition there is no session yet",
+  // Not a server action at all: signup-state.ts has no "use server", and is
+  // caught by this scan only because that string appears in its own comment
+  // explaining why it doesn't. Left listed rather than reworded around — it is
+  // a pre-auth database read either way, and a named exception is a better
+  // record of that decision than a file quietly outside the scan.
+  getSignupState:
+    "runs on the public /login and /register pages, reads only how many accounts exist so a fresh deployment's first account can be created, and returns no personal data",
 };
 
 /** Actions whose ownership check the scan cannot see, each verified by hand. */
