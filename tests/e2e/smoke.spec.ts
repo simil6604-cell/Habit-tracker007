@@ -84,6 +84,42 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByRole("cell", { name: /Periodic Table/ })).toBeVisible();
   });
 
+  test("school: the page opens with today, not with a banner", async () => {
+    await page.goto("/school");
+    const hero = page.getByTestId("school-hero");
+    await expect(hero).toBeVisible();
+
+    // What it replaced said "Timetable, subjects, homework and exams — all in
+    // one place" every day of the year, which is another way of saying it told
+    // you nothing about your day.
+    await expect(page.getByText("Timetable, subjects, homework and exams")).toHaveCount(0);
+
+    // The ring is a meter with the number labelled inside it, so the value is
+    // readable without telling the fill from the track.
+    await expect(hero.locator("svg circle")).not.toHaveCount(0);
+
+    // Seven days, one mark each, and today is the last of them.
+    await expect(page.getByTestId("school-week").locator("> div")).toHaveCount(7);
+
+    // Every shortcut goes somewhere that exists. Scoped to the shortcut row:
+    // the main button is also a link to the School AI, worded differently.
+    const shortcuts = page.getByTestId("school-shortcuts");
+    for (const [label, href] of [
+      ["School AI", "/school/ai"],
+      ["Habit tracker", "/school/habits"],
+      ["Study planner", "/school/planner"],
+      ["Flashcards", "/school/flashcards"],
+      ["Timetable", "/school/timetable"],
+    ] as const) {
+      await expect(shortcuts.getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
+    }
+
+    // The headline is about this account, and the subject count is real: the
+    // test added Chemistry a moment ago.
+    await expect(hero).toContainText(/subject/);
+    await expect(hero.getByRole("heading")).not.toBeEmpty();
+  });
+
   test("school: a revision link is saved and stays a link, not content", async () => {
     await page.goto("/school");
     await page.getByRole("link", { name: /Chemistry/ }).click();

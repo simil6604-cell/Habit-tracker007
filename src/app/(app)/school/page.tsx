@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TimetableDiagram } from "@/components/school/timetable-diagram";
 import { SubjectCard } from "@/components/school/subject-card";
+import { SchoolHero } from "@/components/school/school-hero";
+import { getSchoolHeroData } from "@/lib/school/hero";
 import { HomeworkPanel, ExamPanel } from "@/components/school/homework-exam-lists";
 import { DailyChecklist } from "@/components/school/daily-checklist";
 import { getTodaySchoolChecklist } from "@/lib/planner/day-review";
-import { DomainHero } from "@/components/layout/domain-hero";
 import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
 import { NotesOverviewPanel } from "@/components/school/notes-overview-panel";
 import { getSchoolNotesOverview } from "@/lib/school/notes-overview";
@@ -32,6 +33,8 @@ export default async function SchoolPage() {
     prisma.exam.findMany({ where: { userId, date: { gte: now, lte: in14 } }, include: { subject: true }, orderBy: { date: "asc" } }),
     getTodaySchoolChecklist(userId),
   ]);
+
+  const heroData = await getSchoolHeroData(userId, checklist, now);
 
   const [schoolTasks, notes] = await Promise.all([
     prisma.task.findMany({
@@ -64,20 +67,7 @@ export default async function SchoolPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <DomainHero
-        domain="school"
-        emoji="🎓"
-        title="School"
-        subtitle="Timetable, subjects, homework and exams — all in one place."
-        actions={
-          <>
-            <Link href="/school/ai"><Button className="bg-white text-indigo-700 hover:opacity-90">🎓 School AI</Button></Link>
-            <Link href="/school/habits"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Habit tracker</Button></Link>
-            <Link href="/school/planner"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Study planner</Button></Link>
-            <Link href="/school/flashcards"><Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20">Flashcards</Button></Link>
-          </>
-        }
-      />
+      <SchoolHero data={heroData} />
 
       <Card className="mt-6">
         <CardHeader>
