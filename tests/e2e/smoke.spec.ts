@@ -6,6 +6,7 @@ import path from "node:path";
 import { createTarGz } from "@/lib/export/tar";
 import { makeNoisyPng } from "./big-image";
 import { ean13Png } from "./ean13-png";
+import { E2E_INVITE_CODE } from "./invite-code";
 
 // The Web Speech API has no official TS DOM typings, so `tsc --noEmit` rejects
 // these reads even though every browser that supports voice exposes them.
@@ -53,6 +54,7 @@ test.describe.serial("full app walkthrough", () => {
     await page.fill('input[name="name"]', "E2E Test");
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', password);
+    await page.fill('input[name="invite"]', E2E_INVITE_CODE);
     await page.click('button[type="submit"]');
     await page.waitForURL("**/onboarding");
 
@@ -71,6 +73,49 @@ test.describe.serial("full app walkthrough", () => {
 
     await page.waitForURL("/");
     await expect(page.getByText("What do you want to optimize today?")).toBeVisible();
+  });
+
+  test("register: the wrong invite code creates nothing at all", async ({ browser }: { browser: Browser }) => {
+    // This app's AI runs on one person's API key, so every account that exists
+    // spends their credit. /register used to be open to whoever had the link.
+    const context = await browser.newContext();
+    const stranger = await context.newPage();
+    const strangerEmail = `e2e_stranger_${Date.now()}@example.com`;
+
+    await stranger.goto("/register");
+    // The field is on the page at all, which is the whole feature: without it
+    // the server would be checking a code the form never asks for.
+    await expect(stranger.locator('input[name="invite"]')).toBeVisible();
+
+    await stranger.fill('input[name="name"]', "Stranger");
+    await stranger.fill('input[name="email"]', strangerEmail);
+    await stranger.fill('input[name="password"]', password);
+    await stranger.fill('input[name="invite"]', "definitely-not-the-code");
+    await stranger.getByRole("button", { name: /create account/i }).click();
+
+    await expect(stranger.getByText(/invite code is not right/i)).toBeVisible();
+    expect(new URL(stranger.url()).pathname).toBe("/register");
+
+    // Refused is not the same as not created. The only way to know no row was
+    // written is to try to use it — an account that exists would sign in here,
+    // and this assertion is what a check placed after prisma.user.create would
+    // fail on while still showing the same error message.
+    await stranger.goto("/login");
+    await stranger.fill('input[name="email"]', strangerEmail);
+    await stranger.fill('input[name="password"]', password);
+    await stranger.getByRole("button", { name: /sign in/i }).click();
+    await expect(stranger.getByText(/invalid email or password/i)).toBeVisible();
+
+    // And the right code still works, so the door is a door and not a wall.
+    await stranger.goto("/register");
+    await stranger.fill('input[name="name"]', "Invited");
+    await stranger.fill('input[name="email"]', `e2e_invited_${Date.now()}@example.com`);
+    await stranger.fill('input[name="password"]', password);
+    await stranger.fill('input[name="invite"]', E2E_INVITE_CODE);
+    await stranger.getByRole("button", { name: /create account/i }).click();
+    await stranger.waitForURL("**/onboarding");
+
+    await context.close();
   });
 
   test("home shows all three domain cards", async () => {
@@ -1056,6 +1101,7 @@ test.describe.serial("full app walkthrough", () => {
     await otherPage.fill('input[name="name"]', "Other Person");
     await otherPage.fill('input[name="email"]', otherEmail);
     await otherPage.fill('input[name="password"]', password);
+    await otherPage.fill('input[name="invite"]', E2E_INVITE_CODE);
     await otherPage.getByRole("button", { name: /create account/i }).click();
     await otherPage.waitForURL(/\/onboarding|\/$/);
 
@@ -1100,6 +1146,7 @@ test.describe.serial("full app walkthrough", () => {
     await freshPage.fill('input[name="name"]', "Fresh Install");
     await freshPage.fill('input[name="email"]', freshEmail);
     await freshPage.fill('input[name="password"]', password);
+    await freshPage.fill('input[name="invite"]', E2E_INVITE_CODE);
     await freshPage.getByRole("button", { name: /create account/i }).click();
     await freshPage.waitForURL("**/onboarding");
 
@@ -1279,6 +1326,13 @@ test.describe.serial("full app walkthrough", () => {
     await page.goto("/settings");
     const card = page.getByTestId("setup-checks");
     await expect(card).toBeVisible();
+
+    // This server runs with an invite code set, so the row says the door is
+    // shut — and it must not print the code, because every invited guest can
+    // open this page and would otherwise be able to invite the next one.
+    const signup = page.getByTestId("check-signup");
+    await expect(signup).toContainText(/invite code/i);
+    await expect(signup.locator("xpath=..")).not.toContainText(E2E_INVITE_CODE);
 
     // The suite runs a production build with UPLOAD_DIR outside the repo and
     // the test database inside it — one safe path and one unsafe one, on

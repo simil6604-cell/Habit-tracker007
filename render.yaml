@@ -53,6 +53,14 @@ services:
       - key: TZ
         value: Europe/Zurich
 
+      # The word someone has to type to create an account. Every account that
+      # exists spends the key above, so without this the signup page is a bill
+      # anyone with the link can add to. Set it and nothing here is guessable;
+      # leave it unset and the app closes registration entirely rather than
+      # standing open — but then nobody new can be let in either.
+      - key: INVITE_CODE
+        sync: false
+
       # Prompted for in the dashboard, never stored in the repo.
       - key: ANTHROPIC_API_KEY
         sync: false

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { rmSync } from "node:fs";
+import { E2E_INVITE_CODE } from "./invite-code";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,6 +17,7 @@ test("the setup card notices a photo whose file has been deleted", async ({ page
   await page.fill('input[name="name"]', "Missing Photo");
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
+  await page.fill('input[name="invite"]', E2E_INVITE_CODE);
   await page.getByRole("button", { name: /create account/i }).click();
   await page.waitForURL("**/onboarding");
   await page.click('button:has-text("Continue")');

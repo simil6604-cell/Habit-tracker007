@@ -267,6 +267,7 @@ there, because the app directory itself is rebuilt from git every time.
 |---|---|---|
 | `DATABASE_URL` | `file:/var/data/prod.db` | SQLite on the persistent disk. Anywhere else and every account, note and log is wiped on each deploy. |
 | `UPLOAD_DIR` | `/var/data/uploads` | Note photos, meal photos and progress photos. Without this they are written into the app directory, and each deploy deletes them while the database rows still point at them — the photos turn into broken images with no error. |
+| `INVITE_CODE` | a word you choose | The code someone must type to create an account. Every account that exists spends your `ANTHROPIC_API_KEY`, so without this your signup page is a bill anyone with the link can add to. Leave it unset and the app closes registration entirely rather than standing open — safe, but nobody new can be let in either. Change it to lock out everyone you have already given the old one to. |
 | `ANTHROPIC_API_KEY` | your key | Enables the real AI. Without it the app falls back to its own rule-based logic and says so rather than inventing answers. Settings → **Test AI connection** reports what is actually wrong if it isn't working. |
 | `AUTH_SECRET` | a long random string | Signs session cookies. |
 | `NEXTAUTH_URL` / `AUTH_URL` | your app's URL | Auth redirects are built from this. |
@@ -278,11 +279,16 @@ link.
 
 ### After deploying, check one card
 
-Settings opens with **"Is everything set up right?"** — six rows that answer
-it: where photos are written, whether the photo files are still on disk, where
-the database lives, which time zone dates are counted in, whether the AI can
-answer, and how old the backup is. Each row names a state and, when something
-is wrong, the exact change to make.
+Settings opens with **"Is everything set up right?"** — seven rows that answer
+it: who can register, where photos are written, whether the photo files are
+still on disk, where the database lives, which time zone dates are counted in,
+whether the AI can answer, and how old the backup is. Each row names a state
+and, when something is wrong, the exact change to make.
+
+The "who can register" row never prints the invite code. Anyone signed in can
+open Settings, invited guests included, and showing it to them would make every
+guest able to invite the next one without limit — the code is yours, you set it,
+and the row only reports which of the three states the door is in.
 
 The time-zone row is there because the table above can be read and not acted
 on. A container is UTC unless told otherwise, and every date in this app is
