@@ -77,6 +77,7 @@ model User {
   tutorMessages      TutorMessage[]
   drillVideos        DrillVideo[]
   schoolAIUploads    SchoolAIUpload[]
+  examPlans          ExamPlan[]
 }
 
 model Account {
@@ -686,6 +687,67 @@ model DrillVideo {
  * Rows live for hours, not for keeps: sending the question clears them, and a
  * sweep removes whatever was abandoned.
  */
+/**
+ * A run-up to one exam: every day from today to the paper, and a daily record
+ * of how ready it feels.
+ *
+ * The study planner already existed and answered a different question — what
+ * should I do in the next three days — recomputed each time and never stored.
+ * This one is a commitment you can tick off, and it keeps the readings, which
+ * is the only way "am I actually getting better at this" has an answer.
+ */
+model ExamPlan {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The exam row this was built for, when it came from one. Kept nullable so a
+  // plan survives its exam being deleted rather than vanishing with it.
+  examId     String?
+  subjectId  String?
+  title      String
+  examDate   DateTime
+  // What the student said they were up against, so the plan can say why it
+  // looks the way it does.
+  brief      String?
+  createdAt  DateTime  @default(now())
+  archivedAt DateTime?
+
+  days     ExamPlanDay[]
+  checkIns ExamPlanCheckIn[]
+
+  @@index([userId, examDate])
+}
+
+model ExamPlanDay {
+  id      String   @id @default(cuid())
+  planId  String
+  plan    ExamPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  date    DateTime
+  focus   String
+  detail  String?
+  minutes Int      @default(45)
+  done    Boolean  @default(false)
+
+  @@unique([planId, date])
+  @@index([planId, date])
+}
+
+/** One reading of how ready this exam feels, on one day. */
+model ExamPlanCheckIn {
+  id        String   @id @default(cuid())
+  planId    String
+  plan      ExamPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  date      DateTime
+  // 1-5. Deliberately coarse: a number you can give honestly in two seconds
+  // beats a percentage you have to invent.
+  readiness Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([planId, date])
+  @@index([planId, date])
+}
+
 model SchoolAIUpload {
   id        String   @id @default(cuid())
   userId    String

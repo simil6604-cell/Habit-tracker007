@@ -224,6 +224,7 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   await tx.aIRecommendation.deleteMany({ where: { userId } });
   await tx.progress.deleteMany({ where: { userId } });
   await tx.chatMessage.deleteMany({ where: { userId } });
+  await tx.examPlan.deleteMany({ where: { userId } });
   await tx.schoolAIMessage.deleteMany({ where: { userId } });
   // SchoolAIUpload is deliberately NOT wiped. A restore never deletes photo
   // files, so wiping the rows would strand their files on disk with nothing
@@ -486,6 +487,27 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
         (r) => tx.schoolAIMessage.create({ data: r as never }),
         withNewId({ ...row, imagePaths: kept.length > 0 ? JSON.stringify(kept) : null })
       );
+    }
+
+    // An exam plan is only a plan with its days and its readings, so the
+    // children are written with it rather than by name further down.
+    for (const entry of rows(data.examPlans)) {
+      const row = scalars(entry, owned);
+      if (!row) continue;
+      // withNewId writes the fresh id straight back onto the row, so the
+      // children can be pointed at it without going through the id map.
+      await create((r) => tx.examPlan.create({ data: r as never }), withNewId(row));
+      const planId = row.id as string;
+      for (const day of rows((entry as Record<string, unknown>).days)) {
+        const dayRow = scalars(day, { planId });
+        if (!dayRow) continue;
+        await create((r) => tx.examPlanDay.create({ data: r as never }), withNewId(dayRow));
+      }
+      for (const checkIn of rows((entry as Record<string, unknown>).checkIns)) {
+        const checkRow = scalars(checkIn, { planId });
+        if (!checkRow) continue;
+        await create((r) => tx.examPlanCheckIn.create({ data: r as never }), withNewId(checkRow));
+      }
     }
 
     const football = data.footballProfile;

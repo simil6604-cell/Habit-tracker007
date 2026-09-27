@@ -26,6 +26,16 @@ declare global {
  */
 
 test.describe.serial("full app walkthrough", () => {
+  /**
+   * The Chemistry *subject* card.
+   *
+   * Matched by the link a subject card really is, rather than by anything on
+   * the page whose text contains "Chemistry" — an exam called "Chemistry mock"
+   * in the hero's Start here card is also a link saying Chemistry, and that
+   * ambiguity broke these assertions the moment such an exam existed.
+   */
+  const chemistryCard = (p: Page) => p.locator('a[href^="/school/subjects/"]', { hasText: "Chemistry" });
+
   let page: Page;
   const email = `e2e_${Date.now()}@example.com`;
   const password = "password123";
@@ -75,7 +85,7 @@ test.describe.serial("full app walkthrough", () => {
     await page.fill('input[placeholder="Subject name"]', "Chemistry");
     await page.click('button:has-text("Add subject")');
 
-    const subjectCard = page.getByRole("link", { name: /Chemistry/ });
+    const subjectCard = chemistryCard(page);
     await expect(subjectCard).toBeVisible();
     await subjectCard.click();
 
@@ -122,7 +132,7 @@ test.describe.serial("full app walkthrough", () => {
 
   test("school: a revision link is saved and stays a link, not content", async () => {
     await page.goto("/school");
-    await page.getByRole("link", { name: /Chemistry/ }).click();
+    await chemistryCard(page).click();
 
     await expect(page.getByText("Revision source")).toBeVisible();
     // The card has to be explicit that saving a link doesn't hand the AI the
@@ -151,7 +161,7 @@ test.describe.serial("full app walkthrough", () => {
 
   test("school: a topic can point at its own revision page, or inherit the subject's", async () => {
     await page.goto("/school");
-    await page.getByRole("link", { name: /Chemistry/ }).click();
+    await chemistryCard(page).click();
 
     // Give the subject a link, then open the topic that has none of its own.
     const subjectUrl = "https://www.savemyexams.com/igcse/chemistry/cie/";
@@ -202,7 +212,7 @@ test.describe.serial("full app walkthrough", () => {
 
   test("school: an assistant reply renders as structure, not raw markdown", async () => {
     await page.goto("/school");
-    await page.getByRole("link", { name: /Chemistry/ }).click();
+    await chemistryCard(page).click();
     await page
       .locator("tr", { hasText: "Periodic Table" })
       .first()
@@ -225,7 +235,7 @@ test.describe.serial("full app walkthrough", () => {
   test("school: questions asked in the tutor chat reach the revision list", async () => {
     // The chat lives inside a topic row on the subject page.
     await page.goto("/school");
-    await page.getByRole("link", { name: /Chemistry/ }).click();
+    await chemistryCard(page).click();
     await page
       .locator("tr", { hasText: "Periodic Table" })
       .first()
@@ -382,10 +392,19 @@ test.describe.serial("full app walkthrough", () => {
     await page.reload();
     await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("25%");
 
-    // A day that hasn't happened can't be ticked — in the browser, and on the
-    // server, which is the half a disabled button doesn't cover.
-    const tomorrow = page.locator('[data-testid^="habit-card-"]').filter({ hasText: "Not yet" }).first();
-    await expect(tomorrow.getByRole("button", { name: /Read 20 minutes/ })).toBeDisabled();
+    // A day that hasn't happened can't be ticked. Conditional on purpose: the
+    // week runs Monday to Sunday, so on a Sunday there is no future day left in
+    // it and an unconditional assertion here is red once a week — which is
+    // exactly how this test first failed. Either branch asserts something, so
+    // it is never quietly passing on nothing, and the server-side half of the
+    // rule is covered by parseHabitDate's unit tests whatever day it is.
+    const futureCards = page.locator('[data-testid^="habit-card-"]').filter({ hasText: "Not yet" });
+    if ((await futureCards.count()) > 0) {
+      await expect(futureCards.first().getByRole("button", { name: /Read 20 minutes/ })).toBeDisabled();
+    } else {
+      await expect(page.locator('[data-testid^="habit-card-"]')).toHaveCount(7);
+      await expect(page.getByText("Not yet")).toHaveCount(0);
+    }
 
     // The analysis underneath: the chart, and a rate per habit.
     await expect(page.getByText(/Daily completion — last 28 days/)).toBeVisible();
@@ -410,6 +429,68 @@ test.describe.serial("full app walkthrough", () => {
     await page.getByTitle('Delete "Packed the bag"').click();
     await expect(page.getByTestId("habit-analysis").locator("li")).toHaveCount(3);
     await expect(page.getByTestId(`habit-pct-${todayKey}`)).toHaveText("33%");
+  });
+
+  test("school ai: turns \"too much to do\" into a plan with dates, and tracks how ready it feels", async () => {
+    // An exam three weeks out, so there is a real run-up to plan.
+    const examDate = new Date(Date.now() + 21 * 86400000);
+    const examIso = examDate.toISOString().slice(0, 10);
+    const examTitle = `Chemistry mock ${Date.now()}`;
+
+    await page.goto("/school");
+    const examForm = page.locator('form:has(input[placeholder="Exam title"])');
+    await examForm.locator('input[name="title"]').fill(examTitle);
+    await examForm.locator('input[name="date"]').fill(examIso);
+    await examForm.locator('button[type="submit"]').click();
+    await expect(page.getByText(examTitle).first()).toBeVisible();
+
+    // The plan is built from the School AI, because that is where "I have so
+    // much to do" gets typed.
+    await page.goto("/school/ai");
+    await page.getByTestId("open-plan-builder").click();
+    const select = page.getByTestId("plan-exam-select");
+    const optionValue = await select.locator("option", { hasText: examTitle }).getAttribute("value");
+    expect(optionValue, "the new exam is offered in the picker").toBeTruthy();
+    await select.selectOption(optionValue!);
+    await page.getByTestId("plan-brief").fill("Behind on organic chemistry, football Tue and Thu");
+    await page.getByRole("button", { name: "Build it" }).click();
+
+    await page.waitForURL(/\/school\/plan\//, { timeout: 60000 });
+    await expect(page.getByRole("heading", { name: examTitle })).toBeVisible();
+    await expect(page.getByText(/Behind on organic chemistry/)).toBeVisible();
+
+    // Every planned day is a real date before the exam, and the paper itself
+    // is not one of them.
+    const days = page.getByTestId("exam-plan-days").locator("li");
+    const dayCount = await days.count();
+    expect(dayCount).toBeGreaterThan(5);
+    const dayKeys = await page
+      .locator('[data-testid^="plan-day-"]')
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("plan-day-", "")));
+    expect(dayKeys).not.toContain(examIso);
+    expect([...dayKeys].sort()).toEqual(dayKeys);
+
+    // Ticking a day is a real write.
+    const planUrl = page.url();
+    await page.locator('[data-testid^="plan-day-"]').first().click();
+    await expect(page.getByText(/1 of \d+ days done/)).toBeVisible();
+
+    // Before any reading the chart says so instead of drawing a flat line at
+    // zero, which would be a claim nobody made.
+    await expect(page.getByText(/No readings yet/)).toBeVisible();
+
+    // Rate today, and the line starts.
+    await page.getByTestId("readiness-check-in").getByRole("button", { name: /Could pass/ }).click();
+    await expect(page.getByText(/Saved for today/)).toBeVisible();
+
+    await page.goto(planUrl);
+    await expect(page.getByText(/No readings yet/)).toHaveCount(0);
+    await expect(page.getByText(/Last rated 3\/5/)).toBeVisible();
+    await expect(page.getByText(/1 of \d+ days done/)).toBeVisible();
+
+    // And it is reachable again from the School AI rather than only by URL.
+    await page.goto("/school/ai");
+    await expect(page.getByRole("link", { name: new RegExp(examTitle) })).toBeVisible();
   });
 
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
@@ -1054,10 +1135,10 @@ test.describe.serial("full app walkthrough", () => {
 
     // The data arrived...
     await freshPage.goto("/school");
-    await expect(freshPage.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+    await expect(chemistryCard(freshPage)).toBeVisible();
     // ...including the topic under it, which means the parent link survived
     // being written under a new id.
-    await freshPage.getByRole("link", { name: /Chemistry/ }).click();
+    await chemistryCard(freshPage).click();
     await expect(freshPage.getByRole("cell", { name: /Periodic Table/ })).toBeVisible();
     // The restored account is set up, so onboarding lets it through now.
     await freshPage.goto("/onboarding");
@@ -1121,7 +1202,7 @@ test.describe.serial("full app walkthrough", () => {
     await expect(freshPage.getByTestId("restore-result")).toBeVisible();
 
     await freshPage.goto("/school");
-    await expect(freshPage.getByRole("link", { name: /Chemistry/ })).toHaveCount(1);
+    await expect(chemistryCard(freshPage)).toHaveCount(1);
 
     const afterSecond = await freshPage.request.get("/api/export");
     expect(Number(afterSecond.headers()["x-momentum-rows"]), "rows after restoring the same file twice").toBe(
@@ -1173,7 +1254,7 @@ test.describe.serial("full app walkthrough", () => {
     await page.goto("/school");
     await expect(page.getByRole("link", { name: /Should never appear/ })).toHaveCount(0);
     // ...and nothing of this account was lost on the way to finding that out.
-    await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+    await expect(chemistryCard(page)).toBeVisible();
     await page.goto("/school/timetable");
     await expect(page.locator('input[value="Chemistry"]')).toBeVisible();
   });
@@ -1191,7 +1272,7 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("restore-error")).toBeVisible();
     // And it said so without touching anything.
     await page.goto("/school");
-    await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+    await expect(chemistryCard(page)).toBeVisible();
   });
 
   test("settings: one card says whether this deployment will keep your data", async () => {
@@ -1288,7 +1369,7 @@ test.describe.serial("full app walkthrough", () => {
 
     // And back online it is the real app again, not a cached shell.
     await page.goto("/school");
-    await expect(page.getByRole("link", { name: /Chemistry/ })).toBeVisible();
+    await expect(chemistryCard(page)).toBeVisible();
   });
 
   test("offline: a phone that has only ever opened the app once still gets the offline page", async ({
