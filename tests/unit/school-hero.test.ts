@@ -65,7 +65,7 @@ describe("heroCopy", () => {
     const oneCard = heroCopy({ ...base, totalToday: 2, doneToday: 0, flashcardsDue: 1 });
     expect(oneCard.cta.label).toBe("Review 1 flashcard");
 
-    expect(heroCopy({ ...base, totalToday: 2, doneToday: 0 }).cta.href).toBe("/school/ai");
+    expect(heroCopy({ ...base, totalToday: 2, doneToday: 0 }).cta.href).toBe("/school#school-ai");
   });
 
   it("never leaves a line blank, in any state", () => {

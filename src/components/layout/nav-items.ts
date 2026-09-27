@@ -7,8 +7,10 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: "home" },
+  // The school AI lives ON the school page, not beside it. It used to have its
+  // own row here, which made it look like a different place to go rather than
+  // part of School — and meant two entries competing for the same thing.
   { href: "/school", label: "School", emoji: "🎓" },
-  { href: "/school/ai", label: "School AI", icon: "schoolai" },
   { href: "/gym", label: "Gym", emoji: "🏋️" },
   { href: "/football", label: "Football", emoji: "⚽" },
   { href: "/coach", label: "AI Coach", icon: "coach" },

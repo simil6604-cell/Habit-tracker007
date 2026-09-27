@@ -6,7 +6,7 @@ import { donePct, heroCopy, type SchoolHeroData } from "@/lib/school/hero";
 
 /** The links that were four buttons on a coloured banner, as somewhere to go next. */
 const SHORTCUTS = [
-  { href: "/school/ai", label: "School AI", icon: GraduationCap },
+  { href: "/school#school-ai", label: "School AI", icon: GraduationCap },
   { href: "/school/habits", label: "Habit tracker", icon: ListChecks },
   { href: "/school/planner", label: "Study planner", icon: NotebookPen },
   { href: "/school/flashcards", label: "Flashcards", icon: Layers },

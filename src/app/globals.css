@@ -24,6 +24,24 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
+
+  /*
+   * Memory strength: never opened -> just started -> getting there -> strong.
+   *
+   * A SEQUENTIAL ramp, not four categorical hues, because the four buckets are
+   * ordered — one hue, stepping light to dark as the card gets stronger, so the
+   * order is visible before any label is read.
+   *
+   * Checked rather than eyeballed. Lightness is monotonic in even steps
+   * (0.870 -> 0.680 -> 0.511 -> 0.359 OKLab), and the two lightest steps sit
+   * under 3:1 on white — which is inherent to the pale end of any sequential
+   * ramp, and is why every bucket carries its own count as a direct label
+   * beside the bar rather than relying on the colour alone.
+   */
+  --mem-0: #c7d2fe;
+  --mem-1: #818cf8;
+  --mem-2: #4f46e5;
+  --mem-3: #312e81;
 }
 
 .dark {
@@ -48,6 +66,18 @@
   --success: #4ade80;
   --warning: #fbbf24;
   --danger: #f87171;
+
+  /*
+   * Dark mode is re-stepped, not flipped. The light ramp's dark end would
+   * vanish against #0e0f13, so the ramp runs the other way here — dim for a
+   * card not started, bright for one that is holding — and all four steps
+   * clear 3:1 on the dark surface. Lightness stays monotonic
+   * (0.511 -> 0.642 -> 0.785 -> 0.894 OKLab).
+   */
+  --mem-0: #4f46e5;
+  --mem-1: #7c7cf0;
+  --mem-2: #a5b4fc;
+  --mem-3: #ddd6fe;
 }
 
 @theme inline {
@@ -71,6 +101,11 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+
+  --color-mem-0: var(--mem-0);
+  --color-mem-1: var(--mem-1);
+  --color-mem-2: var(--mem-2);
+  --color-mem-3: var(--mem-3);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

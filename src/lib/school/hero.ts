@@ -59,7 +59,7 @@ export function heroCopy(data: SchoolHeroData): HeroCopy {
       headline: "Nothing in here yet.",
       accentLine: "Add your first subject.",
       subtitle: "Once a subject is in, its topics, homework and exams all hang off it — and this page starts filling itself in.",
-      cta: { label: "Ask your School AI", href: "/school/ai" },
+      cta: { label: "Ask your School AI", href: "/school#school-ai" },
     };
   }
 
@@ -72,7 +72,7 @@ export function heroCopy(data: SchoolHeroData): HeroCopy {
       cta:
         data.flashcardsDue > 0
           ? { label: `Review ${data.flashcardsDue} flashcard${data.flashcardsDue === 1 ? "" : "s"}`, href: "/school/flashcards" }
-          : { label: "Ask your School AI", href: "/school/ai" },
+          : { label: "Ask your School AI", href: "/school#school-ai" },
     };
   }
 
@@ -85,7 +85,7 @@ export function heroCopy(data: SchoolHeroData): HeroCopy {
       cta:
         data.flashcardsDue > 0
           ? { label: `Review ${data.flashcardsDue} flashcard${data.flashcardsDue === 1 ? "" : "s"}`, href: "/school/flashcards" }
-          : { label: "Ask your School AI", href: "/school/ai" },
+          : { label: "Ask your School AI", href: "/school#school-ai" },
     };
   }
 
@@ -97,7 +97,7 @@ export function heroCopy(data: SchoolHeroData): HeroCopy {
     cta:
       data.flashcardsDue > 0
         ? { label: `Review ${data.flashcardsDue} flashcard${data.flashcardsDue === 1 ? "" : "s"}`, href: "/school/flashcards" }
-        : { label: "Ask your School AI", href: "/school/ai" },
+        : { label: "Ask your School AI", href: "/school#school-ai" },
   };
 }
 

@@ -8,6 +8,10 @@ import { TimetableDiagram } from "@/components/school/timetable-diagram";
 import { SubjectCard } from "@/components/school/subject-card";
 import { SchoolHero } from "@/components/school/school-hero";
 import { getSchoolHeroData } from "@/lib/school/hero";
+import { SchoolAISection } from "@/components/school/school-ai-section";
+import { getSchoolAISectionData } from "@/lib/school/school-ai-section";
+import { InsightsPanel } from "@/components/school/insights-panel";
+import { getSchoolInsights } from "@/lib/school/insights-data";
 import { HomeworkPanel, ExamPanel } from "@/components/school/homework-exam-lists";
 import { DailyChecklist } from "@/components/school/daily-checklist";
 import { getTodaySchoolChecklist } from "@/lib/planner/day-review";
@@ -36,13 +40,15 @@ export default async function SchoolPage() {
 
   const heroData = await getSchoolHeroData(userId, checklist, now);
 
-  const [schoolTasks, notes] = await Promise.all([
+  const [schoolTasks, notes, aiSection, insights] = await Promise.all([
     prisma.task.findMany({
       where: { userId, category: "SCHOOL" },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }],
       take: 20,
     }),
     getSchoolNotesOverview(userId),
+    getSchoolAISectionData(userId),
+    getSchoolInsights(userId, now),
   ]);
 
   // Next seven days, narrowed to what actually belongs to school.
@@ -69,7 +75,11 @@ export default async function SchoolPage() {
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <SchoolHero data={heroData} />
 
-      <Card className="mt-6">
+      <InsightsPanel insights={insights} />
+
+      <SchoolAISection data={aiSection} />
+
+      <Card className="mt-4">
         <CardHeader>
           <CardTitle>Today</CardTitle>
         </CardHeader>
