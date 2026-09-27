@@ -160,7 +160,7 @@ test.describe.serial("full app walkthrough", () => {
     // the main button is also a link to the School AI, worded differently.
     const shortcuts = page.getByTestId("school-shortcuts");
     for (const [label, href] of [
-      ["School AI", "/school/ai"],
+      ["School AI", "/school#school-ai"],
       ["Habit tracker", "/school/habits"],
       ["Study planner", "/school/planner"],
       ["Flashcards", "/school/flashcards"],
@@ -491,7 +491,7 @@ test.describe.serial("full app walkthrough", () => {
 
     // The plan is built from the School AI, because that is where "I have so
     // much to do" gets typed.
-    await page.goto("/school/ai");
+    await page.goto("/school");
     await page.getByTestId("open-plan-builder").click();
     const select = page.getByTestId("plan-exam-select");
     const optionValue = await select.locator("option", { hasText: examTitle }).getAttribute("value");
@@ -533,9 +533,137 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText(/Last rated 3\/5/)).toBeVisible();
     await expect(page.getByText(/1 of \d+ days done/)).toBeVisible();
 
-    // And it is reachable again from the School AI rather than only by URL.
-    await page.goto("/school/ai");
-    await expect(page.getByRole("link", { name: new RegExp(examTitle) })).toBeVisible();
+    // And it is reachable again from the school AI rather than only by URL.
+    // Scoped to that section: now the tutor shares the School page, the hero's
+    // "start here" card names the same exam and matches the same text.
+    await page.goto("/school");
+    await expect(
+      page.locator("#school-ai").getByRole("link", { name: new RegExp(examTitle) })
+    ).toBeVisible();
+  });
+
+  test("school: the planner takes what you write, not only what it suggests", async () => {
+    await page.goto("/school/planner");
+
+    // The whole complaint this answers: the page was generated suggestions and
+    // an "accept" button, with nowhere to put the thing you had already
+    // decided to do.
+    const form = page.getByTestId("add-study-block");
+    await expect(form).toBeVisible();
+
+    const ownWords = `Mein eigener Block ${Date.now()}`;
+    await form.locator('input[name="title"]').fill(ownWords);
+    await form.locator('input[name="time"]').fill("18:30");
+    await form.locator('input[name="minutes"]').fill("50");
+    await form.getByRole("button", { name: /Add my block/ }).click();
+
+    const block = page.getByTestId("own-blocks").locator("li", { hasText: ownWords });
+    await expect(block).toBeVisible();
+    await expect(block).toContainText("18:30");
+
+    // It is a real write, not an optimistic row that vanishes on reload.
+    await page.reload();
+    const saved = page.getByTestId("own-blocks").locator("li", { hasText: ownWords });
+    await expect(saved).toBeVisible();
+
+    // The server refuses a bad length even when the browser's own check is
+    // gone. The min/max on the field stops an honest mistake, but it is markup
+    // — stripping it is one line in a console, so the only check that counts
+    // is the one on the server. That is what this removes the attribute to
+    // reach, and the refusal has to be a sentence rather than a silent no-op.
+    await form.locator('input[name="title"]').fill("Too short to be a block");
+    // Only `min` is removed, and the value stays a multiple of the field's
+    // step. Removing more, or picking 2 minutes, leaves the input invalid on
+    // `step` instead and the browser never submits the form at all — so the
+    // assertion below would be waiting on a request that was never made,
+    // which is how this test failed the first time.
+    await form.locator('input[name="minutes"]').evaluate((el) => el.removeAttribute("min"));
+    await form.locator('input[name="minutes"]').fill("5");
+    await form.getByRole("button", { name: /Add my block/ }).click();
+    await expect(form.getByRole("alert")).toContainText(/Between 10 and 360 minutes/);
+
+    // And nothing was written for it.
+    await page.reload();
+    await expect(page.getByTestId("own-blocks").locator("li", { hasText: "Too short to be a block" })).toHaveCount(0);
+
+    // Ticking it off is what turns it into logged study time, so the same
+    // block has to be countable afterwards.
+    await saved.getByRole("button", { name: new RegExp(`Mark "${ownWords}" as done`) }).click();
+    await expect(
+      page.getByTestId("own-blocks").locator("li", { hasText: ownWords }).getByRole("button", { name: /as not done/ })
+    ).toBeVisible();
+
+    // It reached the calendar too, rather than living only on this page.
+    await page.goto("/calendar");
+    await expect(page.getByText(ownWords).first()).toBeVisible();
+
+    // And it can be taken back out again, from both places.
+    await page.goto("/school/planner");
+    await page
+      .getByTestId("own-blocks")
+      .locator("li", { hasText: ownWords })
+      .getByRole("button", { name: new RegExp(`Delete "${ownWords}"`) })
+      .click();
+    await expect(page.getByTestId("own-blocks").locator("li", { hasText: ownWords })).toHaveCount(0);
+
+    await page.goto("/calendar");
+    await expect(page.getByText(ownWords)).toHaveCount(0);
+  });
+
+  test("school: insights report what is measured, and say so when nothing is", async () => {
+    // With no cards at all the panel correctly says there is nothing to
+    // measure and draws no meter — so a card is created first, otherwise the
+    // assertions below would be checking the empty state while claiming to
+    // check the meter.
+    await page.goto("/school");
+    const insights = page.locator("#school-insights");
+    await expect(insights).toBeVisible();
+    await expect(insights).toContainText(/no flashcards yet|Never opened/i);
+
+    await page.goto("/school/flashcards");
+    const cardFront = `Insights card ${Date.now()}`;
+    await page.fill('input[name="front"]', cardFront);
+    await page.fill('input[name="back"]', "the answer");
+    await page.getByRole("button", { name: "Add card" }).click();
+    // A new card shows up twice: once in the review deck (it is due now) and
+    // once in the list of all cards. The list is the one that proves it was
+    // stored.
+    await expect(page.getByRole("listitem").filter({ hasText: cardFront })).toBeVisible();
+
+    await page.goto("/school");
+    await expect(insights).toBeVisible();
+
+    // Four tiles, each with a headline figure.
+    await expect(insights.getByTestId("insight-stats").locator("> div")).toHaveCount(4);
+
+    // This account has answered no flashcard, so recall must say it is not
+    // measured rather than print 0% — the one number on this panel that would
+    // be both false and demoralising.
+    await expect(insights).toContainText(/Not measured/);
+    await expect(insights).not.toContainText(/0% recall/);
+
+    // Every bucket of the memory meter is labelled with its own count, which
+    // is what makes the pale end of the ramp readable at all.
+    await expect(insights.getByTestId("memory-legend").locator("> div")).toHaveCount(4);
+    for (const label of ["Never opened", "Just started", "Getting there", "Strong"]) {
+      await expect(insights.getByTestId("memory-legend")).toContainText(label);
+    }
+
+    // It says where you stand and what to do, and the actions go somewhere
+    // that exists rather than being decoration.
+    await expect(insights.getByTestId("where-you-stand").locator("li").first()).toBeVisible();
+    const actions = insights.getByTestId("do-this-next").locator("a");
+    const actionCount = await actions.count();
+    expect(actionCount).toBeGreaterThan(0);
+    expect(actionCount, "never more than two next steps").toBeLessThanOrEqual(2);
+    for (let i = 0; i < actionCount; i++) {
+      const href = await actions.nth(i).getAttribute("href");
+      const response = await page.request.get(href!);
+      expect(response.status(), `${href} is a real page`).toBeLessThan(400);
+    }
+
+    // The footnote that keeps the numbers honest about their own limits.
+    await expect(insights).toContainText(/most recent answer per card/);
   });
 
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
@@ -546,10 +674,19 @@ test.describe.serial("full app walkthrough", () => {
       "base64"
     );
 
+    // The tutor is part of the School page now, not a separate destination.
+    // The old address still works for anyone who bookmarked it, but it lands
+    // in the same one place rather than rendering a second copy.
+    await page.goto("/school/ai");
+    await page.waitForURL("**/school**");
+    expect(new URL(page.url()).pathname, "the old address redirects into School").toBe("/school");
+
     await page.goto("/school");
-    await page.click('a[href="/school/ai"]');
-    await page.waitForURL("**/school/ai");
-    await expect(page.getByRole("heading", { name: "School AI", exact: true })).toBeVisible();
+    await page.click('a[href="/school#school-ai"]');
+    await expect(page.getByTestId("school-ai-section-title")).toBeVisible();
+
+    // And it is not a row in the sidebar any more — one School, not two.
+    await expect(page.locator('nav a[href="/school/ai"]')).toHaveCount(0);
 
     // An unrelated photo of this account's, in the same upload directory, put
     // there before any of the school-AI work. Discarding a staged photo is a
@@ -568,7 +705,7 @@ test.describe.serial("full app walkthrough", () => {
     const unrelated = await page.locator('img[src^="/uploads/"]').first().getAttribute("src");
     expect(unrelated, "the unrelated progress photo just uploaded").toBeTruthy();
 
-    await page.goto("/school/ai");
+    await page.goto("/school");
     const input = page.getByTestId("school-ai-photo-input");
 
     // First, one photo the size a phone actually takes. Every upload in this
@@ -1212,7 +1349,7 @@ test.describe.serial("full app walkthrough", () => {
     // rewriting as a list — get that wrong and the question restores pointing
     // at the exporting account's folder, where this one is refused and every
     // picture renders broken.
-    await freshPage.goto("/school/ai");
+    await freshPage.goto("/school");
     await expect(freshPage.getByText(/Mark my working on this/)).toBeVisible();
     const restoredPhotos = freshPage.getByAltText("Photo sent to your school AI");
     await expect(restoredPhotos).toHaveCount(2);

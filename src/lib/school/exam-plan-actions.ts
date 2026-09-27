@@ -93,7 +93,7 @@ export async function createExamPlan(examId: string, brief?: string): Promise<Cr
   });
 
   revalidatePath("/school");
-  revalidatePath("/school/ai");
+  revalidatePath("/school");
   return { planId: plan.id };
 }
 
