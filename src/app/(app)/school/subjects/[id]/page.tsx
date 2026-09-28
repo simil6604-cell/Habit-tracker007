@@ -12,6 +12,7 @@ import { SubjectWeaknesses } from "@/components/school/subject-weaknesses";
 import { SubjectLevelPicker } from "@/components/school/subject-level-picker";
 import { RevisionSourceCard } from "@/components/school/revision-source-card";
 import { StuckLinks } from "@/components/school/stuck-links";
+import { stuckLinks } from "@/lib/school/revision-links";
 import { parseEducationSystems } from "@/lib/ai/academic-prompt";
 
 export default async function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -75,7 +76,12 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <StuckLinks links={revisionLinks} scope={{ subjectId: subject.id }} />
-          <RevisionSourceCard subjectId={subject.id} subjectName={subject.name} revisionUrl={subject.revisionUrl} />
+          <RevisionSourceCard
+            subjectId={subject.id}
+            subjectName={subject.name}
+            revisionUrl={subject.revisionUrl}
+            suggestedUrl={stuckLinks(revisionLinks, { subjectId: subject.id }).lookUp?.url ?? null}
+          />
         </CardContent>
       </Card>
 

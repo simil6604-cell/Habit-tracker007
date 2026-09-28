@@ -18,13 +18,20 @@ import { detectProvider, stuckLinks, type LinkScope, type StoredLink } from "@/l
 export function StuckLinks({
   links,
   scope,
+  anySubject,
   className,
 }: {
   links: StoredLink[];
   scope?: LinkScope;
+  /**
+   * For a place with no subject in view — the tutor chat. Without it, a
+   * student who files every link under its subject is told to save the pages
+   * they have already saved.
+   */
+  anySubject?: boolean;
   className?: string;
 }) {
-  const { lookUp, testYourself } = stuckLinks(links, scope ?? {});
+  const { lookUp, testYourself } = stuckLinks(links, scope ?? {}, { anySubject });
 
   if (!lookUp && !testYourself) {
     return (
@@ -52,7 +59,10 @@ export function StuckLinks({
         >
           <BookOpen size={13} className="text-muted" />
           Look it up
-          <span className="font-normal text-muted">{detectProvider(lookUp.url) ?? lookUp.title}</span>
+          <span className="font-normal text-muted">
+            {detectProvider(lookUp.url) ?? lookUp.title}
+            {lookUp.subjectName ? ` · ${lookUp.subjectName}` : ""}
+          </span>
         </a>
       )}
 
@@ -66,7 +76,10 @@ export function StuckLinks({
         >
           <Layers size={13} className="text-muted" />
           Test yourself
-          <span className="font-normal text-muted">{testYourself.title}</span>
+          <span className="font-normal text-muted">
+            {testYourself.title}
+            {testYourself.subjectName ? ` · ${testYourself.subjectName}` : ""}
+          </span>
         </a>
       )}
     </div>

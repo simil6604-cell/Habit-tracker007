@@ -27,12 +27,27 @@ export async function getSchoolAISectionData(userId: string): Promise<SchoolAISe
       take: 4,
       select: { id: true, title: true },
     }),
-    // Newest first, because bestLink takes the first match within a tier.
+    // Newest first, because bestLink takes the first match within a tier. The
+    // subject name rides along: this row has no subject in view, so the chip
+    // has to say which subject's deck it is about to open.
     prisma.revisionLink.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
-      select: { id: true, title: true, url: true, kind: true, subjectId: true, topicId: true },
+      select: {
+        id: true,
+        title: true,
+        url: true,
+        kind: true,
+        subjectId: true,
+        topicId: true,
+        subject: { select: { name: true } },
+      },
     }),
   ]);
-  return { messages, exams, livePlans, links };
+  return {
+    messages,
+    exams,
+    livePlans,
+    links: links.map(({ subject, ...link }) => ({ ...link, subjectName: subject?.name ?? null })),
+  };
 }

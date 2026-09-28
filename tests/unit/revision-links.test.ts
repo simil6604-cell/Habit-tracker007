@@ -226,4 +226,51 @@ describe("bestLink and stuckLinks", () => {
   it("gives back nothing at all when nothing is saved", () => {
     expect(stuckLinks([], { subjectId: "bio" })).toEqual({ lookUp: null, testYourself: null });
   });
+
+  it("does not reach into another subject's links for a subject that has none", () => {
+    // On Physics, the Biology deck is the wrong deck. Saying nothing is saved
+    // is the honest answer, and the empty state tells you what to paste.
+    const links = [
+      link({ id: "bio-notes", kind: "NOTES", subjectId: "bio" }),
+      link({ id: "bio-deck", kind: "FLASHCARDS", subjectId: "bio" }),
+    ];
+    expect(stuckLinks(links, { subjectId: "physics" })).toEqual({ lookUp: null, testYourself: null });
+  });
+
+  it("falls back across subjects only where there is no subject in view", () => {
+    // The tutor chat. Without this, a student who files every link under its
+    // subject — the tidy way — is told to go and save what they have saved.
+    const links = [
+      link({ id: "deck", kind: "FLASHCARDS", subjectId: "bio" }),
+      link({ id: "notes", kind: "NOTES", subjectId: "maths" }),
+    ];
+    expect(stuckLinks(links, {})).toEqual({ lookUp: null, testYourself: null });
+
+    const picked = stuckLinks(links, {}, { anySubject: true });
+    expect(picked.lookUp?.id).toBe("notes");
+    expect(picked.testYourself?.id).toBe("deck");
+  });
+
+  it("still prefers the scoped link over the fallback — both halves", () => {
+    // Newest-first order puts the wrong subject's links first, so a fallback
+    // that runs before the scope check would return them. Both halves are
+    // asserted: the deck alone left the "look it up" half unguarded.
+    const links = [
+      link({ id: "other-deck", kind: "FLASHCARDS", subjectId: "maths" }),
+      link({ id: "other-notes", kind: "NOTES", subjectId: "maths" }),
+      link({ id: "own-deck", kind: "FLASHCARDS", subjectId: "bio" }),
+      link({ id: "own-notes", kind: "NOTES", subjectId: "bio" }),
+    ];
+    const picked = stuckLinks(links, { subjectId: "bio" }, { anySubject: true });
+    expect(picked.testYourself?.id).toBe("own-deck");
+    expect(picked.lookUp?.id).toBe("own-notes");
+  });
+
+  it("keeps the kinds apart when it falls back", () => {
+    // A deck is not somewhere to read it up, whichever subject it came from.
+    const links = [link({ id: "deck", kind: "FLASHCARDS", subjectId: "bio" })];
+    const picked = stuckLinks(links, {}, { anySubject: true });
+    expect(picked.lookUp).toBeNull();
+    expect(picked.testYourself?.id).toBe("deck");
+  });
 });

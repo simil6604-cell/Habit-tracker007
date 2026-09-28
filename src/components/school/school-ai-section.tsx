@@ -62,7 +62,7 @@ export function SchoolAISection({ data }: { data: SchoolAISectionData }) {
             asking the model to type one into its answer — a link is either
             exactly right or useless.
           */}
-          <StuckLinks links={data.links} className="border-t border-border pt-3" />
+          <StuckLinks links={data.links} anySubject className="border-t border-border pt-3" />
         </CardContent>
       </Card>
     </section>
