@@ -748,6 +748,82 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("library-sort")).toHaveValue("NEWEST");
   });
 
+  test("progress: School, Gym and Football each get their own plan, never a shared one", async () => {
+    // The whole requirement in one test: three plans, three pages, and no
+    // number that mixes them. A single combined score would hide exactly what
+    // these are for.
+    const seen: { path: string; title: string; completed: string; next: string }[] = [];
+
+    for (const [path, title] of [
+      ["/school", "School progress"],
+      ["/gym", "Gym progress"],
+      ["/football", "Football progress"],
+    ] as const) {
+      await page.goto(path);
+      const panel = page.locator("#progress");
+      await expect(panel, `${path} has its own progress plan`).toBeVisible();
+      await expect(panel.getByRole("heading", { name: title })).toBeVisible();
+
+      // It must not carry the other two domains' plans with it.
+      for (const other of ["School progress", "Gym progress", "Football progress"].filter((t) => t !== title)) {
+        await expect(page.getByRole("heading", { name: other })).toHaveCount(0);
+      }
+
+      // Five figures: completed, remaining, progress, and two of this
+      // domain's own.
+      await expect(panel.getByTestId("progress-stats").locator("> div")).toHaveCount(5);
+
+      const stats = await panel.getByTestId("progress-stats").innerText();
+      seen.push({
+        path,
+        title,
+        completed: stats.split("\n")[0],
+        next: await panel.getByTestId("next-up").innerText(),
+      });
+
+      // Completed + Remaining is the length of the list, on every page.
+      const tabs = await panel.getByTestId("milestone-tabs").innerText();
+      const [all, completed, remaining] = [...tabs.matchAll(/\((\d+)\)/g)].map((m) => Number(m[1]));
+      expect(completed + remaining, `${path} tab counts add up`).toBe(all);
+      expect(all).toBeGreaterThan(5);
+
+      // Every milestone says a real number against a real target, never NaN.
+      const rows = panel.getByTestId("milestone-list").locator("> li");
+      expect(await rows.count()).toBe(all);
+      await expect(panel).not.toContainText("NaN");
+      await expect(panel).not.toContainText("Infinity");
+      await expect(panel).not.toContainText("undefined");
+    }
+
+    // The three plans are genuinely different plans, not one rendered thrice.
+    expect(new Set(seen.map((s) => s.next)).size, "each domain proposes its own next step").toBeGreaterThan(1);
+
+    // Filtering one page's milestones does not leave that page.
+    await page.goto("/gym");
+    const gym = page.locator("#progress");
+    await gym.getByRole("link", { name: /^Remaining/ }).click();
+    await expect(page).toHaveURL(/\/gym/);
+    const remainingRows = gym.getByTestId("milestone-list").locator('> li[data-done="true"]');
+    await expect(remainingRows).toHaveCount(0);
+
+    await gym.getByRole("link", { name: /^Completed/ }).click();
+    await expect(page).toHaveURL(/\/gym/);
+    const completedRows = gym.getByTestId("milestone-list").locator('> li[data-done="false"]');
+    await expect(completedRows).toHaveCount(0);
+
+    // Searching narrows the list and the tab counts follow it.
+    await page.goto("/gym");
+    await gym.getByTestId("milestone-search").fill("nutrition");
+    await expect(gym.getByTestId("milestone-list").locator("> li").first()).toBeVisible();
+    const narrowed = await gym.getByTestId("milestone-tabs").innerText();
+    const narrowedAll = Number([...narrowed.matchAll(/\((\d+)\)/g)][0][1]);
+    expect(await gym.getByTestId("milestone-list").locator("> li").count()).toBe(narrowedAll);
+
+    // Junk in the milestone parameters falls back rather than breaking.
+    await page.goto("/football?mtab=banana&mq=" + "x".repeat(200));
+    await expect(page.locator("#progress").getByRole("heading", { name: "Football progress" })).toBeVisible();
+  });
+
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
     // A 1x1 PNG. The point is which files are accepted and where they end up,
     // not what is in them.
