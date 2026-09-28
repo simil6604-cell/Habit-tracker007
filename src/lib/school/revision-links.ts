@@ -137,21 +137,41 @@ export type LinkScope = { subjectId?: string | null; topicId?: string | null };
  */
 export function bestLink(links: StoredLink[], kind: RevisionKind, scope: LinkScope): StoredLink | null {
   const ofKind = links.filter((link) => link.kind === kind);
-  if (ofKind.length === 0) return null;
+  for (const tier of scopeTiers(scope)) {
+    const found = ofKind.find(tier);
+    if (found) return found;
+  }
+  return null;
+}
 
-  if (scope.topicId) {
-    const onTopic = ofKind.find((link) => link.topicId === scope.topicId);
-    if (onTopic) return onTopic;
-  }
+/**
+ * The scope tiers, most specific first.
+ *
+ * Shared so "which link belongs here" is decided in one place: the subject
+ * page, the grid and the tutor row all used to answer it slightly differently.
+ */
+function scopeTiers(scope: LinkScope, anySubject = false): ((link: StoredLink) => boolean)[] {
+  const tiers: ((link: StoredLink) => boolean)[] = [];
+
+  if (scope.topicId) tiers.push((link) => link.topicId === scope.topicId);
+
   if (scope.subjectId) {
-    // A link on the right subject but pinned to a DIFFERENT topic is not this
-    // topic's link, so it is skipped rather than offered as one.
-    const onSubject = ofKind.find(
-      (link) => link.subjectId === scope.subjectId && (link.topicId === null || link.topicId === scope.topicId)
+    // With a topic in view, a link pinned to a DIFFERENT topic of the same
+    // subject is not this topic's link, so it is skipped. With no topic in
+    // view there is no such thing as the wrong topic: it is one of this
+    // subject's links, and it beats a link saved under no subject at all.
+    tiers.push(
+      (link) =>
+        link.subjectId === scope.subjectId &&
+        (!scope.topicId || link.topicId === null || link.topicId === scope.topicId)
     );
-    if (onSubject) return onSubject;
   }
-  return ofKind.find((link) => link.subjectId === null && link.topicId === null) ?? null;
+
+  tiers.push((link) => link.subjectId === null && link.topicId === null);
+
+  if (anySubject) tiers.push(() => true);
+
+  return tiers;
 }
 
 /** Kinds that answer "I don't know this", best first. */
@@ -165,6 +185,10 @@ const LOOK_UP_ORDER: RevisionKind[] = ["NOTES", "QUESTIONS", "PAST_PAPERS", "OTH
  * its answer. A link is either exactly right or useless, and a model asked to
  * reproduce a UUID will eventually get one character wrong — at which point
  * the student taps a broken link and blames their own deck.
+ *
+ * Whose link it is outranks what kind it is: this subject's topic questions
+ * beat somebody's general notes page. The kind only decides between links
+ * that are equally yours.
  */
 export type StuckOptions = {
   /**
@@ -184,24 +208,18 @@ export function stuckLinks(
   scope: LinkScope = {},
   options: StuckOptions = {}
 ): { lookUp: StoredLink | null; testYourself: StoredLink | null } {
-  const newestOfKind = (kind: RevisionKind) => links.find((link) => link.kind === kind) ?? null;
-
-  let lookUp: StoredLink | null = null;
-  for (const kind of LOOK_UP_ORDER) {
-    lookUp = bestLink(links, kind, scope);
-    if (lookUp) break;
-  }
-  if (!lookUp && options.anySubject) {
-    for (const kind of LOOK_UP_ORDER) {
-      lookUp = newestOfKind(kind);
-      if (lookUp) break;
+  const pick = (kinds: RevisionKind[]) => {
+    for (const tier of scopeTiers(scope, options.anySubject)) {
+      const inTier = links.filter(tier);
+      for (const kind of kinds) {
+        const found = inTier.find((link) => link.kind === kind);
+        if (found) return found;
+      }
     }
-  }
+    return null;
+  };
 
-  const testYourself =
-    bestLink(links, "FLASHCARDS", scope) ?? (options.anySubject ? newestOfKind("FLASHCARDS") : null);
-
-  return { lookUp, testYourself };
+  return { lookUp: pick(LOOK_UP_ORDER), testYourself: pick(["FLASHCARDS"]) };
 }
 
 /**

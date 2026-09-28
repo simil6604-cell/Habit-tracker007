@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { createFlashcard, deleteFlashcard, generateFlashcardsFromWeakTopics } from "@/lib/school/flashcard-actions";
 import { reviewBucket } from "@/lib/school/srs";
-import { flashcardDecks } from "@/lib/school/revision-links";
+import { detectProvider, flashcardDecks } from "@/lib/school/revision-links";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,7 +54,7 @@ export default async function FlashcardsPage() {
       */}
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle>Your decks on Carousel Learning</CardTitle>
+          <CardTitle>Your saved decks</CardTitle>
         </CardHeader>
         <CardContent>
           {decks.length === 0 ? (
@@ -77,6 +77,7 @@ export default async function FlashcardsPage() {
                   >
                     <Layers size={14} className="text-muted" />
                     {deck.title}
+                    <span className="font-normal text-muted">{detectProvider(deck.url) ?? ""}</span>
                     <ExternalLink size={12} className="text-muted" />
                   </a>
                 </li>

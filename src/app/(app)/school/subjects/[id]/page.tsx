@@ -12,7 +12,7 @@ import { SubjectWeaknesses } from "@/components/school/subject-weaknesses";
 import { SubjectLevelPicker } from "@/components/school/subject-level-picker";
 import { RevisionSourceCard } from "@/components/school/revision-source-card";
 import { StuckLinks } from "@/components/school/stuck-links";
-import { stuckLinks } from "@/lib/school/revision-links";
+import { subjectSetup } from "@/lib/school/revision-setup";
 import { parseEducationSystems } from "@/lib/ai/academic-prompt";
 
 export default async function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -80,7 +80,11 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
             subjectId={subject.id}
             subjectName={subject.name}
             revisionUrl={subject.revisionUrl}
-            suggestedUrl={stuckLinks(revisionLinks, { subjectId: subject.id }).lookUp?.url ?? null}
+            /* subjectSetup, not stuckLinks: a link saved under NO subject is
+               offered to anyone who is stuck, but it is not "the page you
+               saved for Biology", and one press here would pin it as
+               Biology's material for the tutor and the quiz. */
+            suggestedUrl={subjectSetup([{ id: subject.id, name: subject.name }], revisionLinks)[0].lookUp?.url ?? null}
           />
         </CardContent>
       </Card>

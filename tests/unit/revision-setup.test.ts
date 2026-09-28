@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isFullySetUp, needsSetup, setupPrompt, subjectSetup } from "@/lib/school/revision-setup";
+import { linksForPrompt, needsSetup, setupPrompt, subjectSetup } from "@/lib/school/revision-setup";
 import type { StoredLink } from "@/lib/school/revision-links";
 
 const SUBJECTS = [
@@ -82,7 +82,7 @@ describe("subjectSetup", () => {
   });
 });
 
-describe("needsSetup and isFullySetUp", () => {
+describe("needsSetup", () => {
   it("lists a subject missing either half", () => {
     const links = [link({ id: "notes", kind: "NOTES", subjectId: "bio" })];
     const setup = subjectSetup(SUBJECTS, links);
@@ -98,20 +98,39 @@ describe("needsSetup and isFullySetUp", () => {
     expect(needsSetup(subjectSetup(SUBJECTS, links)).map((s) => s.name)).toEqual(["Mathematics", "Economics"]);
   });
 
-  it("is only fully set up when every subject has both", () => {
-    const both = (id: string) => [
-      link({ id: `${id}-n`, kind: "NOTES", subjectId: id }),
-      link({ id: `${id}-d`, kind: "FLASHCARDS", subjectId: id }),
-    ];
-    const all = [...both("bio"), ...both("maths"), ...both("econ")];
-    expect(isFullySetUp(subjectSetup(SUBJECTS, all))).toBe(true);
-    expect(isFullySetUp(subjectSetup(SUBJECTS, both("bio")))).toBe(false);
+});
+
+describe("linksForPrompt", () => {
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) => link({ id: `filler-${i}`, kind: "NOTES", subjectId: "filler" }));
+
+  it("keeps the links a slot is filled from, even when they are the oldest", () => {
+    // Newest-first, so the two that matter sit at the very bottom of a long
+    // list — exactly where a cap would cut them.
+    const links = [...many(16), link({ id: "deck", kind: "FLASHCARDS", subjectId: "bio" })];
+    const setup = subjectSetup([{ id: "bio", name: "Biology" }], links);
+    const described = linksForPrompt(links, setup, 16);
+    expect(described).toHaveLength(16);
+    expect(described.map((l) => l.id)).toContain("deck");
   });
 
-  it("is not 'fully set up' when there are no subjects at all", () => {
-    // Nothing to set up is not the same as everything being ready, and
-    // reporting success for an empty timetable would be a lie of omission.
-    expect(isFullySetUp(subjectSetup([], []))).toBe(false);
+  it("leaves the rest newest-first behind them", () => {
+    const links = [...many(3), link({ id: "deck", kind: "FLASHCARDS", subjectId: "bio" })];
+    const setup = subjectSetup([{ id: "bio", name: "Biology" }], links);
+    expect(linksForPrompt(links, setup, 16).map((l) => l.id)).toEqual([
+      "deck",
+      "filler-0",
+      "filler-1",
+      "filler-2",
+    ]);
+  });
+
+  it("does not grow the list past the cap, or below zero", () => {
+    const links = many(5);
+    const setup = subjectSetup([{ id: "bio", name: "Biology" }], links);
+    expect(linksForPrompt(links, setup, 2)).toHaveLength(2);
+    expect(linksForPrompt(links, setup, 0)).toHaveLength(0);
+    expect(linksForPrompt(links, setup, -1)).toHaveLength(0);
   });
 });
 
