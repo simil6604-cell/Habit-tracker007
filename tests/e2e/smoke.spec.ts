@@ -824,6 +824,62 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.locator("#progress").getByRole("heading", { name: "Football progress" })).toBeVisible();
   });
 
+  test("analytics: three blocks, a donut, and subject names cut to the subject", async () => {
+    // A subject named the way a real timetable names one. On the axis this
+    // used to wrap to three lines and squeeze the plot into a sliver.
+    await page.goto("/school");
+    const longName = `German — First Language ${Date.now()}`;
+    const subjectForm = page.locator("form", { has: page.locator('input[name="teacher"]') });
+    await subjectForm.locator('input[name="name"]').fill(longName);
+    await subjectForm.getByRole("button", { name: "Add subject" }).click();
+    await expect(chemistryCard(page).or(page.locator(`a[href^="/school/subjects/"]`, { hasText: "German" }))).toBeVisible();
+
+    await page.goto("/analytics");
+    await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
+
+    // One block per domain, in order, so you can look at one without reading
+    // all three.
+    for (const title of ["Overview", "School", "Gym", "Football"]) {
+      await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    }
+
+    // The circle chart, with every slice directly labelled — the app's gym
+    // orange and football green are close enough for red-green colour
+    // blindness that the labels are what carry identity.
+    const legend = page.getByTestId("effort-legend");
+    if (await legend.count()) {
+      const text = await legend.innerText();
+      expect(text).toMatch(/School|Gym|Football/);
+      expect(text).toMatch(/%/);
+    } else {
+      await expect(page.getByText(/Nothing logged yet/)).toBeVisible();
+    }
+
+    // The axis says the subject, not the paper.
+    const school = page.locator("section, div").filter({ hasText: "Subject progress" }).last();
+    await expect(school).not.toContainText("First Language");
+    await expect(school).not.toContainText("A-Level");
+
+    // No chart draws a bare grid with nothing on it: an empty plot reads as a
+    // chart that failed to load, so each either has bars or says in words that
+    // there is nothing. Asserted on both, because "it rendered something" was
+    // the weak version of this check and it passed on the heading alone.
+    for (const id of ["gym-consistency", "football-consistency"]) {
+      const card = page.getByTestId(id);
+      const bars = await card.locator(".recharts-bar-rectangle").count();
+      if (bars === 0) {
+        await expect(card, `${id} says why it is empty`).toContainText(/last eight weeks/i);
+      } else {
+        expect(bars, `${id} drew real bars`).toBeGreaterThan(0);
+      }
+    }
+
+    // A win rate of 0% would be a claim about matches; with none played the
+    // truth is that there is nothing to report, and the tile shows a dash.
+    const winRate = page.getByTestId("win-rate");
+    await expect(winRate).toContainText(/^(—|\d+%)/);
+  });
+
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
     // A 1x1 PNG. The point is which files are accepted and where they end up,
     // not what is in them.
