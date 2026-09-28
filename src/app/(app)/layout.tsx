@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { computeDomainScores } from "@/lib/planner/scores";
+import { countLibrary } from "@/lib/library/library-data";
 import { AIStatusBanner } from "@/components/layout/ai-status-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { BottomNav } from "@/components/layout/bottom-nav";
@@ -18,11 +19,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
   if (!user.onboardingComplete) redirect("/onboarding");
 
-  const scores = await computeDomainScores(session.user.id);
+  const [scores, libraryCount] = await Promise.all([
+    computeDomainScores(session.user.id),
+    countLibrary(session.user.id),
+  ]);
 
   return (
     <div className="flex min-h-screen w-full">
-      <Sidebar overallScore={scores.overall} />
+      <Sidebar overallScore={scores.overall} libraryCount={libraryCount} />
       {/* min-w-0 / overflow-x-hidden: a flex item defaults to min-width:auto, so any
           wide child (a league table, a timetable grid) stretched the whole shell and
           the page scrolled sideways on a phone. Wide content scrolls in its own box. */}

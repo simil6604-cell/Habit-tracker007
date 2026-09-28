@@ -666,6 +666,88 @@ test.describe.serial("full app walkthrough", () => {
     await expect(insights).toContainText(/most recent answer per card/);
   });
 
+  test("library: everything you have made, in one place you can search and file", async () => {
+    // Something of each kind, made where it is normally made — the library is
+    // an index, so it has to pick things up without being told about them.
+    const cardFront = `Übungsaufgabe Osmose ${Date.now()}`;
+    await page.goto("/school/flashcards");
+    await page.fill('input[name="front"]', cardFront);
+    await page.fill('input[name="back"]', "Wasser wandert zur höheren Konzentration");
+    await page.getByRole("button", { name: "Add card" }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: cardFront })).toBeVisible();
+
+    await page.goto("/library");
+    await expect(page.getByRole("heading", { name: "Your study space." })).toBeVisible();
+
+    const items = page.getByTestId("library-items");
+    await expect(items.getByText(cardFront)).toBeVisible();
+
+    // The sidebar says how much is in there, like the rest of the app says
+    // what it knows. It is a desktop-only element, and this viewport is wide.
+    await expect(page.locator('nav a[href="/library"]')).toContainText(/\d/);
+
+    // Tabs carry real counts, and they add up.
+    const tabs = page.getByTestId("library-tabs");
+    await expect(tabs).toContainText("Flashcards");
+    await expect(tabs).toContainText("Recordings");
+    const tabText = await tabs.innerText();
+    const [all, flash, notes, recordings] = [...tabText.matchAll(/(\d+)/g)].map((m) => Number(m[1]));
+    expect(flash + notes + recordings, "the tab counts add up to All").toBe(all);
+
+    // Searching without the umlaut finds the word that has one — nobody
+    // reaches for the ü key on a phone.
+    await page.getByTestId("library-search").fill("ubungsaufgabe");
+    await expect(items.getByText(cardFront)).toBeVisible();
+    await expect(page.getByTestId("library-result-count")).toContainText(/of/);
+
+    // A search that matches nothing says so, instead of looking empty.
+    await page.getByTestId("library-search").fill("zzzznothinghere");
+    await expect(page.getByText(/Nothing matches/)).toBeVisible();
+    await page.getByTestId("library-search").fill("");
+    await expect(items.getByText(cardFront)).toBeVisible();
+
+    // A folder, made and named in your own words.
+    const folderName = `Biologie ${Date.now()}`;
+    await page.getByRole("button", { name: /Create folder|New folder/ }).click();
+    await page.fill('input[name="name"]', folderName);
+    await page.getByRole("button", { name: "Create folder" }).click();
+    await expect(page.getByTestId("library-folders")).toContainText(folderName);
+
+    // The same name twice is refused with a sentence, not a crash.
+    await page.fill('input[name="name"]', folderName);
+    await page.getByRole("button", { name: "Create folder" }).click();
+    await expect(page.getByTestId("create-folder-form").getByRole("alert")).toContainText(/already have a folder/i);
+
+    // File the card, and the folder's count follows it.
+    const card = page.locator('[data-testid^="library-item-flashcard-"]').filter({ hasText: cardFront });
+    await card.locator("select").selectOption({ label: folderName });
+    await expect(page.getByTestId("library-folders").locator("div", { hasText: folderName }).first()).toContainText("1");
+
+    // And the folder view holds it.
+    const folderLink = page.getByTestId("library-folders").getByRole("link", { name: new RegExp(folderName) });
+    await folderLink.click();
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+    await expect(page.getByTestId("library-result-count")).toContainText(/1 of/);
+
+    // Deleting the folder must NOT delete what was inside it.
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: `Delete folder ${folderName}` }).click();
+    await expect(page.getByTestId("library-folders")).toHaveCount(0);
+
+    await page.goto("/library");
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // A folder id that is not this account's shows the whole library rather
+    // than an empty page that looks like the material is gone.
+    await page.goto("/library?folder=not-a-real-folder-id");
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // Junk in the query string falls back instead of breaking the page.
+    await page.goto("/library?type=banana&sort=%3Cscript%3E&view=nope");
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+    await expect(page.getByTestId("library-sort")).toHaveValue("NEWEST");
+  });
+
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
     // A 1x1 PNG. The point is which files are accepted and where they end up,
     // not what is in them.
