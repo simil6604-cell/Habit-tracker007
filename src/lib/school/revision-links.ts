@@ -113,6 +113,8 @@ export type StoredLink = {
   kind: string;
   subjectId: string | null;
   topicId: string | null;
+  /** Only where the caller has it: shown so a link is never ambiguous. */
+  subjectName?: string | null;
 };
 
 /** The flashcard decks, which is what "when I need flashcards" means. */
@@ -164,16 +166,42 @@ const LOOK_UP_ORDER: RevisionKind[] = ["NOTES", "QUESTIONS", "PAST_PAPERS", "OTH
  * reproduce a UUID will eventually get one character wrong — at which point
  * the student taps a broken link and blames their own deck.
  */
+export type StuckOptions = {
+  /**
+   * When nothing matches the scope, take the newest link of that kind from
+   * whichever subject it belongs to.
+   *
+   * For the tutor chat, which has no subject in view. Without it, a student
+   * whose every link is filed under a subject — which is the tidy way to save
+   * them — gets told to go and save the pages they have already saved. The
+   * chip names the subject, so what you are being sent to is never a guess.
+   */
+  anySubject?: boolean;
+};
+
 export function stuckLinks(
   links: StoredLink[],
-  scope: LinkScope = {}
+  scope: LinkScope = {},
+  options: StuckOptions = {}
 ): { lookUp: StoredLink | null; testYourself: StoredLink | null } {
+  const newestOfKind = (kind: RevisionKind) => links.find((link) => link.kind === kind) ?? null;
+
   let lookUp: StoredLink | null = null;
   for (const kind of LOOK_UP_ORDER) {
     lookUp = bestLink(links, kind, scope);
     if (lookUp) break;
   }
-  return { lookUp, testYourself: bestLink(links, "FLASHCARDS", scope) };
+  if (!lookUp && options.anySubject) {
+    for (const kind of LOOK_UP_ORDER) {
+      lookUp = newestOfKind(kind);
+      if (lookUp) break;
+    }
+  }
+
+  const testYourself =
+    bestLink(links, "FLASHCARDS", scope) ?? (options.anySubject ? newestOfKind("FLASHCARDS") : null);
+
+  return { lookUp, testYourself };
 }
 
 /**

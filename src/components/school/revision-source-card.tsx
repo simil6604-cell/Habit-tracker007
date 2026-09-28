@@ -12,10 +12,20 @@ export function RevisionSourceCard({
   subjectId,
   subjectName,
   revisionUrl,
+  suggestedUrl,
 }: {
   subjectId: string;
   subjectName: string;
   revisionUrl: string | null;
+  /**
+   * The page already saved for this subject under "Where you revise from".
+   *
+   * Two places holding a link for one subject reads as a contradiction — the
+   * row above says you have a page, this said you had none. So when one is
+   * saved, this says what pinning it HERE adds, and offers it ready to save
+   * instead of asking you to go and find the address a second time.
+   */
+  suggestedUrl?: string | null;
 }) {
   const host = (() => {
     if (!revisionUrl) return null;
@@ -43,8 +53,18 @@ export function RevisionSourceCard({
         </div>
       ) : (
         <p className="text-sm text-muted">
-          No revision site saved for {subjectName} yet — paste the page you actually revise from (Save My Exams,
-          Physics &amp; Maths Tutor, your school&apos;s portal) and it&apos;s one tap away from here.
+          {suggestedUrl ? (
+            <>
+              The page you saved for {subjectName} is in the row above. Pinning it here as well is what makes the
+              tutor and the quiz treat it as your material, and gives every topic without its own link a default —
+              it is filled in below, ready to save.
+            </>
+          ) : (
+            <>
+              No revision site saved for {subjectName} yet — paste the page you actually revise from (Save My Exams,
+              Physics &amp; Maths Tutor, your school&apos;s portal) and it&apos;s one tap away from here.
+            </>
+          )}
         </p>
       )}
 
@@ -52,7 +72,7 @@ export function RevisionSourceCard({
         <input
           name="revisionUrl"
           type="url"
-          defaultValue={revisionUrl ?? ""}
+          defaultValue={revisionUrl ?? suggestedUrl ?? ""}
           placeholder="https://www.savemyexams.com/…"
           className="min-w-[14rem] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
         />
