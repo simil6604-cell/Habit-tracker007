@@ -12,6 +12,7 @@ import { SchoolAISection } from "@/components/school/school-ai-section";
 import { getSchoolAISectionData } from "@/lib/school/school-ai-section";
 import { InsightsPanel } from "@/components/school/insights-panel";
 import { getSchoolInsights } from "@/lib/school/insights-data";
+import { RevisionLinksPanel } from "@/components/school/revision-links-panel";
 import { ProgressPlanPanel } from "@/components/progress/progress-plan";
 import { getSchoolProgress } from "@/lib/progress/school-plan";
 import { parseMilestoneTab } from "@/lib/progress/milestones";
@@ -57,7 +58,7 @@ export default async function SchoolPage({
 
   const heroData = await getSchoolHeroData(userId, checklist, now);
 
-  const [schoolTasks, notes, aiSection, insights] = await Promise.all([
+  const [schoolTasks, notes, aiSection, insights, revisionLinks] = await Promise.all([
     prisma.task.findMany({
       where: { userId, category: "SCHOOL" },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }],
@@ -66,6 +67,11 @@ export default async function SchoolPage({
     getSchoolNotesOverview(userId),
     getSchoolAISectionData(userId),
     getSchoolInsights(userId, now),
+    prisma.revisionLink.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, url: true, kind: true, subjectId: true, topicId: true },
+    }),
   ]);
 
   // Next seven days, narrowed to what actually belongs to school.
@@ -103,6 +109,22 @@ export default async function SchoolPage({
           basePath="/school"
         />
       </div>
+
+      <Card className="mt-4" data-testid="revision-sources">
+        <CardHeader>
+          <CardTitle>Where you revise from</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RevisionLinksPanel
+            links={revisionLinks}
+            subjects={subjects.map((s) => ({
+              id: s.id,
+              name: s.name,
+              topics: s.topics.map((t) => ({ id: t.id, name: t.name })),
+            }))}
+          />
+        </CardContent>
+      </Card>
 
       <SchoolAISection data={aiSection} />
 

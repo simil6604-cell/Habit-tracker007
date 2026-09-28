@@ -880,6 +880,70 @@ test.describe.serial("full app walkthrough", () => {
     await expect(winRate).toContainText(/^(—|\d+%)/);
   });
 
+  test("school: the pages and decks you revise from, saved as links and never opened", async () => {
+    await page.goto("/school");
+    const panel = page.getByTestId("revision-sources");
+    await expect(panel).toBeVisible();
+
+    /**
+     * The form stays open after a save, so the "Add a link" button is gone by
+     * the second link. Clicking a button that is not there does not fail fast
+     * — Playwright waits the full timeout for it to appear, and .catch() does
+     * not shorten that wait, which is how this test first ran out of time.
+     */
+    const openForm = async () => {
+      const form = page.getByTestId("add-revision-link");
+      if ((await form.count()) === 0) {
+        await panel.getByRole("button", { name: /Add a link/ }).click();
+      }
+      return form;
+    };
+
+    // A Carousel Learning deck. The app recognises what it is from the
+    // address, so the form starts on the right answer.
+    const form = await openForm();
+    const deckUrl = "https://app.carousel-learning.com/quiz/58669cfa-9905-450d-a085-e203fda94606/revise";
+    await form.locator('input[name="url"]').fill(deckUrl);
+    await expect(form).toContainText("Carousel Learning");
+    await expect(form.locator('select[name="kind"]')).toHaveValue("FLASHCARDS");
+
+    const deckName = `Heart deck ${Date.now()}`;
+    await form.locator('input[name="title"]').fill(deckName);
+    await form.getByRole("button", { name: "Save link" }).click();
+    await expect(panel.getByTestId("revision-links").first()).toContainText(deckName);
+
+    // A Save My Exams page with no name typed takes the service's name, so a
+    // saved link never reads as a bare URL.
+    const second = await openForm();
+    await second.locator('input[name="url"]').fill("https://www.savemyexams.com/igcse/biology/cie/23/revision-notes/");
+    await expect(second.locator('select[name="kind"]')).toHaveValue("NOTES");
+    await second.getByRole("button", { name: "Save link" }).click();
+    await expect(panel).toContainText("Save My Exams");
+
+    // The value ends up in an href, so a scheme that would run code is
+    // refused with a sentence — and nothing like it reaches the page.
+    const third = await openForm();
+    await third.locator('input[name="url"]').evaluate((el) => el.removeAttribute("type"));
+    await third.locator('input[name="url"]').fill("javascript:alert(1)");
+    await third.getByRole("button", { name: "Save link" }).click();
+    await expect(third.getByRole("alert")).toContainText(/full link starting with https/i);
+
+    await page.reload();
+    expect(await page.locator('a[href^="javascript"]').count(), "no javascript: href anywhere").toBe(0);
+    expect(await page.locator('a[href^="data:"]').count(), "no data: href anywhere").toBe(0);
+
+    // A real write: still there after a reload, and it opens in a new tab
+    // rather than navigating this app away.
+    const saved = page.getByTestId("revision-sources").getByRole("link", { name: new RegExp(deckName) }).first();
+    await expect(saved).toHaveAttribute("href", deckUrl);
+    await expect(saved).toHaveAttribute("target", "_blank");
+    await expect(saved).toHaveAttribute("rel", /noopener/);
+
+    // And it can be taken back out.
+    await page.getByTestId("revision-sources").getByRole("button", { name: `Delete ${deckName}` }).click();
+    await expect(page.getByTestId("revision-sources").getByText(deckName)).toHaveCount(0);
+  });
+
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
     // A 1x1 PNG. The point is which files are accepted and where they end up,
     // not what is in them.

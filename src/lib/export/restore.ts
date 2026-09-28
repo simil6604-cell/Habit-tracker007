@@ -209,6 +209,7 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   // relation is SetNull, so deleting folders first means SQLite rewrites every
   // one of them to null on the way to deleting them anyway.
   await tx.libraryFolder.deleteMany({ where: { userId } });
+  await tx.revisionLink.deleteMany({ where: { userId } });
   await tx.schoolHabit.deleteMany({ where: { userId } });
   await tx.learningLogEntry.deleteMany({ where: { userId } });
   await tx.notePhoto.deleteMany({ where: { userId } });
@@ -399,6 +400,21 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
         if (row.folderId != null && !link(row, "folderId")) row.folderId = null;
         await create(write, withNewId(row));
       }
+    }
+
+    /**
+     * Revision links come after subjects and topics because a link can hang
+     * off either. One whose subject or topic did not survive is kept and
+     * simply unattached — the address is the part worth keeping, and losing
+     * "my Biology deck" because a subject was renamed away would be the app
+     * throwing out something it cannot get back.
+     */
+    for (const entry of rows(data.revisionLinks)) {
+      const row = scalars(entry, owned);
+      if (!row) continue;
+      if (row.subjectId != null && !link(row, "subjectId")) row.subjectId = null;
+      if (row.topicId != null && !link(row, "topicId")) row.topicId = null;
+      await create((r) => tx.revisionLink.create({ data: r as never }), withNewId(row));
     }
 
     /**
