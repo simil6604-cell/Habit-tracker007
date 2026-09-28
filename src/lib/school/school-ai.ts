@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { MAX_REVISION_LINKS, revisionLinksPrompt } from "./revision-links";
-import { setupPrompt, subjectSetup } from "./revision-setup";
+import { linksForPrompt, setupPrompt, subjectSetup } from "./revision-setup";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { daysUntilLabel } from "@/lib/planner/days-until";
 
@@ -119,12 +119,22 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
     );
   }
 
+  // Which link fills which slot is decided over ALL of them, while only a
+  // capped list is described to the model. So the chosen ones go first:
+  // otherwise, past sixteen links, the tutor could be told a subject is set up
+  // and to name its deck, with that deck missing from everything it can see.
+  const setup = subjectSetup(
+    subjects.map((s) => ({ id: s.id, name: s.name })),
+    revisionLinks
+  );
+  const describedLinks = linksForPrompt(revisionLinks, setup, MAX_REVISION_LINKS_IN_PROMPT);
+
   // Always included, even when empty: the empty version is what stops the
   // model inventing a Carousel deck that does not exist.
   lines.push(
     "",
     revisionLinksPrompt(
-      revisionLinks.slice(0, MAX_REVISION_LINKS_IN_PROMPT).map((link) => ({
+      describedLinks.map((link) => ({
         title: link.title,
         url: link.url,
         kind: link.kind,
@@ -138,13 +148,8 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
   // know the address of this student's Biology page — those sites were never
   // opened from here — so the tutor is told which subject is missing which
   // half and asks for it, once, when it is relevant.
-  const setup = setupPrompt(
-    subjectSetup(
-      subjects.map((s) => ({ id: s.id, name: s.name })),
-      revisionLinks
-    )
-  );
-  if (setup) lines.push("", setup);
+  const gaps = setupPrompt(setup);
+  if (gaps) lines.push("", gaps);
 
   if (weakTopics.length > 0) {
     lines.push(

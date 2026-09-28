@@ -57,8 +57,23 @@ export function needsSetup(setup: SubjectSetup[]): SubjectSetup[] {
   return setup.filter((subject) => !subject.lookUp || !subject.deck);
 }
 
-export function isFullySetUp(setup: SubjectSetup[]): boolean {
-  return setup.length > 0 && needsSetup(setup).length === 0;
+/**
+ * The links to describe to the tutor when not all of them fit in the prompt.
+ *
+ * Which link fills which slot is decided over every saved link; only a capped
+ * list is written into the prompt. So the ones filling a slot go first —
+ * otherwise, past the cap, the tutor is told a subject is set up and to send
+ * the student to its deck, while that deck is absent from everything it can
+ * see. Order is otherwise left alone, so the rest stay newest-first.
+ */
+export function linksForPrompt<T extends { id: string }>(links: T[], setup: SubjectSetup[], cap: number): T[] {
+  const chosen = new Set(
+    setup.flatMap((subject) => [subject.lookUp?.id, subject.deck?.id]).filter(Boolean) as string[]
+  );
+  return [...links.filter((link) => chosen.has(link.id)), ...links.filter((link) => !chosen.has(link.id))].slice(
+    0,
+    Math.max(0, cap)
+  );
 }
 
 /**

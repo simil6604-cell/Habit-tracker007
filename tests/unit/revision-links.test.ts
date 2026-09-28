@@ -223,6 +223,42 @@ describe("bestLink and stuckLinks", () => {
     expect(picked.testYourself?.id).toBe("deck");
   });
 
+  it("counts a link pinned to one of the subject's topics as that subject's link", () => {
+    // With no topic in view there is no such thing as the wrong topic. This
+    // went the other way: the Biology deck was skipped for being pinned to a
+    // Biology topic, and a deck saved under nothing was offered instead — so
+    // the subject page opened the wrong deck and the grid reported the right
+    // one missing.
+    const links = [
+      link({ id: "generic-deck", kind: "FLASHCARDS" }),
+      link({ id: "bio-topic-deck", kind: "FLASHCARDS", subjectId: "bio", topicId: "circulation" }),
+    ];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio" })?.id).toBe("bio-topic-deck");
+  });
+
+  it("still refuses another topic's link when a topic IS in view", () => {
+    const links = [link({ id: "other-topic", kind: "FLASHCARDS", subjectId: "bio", topicId: "genetics" })];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio", topicId: "circulation" })).toBeNull();
+  });
+
+  it("puts whose link it is above what kind it is", () => {
+    // Notes are the better kind for "look it up" — but a general notes page
+    // saved under no subject is not better than this subject's own questions.
+    const links = [
+      link({ id: "generic-notes", kind: "NOTES" }),
+      link({ id: "bio-questions", kind: "QUESTIONS", subjectId: "bio" }),
+    ];
+    expect(stuckLinks(links, { subjectId: "bio" }).lookUp?.id).toBe("bio-questions");
+  });
+
+  it("still ranks kinds within one tier", () => {
+    const links = [
+      link({ id: "bio-papers", kind: "PAST_PAPERS", subjectId: "bio" }),
+      link({ id: "bio-notes", kind: "NOTES", subjectId: "bio" }),
+    ];
+    expect(stuckLinks(links, { subjectId: "bio" }).lookUp?.id).toBe("bio-notes");
+  });
+
   it("gives back nothing at all when nothing is saved", () => {
     expect(stuckLinks([], { subjectId: "bio" })).toEqual({ lookUp: null, testYourself: null });
   });
