@@ -2,7 +2,7 @@ export type NavItem = {
   href: string;
   label: string;
   emoji?: string;
-  icon?: "home" | "calendar" | "tasks" | "analytics" | "settings" | "coach" | "schoolai";
+  icon?: "home" | "calendar" | "tasks" | "analytics" | "settings" | "coach" | "schoolai" | "library";
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -11,6 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   // own row here, which made it look like a different place to go rather than
   // part of School — and meant two entries competing for the same thing.
   { href: "/school", label: "School", emoji: "🎓" },
+  { href: "/library", label: "My Library", icon: "library" },
   { href: "/gym", label: "Gym", emoji: "🏋️" },
   { href: "/football", label: "Football", emoji: "⚽" },
   { href: "/coach", label: "AI Coach", icon: "coach" },

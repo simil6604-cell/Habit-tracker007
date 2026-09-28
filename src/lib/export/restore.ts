@@ -205,6 +205,10 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   await tx.exam.deleteMany({ where: { userId } });
   await tx.studySession.deleteMany({ where: { userId } });
   await tx.flashcard.deleteMany({ where: { userId } });
+  // After the things that sit in folders: those rows carry folderId, and this
+  // relation is SetNull, so deleting folders first means SQLite rewrites every
+  // one of them to null on the way to deleting them anyway.
+  await tx.libraryFolder.deleteMany({ where: { userId } });
   await tx.schoolHabit.deleteMany({ where: { userId } });
   await tx.learningLogEntry.deleteMany({ where: { userId } });
   await tx.notePhoto.deleteMany({ where: { userId } });
@@ -308,6 +312,15 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       await create((row) => tx.school.create({ data: row as never }), { ...omit(school, ["id"]), userId });
     }
 
+    // Library folders first: flashcards, notes, recordings and log entries can
+    // all point at one, and a folder written after them would leave every
+    // folderId pointing at an id that does not exist yet.
+    for (const folder of rows(data.libraryFolders)) {
+      const row = scalars(folder, owned);
+      if (!row) continue;
+      await create((r) => tx.libraryFolder.create({ data: r as never }), withNewId(row));
+    }
+
     // Parents before children, and a child whose parent didn't make it is
     // skipped rather than re-parented to something arbitrary.
     for (const subject of rows(data.subjects)) {
@@ -381,6 +394,9 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       for (const entry of rows(data[key])) {
         const row = scalars(entry, owned);
         if (!row || !link(row, "topicId")) continue;
+        // A folder that did not survive leaves the item unfiled rather than
+        // taking the item down with it.
+        if (row.folderId != null && !link(row, "folderId")) row.folderId = null;
         await create(write, withNewId(row));
       }
     }
@@ -398,6 +414,7 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       if (!row) continue;
       if (!link(row, "subjectId")) row.subjectId = null;
       if (row.sourceLogEntryId != null && !link(row, "sourceLogEntryId")) row.sourceLogEntryId = null;
+      if (row.folderId != null && !link(row, "folderId")) row.folderId = null;
       await create((r) => tx.flashcard.create({ data: r as never }), withNewId(row));
     }
 
@@ -407,6 +424,7 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       const rewritten = rewriteImagePath(row.imagePath, userId, photos);
       // A note photo is its picture — without the file there is nothing to show.
       if (!rewritten) continue;
+      if (row.folderId != null && !link(row, "folderId")) row.folderId = null;
       await create((r) => tx.notePhoto.create({ data: r as never }), withNewId({ ...row, imagePath: rewritten }));
     }
 

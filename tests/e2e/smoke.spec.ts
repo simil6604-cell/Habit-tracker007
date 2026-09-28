@@ -666,6 +666,164 @@ test.describe.serial("full app walkthrough", () => {
     await expect(insights).toContainText(/most recent answer per card/);
   });
 
+  test("library: everything you have made, in one place you can search and file", async () => {
+    // Something of each kind, made where it is normally made — the library is
+    // an index, so it has to pick things up without being told about them.
+    const cardFront = `Übungsaufgabe Osmose ${Date.now()}`;
+    await page.goto("/school/flashcards");
+    await page.fill('input[name="front"]', cardFront);
+    await page.fill('input[name="back"]', "Wasser wandert zur höheren Konzentration");
+    await page.getByRole("button", { name: "Add card" }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: cardFront })).toBeVisible();
+
+    await page.goto("/library");
+    await expect(page.getByRole("heading", { name: "Your study space." })).toBeVisible();
+
+    const items = page.getByTestId("library-items");
+    await expect(items.getByText(cardFront)).toBeVisible();
+
+    // The sidebar says how much is in there, like the rest of the app says
+    // what it knows. It is a desktop-only element, and this viewport is wide.
+    await expect(page.locator('nav a[href="/library"]')).toContainText(/\d/);
+
+    // Tabs carry real counts, and they add up.
+    const tabs = page.getByTestId("library-tabs");
+    await expect(tabs).toContainText("Flashcards");
+    await expect(tabs).toContainText("Recordings");
+    const tabText = await tabs.innerText();
+    const [all, flash, notes, recordings] = [...tabText.matchAll(/(\d+)/g)].map((m) => Number(m[1]));
+    expect(flash + notes + recordings, "the tab counts add up to All").toBe(all);
+
+    // Searching without the umlaut finds the word that has one — nobody
+    // reaches for the ü key on a phone.
+    await page.getByTestId("library-search").fill("ubungsaufgabe");
+    await expect(items.getByText(cardFront)).toBeVisible();
+    await expect(page.getByTestId("library-result-count")).toContainText(/of/);
+
+    // A search that matches nothing says so, instead of looking empty.
+    await page.getByTestId("library-search").fill("zzzznothinghere");
+    await expect(page.getByText(/Nothing matches/)).toBeVisible();
+    await page.getByTestId("library-search").fill("");
+    await expect(items.getByText(cardFront)).toBeVisible();
+
+    // A folder, made and named in your own words.
+    const folderName = `Biologie ${Date.now()}`;
+    await page.getByRole("button", { name: /Create folder|New folder/ }).click();
+    await page.fill('input[name="name"]', folderName);
+    await page.getByRole("button", { name: "Create folder" }).click();
+    await expect(page.getByTestId("library-folders")).toContainText(folderName);
+
+    // The same name twice is refused with a sentence, not a crash.
+    await page.fill('input[name="name"]', folderName);
+    await page.getByRole("button", { name: "Create folder" }).click();
+    await expect(page.getByTestId("create-folder-form").getByRole("alert")).toContainText(/already have a folder/i);
+
+    // File the card, and the folder's count follows it.
+    const card = page.locator('[data-testid^="library-item-flashcard-"]').filter({ hasText: cardFront });
+    await card.locator("select").selectOption({ label: folderName });
+    await expect(page.getByTestId("library-folders").locator("div", { hasText: folderName }).first()).toContainText("1");
+
+    // And the folder view holds it.
+    const folderLink = page.getByTestId("library-folders").getByRole("link", { name: new RegExp(folderName) });
+    await folderLink.click();
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+    await expect(page.getByTestId("library-result-count")).toContainText(/1 of/);
+
+    // Deleting the folder must NOT delete what was inside it.
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: `Delete folder ${folderName}` }).click();
+    await expect(page.getByTestId("library-folders")).toHaveCount(0);
+
+    await page.goto("/library");
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // A folder id that is not this account's shows the whole library rather
+    // than an empty page that looks like the material is gone.
+    await page.goto("/library?folder=not-a-real-folder-id");
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // Junk in the query string falls back instead of breaking the page.
+    await page.goto("/library?type=banana&sort=%3Cscript%3E&view=nope");
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+    await expect(page.getByTestId("library-sort")).toHaveValue("NEWEST");
+  });
+
+  test("progress: School, Gym and Football each get their own plan, never a shared one", async () => {
+    // The whole requirement in one test: three plans, three pages, and no
+    // number that mixes them. A single combined score would hide exactly what
+    // these are for.
+    const seen: { path: string; title: string; completed: string; next: string }[] = [];
+
+    for (const [path, title] of [
+      ["/school", "School progress"],
+      ["/gym", "Gym progress"],
+      ["/football", "Football progress"],
+    ] as const) {
+      await page.goto(path);
+      const panel = page.locator("#progress");
+      await expect(panel, `${path} has its own progress plan`).toBeVisible();
+      await expect(panel.getByRole("heading", { name: title })).toBeVisible();
+
+      // It must not carry the other two domains' plans with it.
+      for (const other of ["School progress", "Gym progress", "Football progress"].filter((t) => t !== title)) {
+        await expect(page.getByRole("heading", { name: other })).toHaveCount(0);
+      }
+
+      // Five figures: completed, remaining, progress, and two of this
+      // domain's own.
+      await expect(panel.getByTestId("progress-stats").locator("> div")).toHaveCount(5);
+
+      const stats = await panel.getByTestId("progress-stats").innerText();
+      seen.push({
+        path,
+        title,
+        completed: stats.split("\n")[0],
+        next: await panel.getByTestId("next-up").innerText(),
+      });
+
+      // Completed + Remaining is the length of the list, on every page.
+      const tabs = await panel.getByTestId("milestone-tabs").innerText();
+      const [all, completed, remaining] = [...tabs.matchAll(/\((\d+)\)/g)].map((m) => Number(m[1]));
+      expect(completed + remaining, `${path} tab counts add up`).toBe(all);
+      expect(all).toBeGreaterThan(5);
+
+      // Every milestone says a real number against a real target, never NaN.
+      const rows = panel.getByTestId("milestone-list").locator("> li");
+      expect(await rows.count()).toBe(all);
+      await expect(panel).not.toContainText("NaN");
+      await expect(panel).not.toContainText("Infinity");
+      await expect(panel).not.toContainText("undefined");
+    }
+
+    // The three plans are genuinely different plans, not one rendered thrice.
+    expect(new Set(seen.map((s) => s.next)).size, "each domain proposes its own next step").toBeGreaterThan(1);
+
+    // Filtering one page's milestones does not leave that page.
+    await page.goto("/gym");
+    const gym = page.locator("#progress");
+    await gym.getByRole("link", { name: /^Remaining/ }).click();
+    await expect(page).toHaveURL(/\/gym/);
+    const remainingRows = gym.getByTestId("milestone-list").locator('> li[data-done="true"]');
+    await expect(remainingRows).toHaveCount(0);
+
+    await gym.getByRole("link", { name: /^Completed/ }).click();
+    await expect(page).toHaveURL(/\/gym/);
+    const completedRows = gym.getByTestId("milestone-list").locator('> li[data-done="false"]');
+    await expect(completedRows).toHaveCount(0);
+
+    // Searching narrows the list and the tab counts follow it.
+    await page.goto("/gym");
+    await gym.getByTestId("milestone-search").fill("nutrition");
+    await expect(gym.getByTestId("milestone-list").locator("> li").first()).toBeVisible();
+    const narrowed = await gym.getByTestId("milestone-tabs").innerText();
+    const narrowedAll = Number([...narrowed.matchAll(/\((\d+)\)/g)][0][1]);
+    expect(await gym.getByTestId("milestone-list").locator("> li").count()).toBe(narrowedAll);
+
+    // Junk in the milestone parameters falls back rather than breaking.
+    await page.goto("/football?mtab=banana&mq=" + "x".repeat(200));
+    await expect(page.locator("#progress").getByRole("heading", { name: "Football progress" })).toBeVisible();
+  });
+
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {
     // A 1x1 PNG. The point is which files are accepted and where they end up,
     // not what is in them.

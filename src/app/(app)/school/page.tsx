@@ -12,6 +12,9 @@ import { SchoolAISection } from "@/components/school/school-ai-section";
 import { getSchoolAISectionData } from "@/lib/school/school-ai-section";
 import { InsightsPanel } from "@/components/school/insights-panel";
 import { getSchoolInsights } from "@/lib/school/insights-data";
+import { ProgressPlanPanel } from "@/components/progress/progress-plan";
+import { getSchoolProgress } from "@/lib/progress/school-plan";
+import { parseMilestoneTab } from "@/lib/progress/milestones";
 import { HomeworkPanel, ExamPanel } from "@/components/school/homework-exam-lists";
 import { DailyChecklist } from "@/components/school/daily-checklist";
 import { getTodaySchoolChecklist } from "@/lib/planner/day-review";
@@ -24,10 +27,24 @@ import { SubjectProgressChart } from "@/components/charts/subject-progress-chart
 import { getAnalyticsData } from "@/lib/analytics/data";
 import { addDays, startOfDay } from "date-fns";
 
-export default async function SchoolPage() {
+export default async function SchoolPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   const userId = session!.user.id;
   const now = new Date();
+
+  // School's OWN progress plan — Gym and Football each build their own.
+  const params = await searchParams;
+  const one = (key: string) => {
+    const value = params[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const milestoneTab = parseMilestoneTab(one("mtab"));
+  const milestoneQuery = (one("mq") ?? "").slice(0, 60);
+  const schoolProgress = await getSchoolProgress(userId, now);
   const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
   const [subjects, slots, homework, exams, checklist] = await Promise.all([
@@ -76,6 +93,16 @@ export default async function SchoolPage() {
       <SchoolHero data={heroData} />
 
       <InsightsPanel insights={insights} />
+
+      <div id="progress" className="mt-4 scroll-mt-20">
+        <ProgressPlanPanel
+          plan={schoolProgress}
+          title="School progress"
+          tab={milestoneTab}
+          query={milestoneQuery}
+          basePath="/school"
+        />
+      </div>
 
       <SchoolAISection data={aiSection} />
 

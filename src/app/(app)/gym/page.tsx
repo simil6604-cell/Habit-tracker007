@@ -18,12 +18,30 @@ import { GoalsPanel } from "@/components/shared/goals-panel";
 import { GYM_GOALS } from "@/lib/data/football";
 import { getNutritionSummary } from "@/lib/gym/nutrition-summary";
 import { DomainHero } from "@/components/layout/domain-hero";
+import { ProgressPlanPanel } from "@/components/progress/progress-plan";
+import { getGymProgress } from "@/lib/progress/gym-plan";
+import { parseMilestoneTab } from "@/lib/progress/milestones";
 
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export default async function GymPage() {
+export default async function GymPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   const userId = session!.user.id;
+
+  // Gym's OWN progress plan. School and Football each build their own from
+  // their own rows; nothing is added across the three.
+  const params = await searchParams;
+  const one = (key: string) => {
+    const value = params[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const milestoneTab = parseMilestoneTab(one("mtab"));
+  const milestoneQuery = (one("mq") ?? "").slice(0, 60);
+  const gymProgress = await getGymProgress(userId);
   const todayIdx = (new Date().getDay() + 6) % 7;
 
   const workouts = await prisma.workout.findMany({
@@ -66,6 +84,16 @@ export default async function GymPage() {
           </>
         }
       />
+
+      <div id="progress" className="mt-6 scroll-mt-20">
+        <ProgressPlanPanel
+          plan={gymProgress}
+          title="Gym progress"
+          tab={milestoneTab}
+          query={milestoneQuery}
+          basePath="/gym"
+        />
+      </div>
 
       <Card className="mt-6">
         <CardHeader>

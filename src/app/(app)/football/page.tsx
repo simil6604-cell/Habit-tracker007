@@ -12,6 +12,9 @@ import { DrillLibraryPanel } from "@/components/football/drill-library-panel";
 import { getSavedDrillVideos } from "@/lib/football/drill-video-actions";
 import { Sparkles } from "lucide-react";
 import { DomainHero } from "@/components/layout/domain-hero";
+import { ProgressPlanPanel } from "@/components/progress/progress-plan";
+import { getFootballProgress } from "@/lib/progress/football-plan";
+import { parseMilestoneTab } from "@/lib/progress/milestones";
 import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
 import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
 import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
@@ -23,9 +26,23 @@ import { WeekView } from "@/components/calendar/week-view";
 import { getCalendarItems } from "@/lib/calendar/items";
 import { addDays, startOfDay } from "date-fns";
 
-export default async function FootballPage() {
+export default async function FootballPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   const userId = session!.user.id;
+
+  // Football's OWN progress plan — separate from School's and Gym's.
+  const params = await searchParams;
+  const one = (key: string) => {
+    const value = params[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const milestoneTab = parseMilestoneTab(one("mtab"));
+  const milestoneQuery = (one("mq") ?? "").slice(0, 60);
+  const footballProgress = await getFootballProgress(userId);
 
   const profile = await prisma.footballProfile.findUnique({
     where: { userId },
@@ -78,6 +95,16 @@ export default async function FootballPage() {
           )
         }
       />
+
+      <div id="progress" className="mt-6 scroll-mt-20">
+        <ProgressPlanPanel
+          plan={footballProgress}
+          title="Football progress"
+          tab={milestoneTab}
+          query={milestoneQuery}
+          basePath="/football"
+        />
+      </div>
 
       <Card className="mt-6">
         <CardHeader><CardTitle>Profile</CardTitle></CardHeader>

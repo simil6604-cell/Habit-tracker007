@@ -10,7 +10,7 @@ import { StatusPill } from "./status-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "./sign-out-button";
 
-export function Sidebar({ overallScore }: { overallScore: number }) {
+export function Sidebar({ overallScore, libraryCount }: { overallScore: number; libraryCount: number }) {
   const pathname = usePathname();
   // Longest matching href wins: /school/ai sits under /school, and without this
   // both light up at once — two "you are here" markers, neither of them wrong.
@@ -44,6 +44,12 @@ export function Sidebar({ overallScore }: { overallScore: number }) {
             >
               <NavIcon item={item} />
               {item.label}
+              {/* Only My Library carries a count, and only once there is
+                  something in it: a badge reading 0 is a label saying the
+                  page is empty, on a page you have not opened. */}
+              {item.href === "/library" && libraryCount > 0 && (
+                <span className="ml-auto text-xs tabular-nums text-muted">{libraryCount}</span>
+              )}
             </Link>
           );
         })}

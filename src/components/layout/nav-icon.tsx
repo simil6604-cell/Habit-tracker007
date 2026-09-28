@@ -1,4 +1,4 @@
-import { Home, Calendar, ListChecks, BarChart3, Settings, Sparkles, GraduationCap } from "lucide-react";
+import { Home, Calendar, ListChecks, BarChart3, Settings, Sparkles, GraduationCap, Library } from "lucide-react";
 import type { NavItem } from "./nav-items";
 
 const ICONS = {
@@ -9,6 +9,7 @@ const ICONS = {
   settings: Settings,
   coach: Sparkles,
   schoolai: GraduationCap,
+  library: Library,
 };
 
 export function NavIcon({ item, size = 18 }: { item: NavItem; size?: number }) {
