@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { revisionLinksPrompt } from "./revision-links";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { daysUntilLabel } from "@/lib/planner/days-until";
 
@@ -52,8 +53,16 @@ const MAX_EXAMS = 8;
  * Without it every conversation starts from nothing and the first three turns
  * go on establishing facts the app already holds.
  */
+/**
+ * How many saved links are described to the model.
+ *
+ * Capped because the prompt is rebuilt on every message and a list of sixty
+ * URLs crowds out the student's actual question.
+ */
+const MAX_REVISION_LINKS_IN_PROMPT = 16;
+
 export async function buildSchoolContextBlock(userId: string, now: Date = new Date()): Promise<string> {
-  const [subjects, exams, weakTopics, confusions] = await Promise.all([
+  const [subjects, exams, weakTopics, confusions, revisionLinks] = await Promise.all([
     prisma.subject.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     prisma.exam.findMany({
       where: { userId, date: { gte: now } },
@@ -71,6 +80,18 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
       where: { userId, type: "CONFUSED" },
       orderBy: { createdAt: "desc" },
       take: 8,
+    }),
+    prisma.revisionLink.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: MAX_REVISION_LINKS_IN_PROMPT,
+      select: {
+        title: true,
+        url: true,
+        kind: true,
+        subject: { select: { name: true } },
+        topic: { select: { name: true } },
+      },
     }),
   ]);
 
@@ -90,6 +111,21 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
       ...exams.map((e) => `- ${e.title}${e.subject ? ` (${e.subject.name})` : ""} — ${daysUntilLabel(e.date, now)}`)
     );
   }
+
+  // Always included, even when empty: the empty version is what stops the
+  // model inventing a Carousel deck that does not exist.
+  lines.push(
+    "",
+    revisionLinksPrompt(
+      revisionLinks.map((link) => ({
+        title: link.title,
+        url: link.url,
+        kind: link.kind,
+        subjectName: link.subject?.name ?? null,
+        topicName: link.topic?.name ?? null,
+      }))
+    )
+  );
 
   if (weakTopics.length > 0) {
     lines.push(

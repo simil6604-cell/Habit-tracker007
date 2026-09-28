@@ -79,6 +79,7 @@ model User {
   schoolAIUploads    SchoolAIUpload[]
   examPlans          ExamPlan[]
   libraryFolders     LibraryFolder[]
+  revisionLinks      RevisionLink[]
 }
 
 model Account {
@@ -144,6 +145,7 @@ model Subject {
   exams          Exam[]
   studySessions  StudySession[]
   flashcards     Flashcard[]
+  revisionLinks  RevisionLink[]
 
   @@index([userId])
 }
@@ -186,6 +188,7 @@ model Topic {
   notePhotos      NotePhoto[]
   classRecordings ClassRecording[]
   tutorMessages   TutorMessage[]
+  revisionLinks   RevisionLink[]
 
   @@index([subjectId])
 }
@@ -823,4 +826,34 @@ model LibraryFolder {
 
   @@unique([userId, name])
   @@index([userId])
+}
+
+/**
+ * A revision page or deck YOU work from, saved as a link and nothing else.
+ * The two this was built for are Carousel Learning (retrieval-practice decks a
+ * teacher sets) and Save My Exams (notes, topic questions and past papers).
+ * Both are somebody else's product and Save My Exams is paid, so this app
+ * stores the address and never fetches the page: nothing of their content is
+ * copied in, and the school AI is told in as many words that it has not read
+ * them.
+ * Attached to a subject, or to a single topic, or to neither — a link that is
+ * just "my Biology deck" is as real as one for one topic.
+ */
+model RevisionLink {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topicId   String?
+  topic     Topic?   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  // FLASHCARDS | NOTES | QUESTIONS | PAST_PAPERS | OTHER
+  kind      String   @default("OTHER")
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+
+  @@index([userId, kind])
+  @@index([subjectId])
+  @@index([topicId])
 }
