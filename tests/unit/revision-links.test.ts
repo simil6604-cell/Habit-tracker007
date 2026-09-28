@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  bestLink,
   detectKind,
   detectProvider,
   flashcardDecks,
   MAX_LINK_TITLE,
   parseLinkInput,
   revisionLinksPrompt,
+  stuckLinks,
   type StoredLink,
 } from "@/lib/school/revision-links";
 
@@ -136,5 +138,92 @@ describe("revisionLinksPrompt", () => {
     const prompt = revisionLinksPrompt([]);
     expect(prompt).toMatch(/not saved any revision links/);
     expect(prompt).toMatch(/do not invent a link/);
+  });
+});
+
+describe("bestLink and stuckLinks", () => {
+  const link = (over: Partial<StoredLink>): StoredLink => ({
+    id: "x",
+    title: "Link",
+    url: "https://example.com/",
+    kind: "NOTES",
+    subjectId: null,
+    topicId: null,
+    ...over,
+  });
+
+  it("prefers this topic's link over the subject's", () => {
+    const links = [
+      link({ id: "subject", kind: "FLASHCARDS", subjectId: "bio" }),
+      link({ id: "topic", kind: "FLASHCARDS", subjectId: "bio", topicId: "circulation" }),
+    ];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio", topicId: "circulation" })?.id).toBe("topic");
+  });
+
+  it("falls back to the subject's link when the topic has none", () => {
+    const links = [link({ id: "subject", kind: "FLASHCARDS", subjectId: "bio" })];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio", topicId: "circulation" })?.id).toBe("subject");
+  });
+
+  it("falls back to a link saved for no subject at all", () => {
+    // "My Carousel account", attached to nothing, is still the right answer
+    // when this subject has nothing of its own.
+    const links = [link({ id: "loose", kind: "FLASHCARDS" })];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio", topicId: "circulation" })?.id).toBe("loose");
+  });
+
+  it("never offers another topic's link as this topic's", () => {
+    // A deck pinned to Photosynthesis is not the Circulation deck, and showing
+    // it under Circulation would send you to the wrong cards.
+    const links = [link({ id: "other", kind: "FLASHCARDS", subjectId: "bio", topicId: "photosynthesis" })];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio", topicId: "circulation" })).toBeNull();
+  });
+
+  it("never offers another subject's link", () => {
+    const links = [link({ id: "chem", kind: "FLASHCARDS", subjectId: "chemistry" })];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio" })).toBeNull();
+  });
+
+  it("takes the newest within a tier, since the query hands them over newest first", () => {
+    const links = [
+      link({ id: "newer", kind: "FLASHCARDS", subjectId: "bio" }),
+      link({ id: "older", kind: "FLASHCARDS", subjectId: "bio" }),
+    ];
+    expect(bestLink(links, "FLASHCARDS", { subjectId: "bio" })?.id).toBe("newer");
+  });
+
+  it("is null when nothing of that kind is saved", () => {
+    expect(bestLink([link({ kind: "NOTES" })], "FLASHCARDS", {})).toBeNull();
+    expect(bestLink([], "NOTES", {})).toBeNull();
+  });
+
+  it("gives one place to read and one to test yourself", () => {
+    const links = [
+      link({ id: "notes", kind: "NOTES", subjectId: "bio" }),
+      link({ id: "deck", kind: "FLASHCARDS", subjectId: "bio" }),
+      link({ id: "papers", kind: "PAST_PAPERS", subjectId: "bio" }),
+    ];
+    const picked = stuckLinks(links, { subjectId: "bio" });
+    expect(picked.lookUp?.id).toBe("notes");
+    expect(picked.testYourself?.id).toBe("deck");
+  });
+
+  it("works down the kinds when there are no notes", () => {
+    const only = (kind: string) => [link({ id: kind, kind, subjectId: "bio" })];
+    expect(stuckLinks(only("QUESTIONS"), { subjectId: "bio" }).lookUp?.id).toBe("QUESTIONS");
+    expect(stuckLinks(only("PAST_PAPERS"), { subjectId: "bio" }).lookUp?.id).toBe("PAST_PAPERS");
+    expect(stuckLinks(only("OTHER"), { subjectId: "bio" }).lookUp?.id).toBe("OTHER");
+  });
+
+  it("never offers a flashcard deck as somewhere to read it up", () => {
+    // They answer different questions, and a deck of questions is no use when
+    // the whole problem is that you do not know the answer.
+    const picked = stuckLinks([link({ id: "deck", kind: "FLASHCARDS", subjectId: "bio" })], { subjectId: "bio" });
+    expect(picked.lookUp).toBeNull();
+    expect(picked.testYourself?.id).toBe("deck");
+  });
+
+  it("gives back nothing at all when nothing is saved", () => {
+    expect(stuckLinks([], { subjectId: "bio" })).toEqual({ lookUp: null, testYourself: null });
   });
 });

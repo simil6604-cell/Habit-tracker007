@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
-import { revisionLinksPrompt } from "./revision-links";
+import { MAX_REVISION_LINKS, revisionLinksPrompt } from "./revision-links";
+import { setupPrompt, subjectSetup } from "./revision-setup";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { daysUntilLabel } from "@/lib/planner/days-until";
 
@@ -81,14 +82,20 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
+    // All of them, not just the ones that fit in the prompt: which subject is
+    // still missing a link is decided from the whole set, and the total is
+    // capped at MAX_REVISION_LINKS on the way in.
     prisma.revisionLink.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
-      take: MAX_REVISION_LINKS_IN_PROMPT,
+      take: MAX_REVISION_LINKS,
       select: {
+        id: true,
         title: true,
         url: true,
         kind: true,
+        subjectId: true,
+        topicId: true,
         subject: { select: { name: true } },
         topic: { select: { name: true } },
       },
@@ -117,7 +124,7 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
   lines.push(
     "",
     revisionLinksPrompt(
-      revisionLinks.map((link) => ({
+      revisionLinks.slice(0, MAX_REVISION_LINKS_IN_PROMPT).map((link) => ({
         title: link.title,
         url: link.url,
         kind: link.kind,
@@ -126,6 +133,18 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
       }))
     )
   );
+
+  // The half of setting this up that the app cannot do itself. It does not
+  // know the address of this student's Biology page — those sites were never
+  // opened from here — so the tutor is told which subject is missing which
+  // half and asks for it, once, when it is relevant.
+  const setup = setupPrompt(
+    subjectSetup(
+      subjects.map((s) => ({ id: s.id, name: s.name })),
+      revisionLinks
+    )
+  );
+  if (setup) lines.push("", setup);
 
   if (weakTopics.length > 0) {
     lines.push(

@@ -1,22 +1,32 @@
+import Link from "next/link";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { createFlashcard, deleteFlashcard, generateFlashcardsFromWeakTopics } from "@/lib/school/flashcard-actions";
 import { reviewBucket } from "@/lib/school/srs";
+import { flashcardDecks } from "@/lib/school/revision-links";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FlashcardReview } from "@/components/school/flashcard-review";
 import { GenerateFromConfusionsButton } from "@/components/school/generate-from-confusions-button";
-import { Trash2, Sparkles } from "lucide-react";
+import { Trash2, Sparkles, Layers, ExternalLink } from "lucide-react";
 
 export default async function FlashcardsPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [cards, subjects] = await Promise.all([
+  const [cards, subjects, revisionLinks] = await Promise.all([
     prisma.flashcard.findMany({ where: { userId }, orderBy: { dueDate: "asc" } }),
     prisma.subject.findMany({ where: { userId } }),
+    // Newest first, because bestLink takes the first match within a tier.
+    prisma.revisionLink.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, url: true, kind: true, subjectId: true, topicId: true },
+    }),
   ]);
+
+  const decks = flashcardDecks(revisionLinks);
 
   const due = cards.filter((c) => new Date(c.dueDate) <= new Date());
   const buckets = { NEEDS_REVIEW: 0, DUE_TODAY: 0, MASTERED: 0 };
@@ -35,6 +45,46 @@ export default async function FlashcardsPage() {
         <Badge variant="warning">🟡 Due today: {buckets.DUE_TODAY}</Badge>
         <Badge variant="success">🟢 Mastered: {buckets.MASTERED}</Badge>
       </div>
+
+      {/*
+        The decks you keep elsewhere, on the page about flashcards — because
+        this is where you come when you want to test yourself, and having to
+        remember that your real deck lives on another site is the friction
+        that stops you doing it.
+      */}
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Your decks on Carousel Learning</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {decks.length === 0 ? (
+            <p className="text-sm text-muted">
+              No deck saved yet. Open the deck in your own account, copy the address, and paste it under{" "}
+              <Link href="/school#revision-sources" className="underline">
+                Where you revise from
+              </Link>{" "}
+              — it then opens from here, from the tutor, and from the subject itself.
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-2" data-testid="carousel-decks">
+              {decks.map((deck) => (
+                <li key={deck.id}>
+                  <a
+                    href={deck.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium transition hover:border-accent"
+                  >
+                    <Layers size={14} className="text-muted" />
+                    {deck.title}
+                    <ExternalLink size={12} className="text-muted" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader>
