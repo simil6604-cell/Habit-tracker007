@@ -35,7 +35,11 @@ test.describe.serial("full app walkthrough", () => {
    * in the hero's Start here card is also a link saying Chemistry, and that
    * ambiguity broke these assertions the moment such an exam existed.
    */
-  const chemistryCard = (p: Page) => p.locator('a[href^="/school/subjects/"]', { hasText: "Chemistry" });
+  // Scoped to the Subjects list on purpose: the "Where you revise from" grid
+  // links to each subject as well, so an unscoped link locator matches twice.
+  const subjectLink = (p: Page, name: string) =>
+    p.getByTestId("subject-cards").locator('a[href^="/school/subjects/"]', { hasText: name });
+  const chemistryCard = (p: Page) => subjectLink(p, "Chemistry");
 
   let page: Page;
   const email = `e2e_${Date.now()}@example.com`;
@@ -832,7 +836,7 @@ test.describe.serial("full app walkthrough", () => {
     const subjectForm = page.locator("form", { has: page.locator('input[name="teacher"]') });
     await subjectForm.locator('input[name="name"]').fill(longName);
     await subjectForm.getByRole("button", { name: "Add subject" }).click();
-    await expect(chemistryCard(page).or(page.locator(`a[href^="/school/subjects/"]`, { hasText: "German" }))).toBeVisible();
+    await expect(chemistryCard(page).or(subjectLink(page, "German"))).toBeVisible();
 
     await page.goto("/analytics");
     await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
@@ -942,6 +946,53 @@ test.describe.serial("full app walkthrough", () => {
     // And it can be taken back out.
     await page.getByTestId("revision-sources").getByRole("button", { name: `Delete ${deckName}` }).click();
     await expect(page.getByTestId("revision-sources").getByText(deckName)).toHaveCount(0);
+  });
+
+  test("school: each subject's two slots, and its deck on the flashcards page", async () => {
+    // The point of the grid is that a missing link is visible BEFORE you need
+    // it. So this walks one subject from nothing saved, through one paste, to
+    // the deck being one tap away from the page you revise on.
+    await page.goto("/school");
+    const subjectName = `Physics ${Date.now()}`;
+    const subjectForm = page.locator("form", { has: page.locator('input[name="teacher"]') });
+    await subjectForm.locator('input[name="name"]').fill(subjectName);
+    await subjectForm.getByRole("button", { name: "Add subject" }).click();
+
+    const card = page
+      .getByTestId("subject-links-grid")
+      .locator('[data-testid^="subject-links-"]', { hasText: subjectName });
+    await expect(card).toBeVisible();
+
+    // Nothing saved for it yet: both slots say so, in words that tell you what
+    // to go and fetch rather than pretending the app could fetch it.
+    await expect(card).toContainText("Look it up — paste");
+    await expect(card).toContainText("Test yourself — paste");
+
+    const deckUrl = `https://app.carousel-learning.com/quiz/${crypto.randomUUID()}/revise`;
+    const deckName = `Forces deck ${Date.now()}`;
+    const panel = page.getByTestId("revision-sources");
+    if ((await page.getByTestId("add-revision-link").count()) === 0) {
+      await panel.getByRole("button", { name: /Add a link/ }).click();
+    }
+    const form = page.getByTestId("add-revision-link");
+    await form.locator('input[name="url"]').fill(deckUrl);
+    await form.locator('input[name="title"]').fill(deckName);
+    await form.locator('select[name="subjectId"]').selectOption({ label: subjectName });
+    await form.getByRole("button", { name: "Save link" }).click();
+
+    // One paste fills exactly one slot. The other stays empty — a link saved
+    // for one job must never be offered as the answer to the other.
+    const testYourself = card.getByRole("link", { name: /Test yourself/ });
+    await expect(testYourself).toHaveAttribute("href", deckUrl);
+    await expect(card).toContainText("Look it up — paste");
+
+    // And it shows up where you go to test yourself, which is the whole
+    // reason for saving it: no remembering which site the deck lives on.
+    await page.goto("/school/flashcards");
+    const chip = page.getByTestId("carousel-decks").getByRole("link", { name: new RegExp(deckName) });
+    await expect(chip).toHaveAttribute("href", deckUrl);
+    await expect(chip).toHaveAttribute("target", "_blank");
+    await expect(chip).toHaveAttribute("rel", /noopener/);
   });
 
   test("school ai: its own tutor, separate from the coach, that takes a stack of photos", async () => {

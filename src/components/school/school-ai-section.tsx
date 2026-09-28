@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GraduationCap } from "lucide-react";
 import { ExamPlanBuilder } from "@/components/school/exam-plan-builder";
 import { SchoolAIPanel } from "@/components/school/school-ai-panel";
+import { StuckLinks } from "@/components/school/stuck-links";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { isRealAIConfigured } from "@/lib/ai/provider";
@@ -54,6 +55,14 @@ export function SchoolAISection({ data }: { data: SchoolAISectionData }) {
           <div className="flex h-[60vh] min-h-[440px] flex-col overflow-hidden">
             <SchoolAIPanel initialMessages={data.messages} />
           </div>
+
+          {/*
+            Directly under the chat, because this is where "I still don't get
+            it" happens. The app renders these from the saved URL rather than
+            asking the model to type one into its answer — a link is either
+            exactly right or useless.
+          */}
+          <StuckLinks links={data.links} className="border-t border-border pt-3" />
         </CardContent>
       </Card>
     </section>

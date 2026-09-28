@@ -120,6 +120,62 @@ export function flashcardDecks(links: StoredLink[]): StoredLink[] {
   return links.filter((link) => link.kind === "FLASHCARDS");
 }
 
+export type LinkScope = { subjectId?: string | null; topicId?: string | null };
+
+/**
+ * The most specific saved link of one kind.
+ *
+ * Specificity beats recency, in this order: a link on THIS topic, then one on
+ * the subject, then one attached to neither — a link saved as "my Biology
+ * deck" with no topic is still the right answer on a topic that has none of
+ * its own.
+ *
+ * Within a tier the first wins, and the query hands these over newest-first,
+ * so what comes back is the most recent link of the most specific kind.
+ */
+export function bestLink(links: StoredLink[], kind: RevisionKind, scope: LinkScope): StoredLink | null {
+  const ofKind = links.filter((link) => link.kind === kind);
+  if (ofKind.length === 0) return null;
+
+  if (scope.topicId) {
+    const onTopic = ofKind.find((link) => link.topicId === scope.topicId);
+    if (onTopic) return onTopic;
+  }
+  if (scope.subjectId) {
+    // A link on the right subject but pinned to a DIFFERENT topic is not this
+    // topic's link, so it is skipped rather than offered as one.
+    const onSubject = ofKind.find(
+      (link) => link.subjectId === scope.subjectId && (link.topicId === null || link.topicId === scope.topicId)
+    );
+    if (onSubject) return onSubject;
+  }
+  return ofKind.find((link) => link.subjectId === null && link.topicId === null) ?? null;
+}
+
+/** Kinds that answer "I don't know this", best first. */
+const LOOK_UP_ORDER: RevisionKind[] = ["NOTES", "QUESTIONS", "PAST_PAPERS", "OTHER"];
+
+/**
+ * The two links worth putting in front of someone who is stuck: somewhere to
+ * read it up, and somewhere to test themselves.
+ *
+ * Rendered by the app from the stored URL rather than typed by the model into
+ * its answer. A link is either exactly right or useless, and a model asked to
+ * reproduce a UUID will eventually get one character wrong — at which point
+ * the student taps a broken link and blames their own deck.
+ */
+export function stuckLinks(
+  links: StoredLink[],
+  scope: LinkScope = {}
+): { lookUp: StoredLink | null; testYourself: StoredLink | null } {
+  let lookUp: StoredLink | null = null;
+  for (const kind of LOOK_UP_ORDER) {
+    lookUp = bestLink(links, kind, scope);
+    if (lookUp) break;
+  }
+  return { lookUp, testYourself: bestLink(links, "FLASHCARDS", scope) };
+}
+
 /**
  * The lines the school AI is given about these links.
  *

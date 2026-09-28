@@ -11,6 +11,7 @@ import { TopicsTable } from "@/components/school/topics-table";
 import { SubjectWeaknesses } from "@/components/school/subject-weaknesses";
 import { SubjectLevelPicker } from "@/components/school/subject-level-picker";
 import { RevisionSourceCard } from "@/components/school/revision-source-card";
+import { StuckLinks } from "@/components/school/stuck-links";
 import { parseEducationSystems } from "@/lib/ai/academic-prompt";
 
 export default async function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,6 +27,14 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
 
   const school = await prisma.school.findUnique({ where: { userId } });
   const systems = parseEducationSystems(school?.educationSystem);
+
+  // Scoped to this subject below, so a Biology deck shows on Biology and not
+  // on Chemistry. Newest first, because bestLink takes the first in a tier.
+  const revisionLinks = await prisma.revisionLink.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, title: true, url: true, kind: true, subjectId: true, topicId: true },
+  });
 
   const avgProgress = subject.topics.length
     ? Math.round(subject.topics.reduce((a, t) => a + t.progressPct, 0) / subject.topics.length)
@@ -64,7 +73,8 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
         <CardHeader>
           <CardTitle>Revision source</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          <StuckLinks links={revisionLinks} scope={{ subjectId: subject.id }} />
           <RevisionSourceCard subjectId={subject.id} subjectName={subject.name} revisionUrl={subject.revisionUrl} />
         </CardContent>
       </Card>

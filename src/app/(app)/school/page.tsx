@@ -13,6 +13,8 @@ import { getSchoolAISectionData } from "@/lib/school/school-ai-section";
 import { InsightsPanel } from "@/components/school/insights-panel";
 import { getSchoolInsights } from "@/lib/school/insights-data";
 import { RevisionLinksPanel } from "@/components/school/revision-links-panel";
+import { SubjectLinksGrid } from "@/components/school/subject-links-grid";
+import { subjectSetup } from "@/lib/school/revision-setup";
 import { ProgressPlanPanel } from "@/components/progress/progress-plan";
 import { getSchoolProgress } from "@/lib/progress/school-plan";
 import { parseMilestoneTab } from "@/lib/progress/milestones";
@@ -110,11 +112,17 @@ export default async function SchoolPage({
         />
       </div>
 
-      <Card className="mt-4" data-testid="revision-sources">
+      <Card id="revision-sources" className="mt-4 scroll-mt-20" data-testid="revision-sources">
         <CardHeader>
           <CardTitle>Where you revise from</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-5">
+          {/*
+            Two slots per subject, so a missing one is visible rather than
+            something you find out about when you need it.
+          */}
+          <SubjectLinksGrid setup={subjectSetup(subjectCards.map((s) => ({ id: s.id, name: s.name })), revisionLinks)} />
+
           <RevisionLinksPanel
             links={revisionLinks}
             subjects={subjects.map((s) => ({
@@ -182,7 +190,7 @@ export default async function SchoolPage({
           {subjectCards.length === 0 ? (
             <p className="text-sm text-muted">No subjects yet — add your first one above.</p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="subject-cards">
               {subjectCards.map((s) => (
                 <SubjectCard key={s.id} subject={s} />
               ))}
