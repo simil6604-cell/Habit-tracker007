@@ -10,7 +10,7 @@ import { StatusPill } from "./status-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "./sign-out-button";
 
-export function Sidebar({ overallScore, libraryCount }: { overallScore: number; libraryCount: number }) {
+export function Sidebar({ overallScore, libraryCount }: { overallScore: number | null; libraryCount: number }) {
   const pathname = usePathname();
   // Longest matching href wins: /school/ai sits under /school, and without this
   // both light up at once — two "you are here" markers, neither of them wrong.

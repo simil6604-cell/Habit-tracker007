@@ -56,14 +56,33 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
       ...prev,
       { id: `pending-${Date.now()}`, role: "USER", content: trimmed, createdAt: new Date() },
     ]);
-    startTransition(async () => setMessages(await sendCoachMessageLive(trimmed)));
+    startTransition(async () => {
+      try {
+        setMessages(await sendCoachMessageLive(trimmed));
+      } catch {
+        // Without this the optimistic bubble just sat there with no reply and
+        // no error — indistinguishable from the coach ignoring you.
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            role: "ASSISTANT",
+            content: "That didn't get through — check your connection and send it again.",
+            createdAt: new Date(),
+          },
+        ]);
+      }
+    });
   }
 
   function toggleMic() {
     if (mic.listening) {
       mic.stop();
       // Stopping is how you finish a spoken turn, so send what was heard.
-      const heard = (mic.transcript || input).trim();
+      // The box first: dictation writes into it, and if you corrected a
+      // misheard word in there, that correction IS what you meant to send.
+      // The raw transcript is only the fallback for a box you never touched.
+      const heard = (input || mic.transcript).trim();
       if (heard) send(heard);
     } else {
       // Never listen to our own voice.

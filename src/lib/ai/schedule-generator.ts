@@ -51,7 +51,10 @@ export async function generateDayPlan(userId: string, date: Date): Promise<DayPl
     prisma.footballTraining.findMany({ where: { profile: { userId }, date: { gte: dayStart, lt: dayEnd } } }),
     prisma.footballMatch.findMany({ where: { profile: { userId }, date: { gte: dayStart, lt: dayEnd } } }),
     prisma.exam.findMany({
-      where: { userId, date: { gte: date, lte: addDays(date, 10) } },
+      // From the START of the day being planned. `date` carries the current
+      // time of day, so planning tomorrow at 21:00 excluded an exam at 08:00
+      // tomorrow — the one day it matters most.
+      where: { userId, date: { gte: dayStart, lte: addDays(dayStart, 10) } },
       include: { subject: { include: { topics: true } } },
       orderBy: { date: "asc" },
     }),

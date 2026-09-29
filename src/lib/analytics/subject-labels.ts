@@ -89,13 +89,24 @@ export function shortSubjectNames(names: string[]): string[] {
     return out;
   });
 
-  const counts = new Map<string, number>();
-  for (const name of candidate) counts.set(name.toLowerCase(), (counts.get(name.toLowerCase()) ?? 0) + 1);
+  const tally = (list: string[]) => {
+    const counts = new Map<string, number>();
+    for (const name of list) counts.set(name.toLowerCase(), (counts.get(name.toLowerCase()) ?? 0) + 1);
+    return counts;
+  };
+  const candidateCounts = tally(candidate);
+  const firstPassCounts = tally(firstPass);
 
   return candidate.map((short, i) => {
-    const collides = (counts.get(short.toLowerCase()) ?? 0) > 1;
     // A collision after the optional cut falls back to the first pass, which
     // still has "Language" or "Literature" on it and tells the two apart.
-    return collides ? firstPass[i] : short;
+    if ((candidateCounts.get(short.toLowerCase()) ?? 0) <= 1) return short;
+    if ((firstPassCounts.get(firstPass[i].toLowerCase()) ?? 0) <= 1) return firstPass[i];
+
+    // Both passes collide: "Mathematics IGCSE" and "Mathematics A-Level" are
+    // both just "Mathematics", and two identical labels on a chart are worse
+    // than a long one. The level is the only thing telling them apart, so it
+    // comes back — for these rows only.
+    return names[i].trim();
   });
 }

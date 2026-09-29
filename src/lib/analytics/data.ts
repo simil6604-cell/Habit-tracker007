@@ -17,7 +17,10 @@ export async function getWeeklyTimeSplit(userId: string, weekOffset = 0) {
 
   const [studySessions, gymSessions, footballTrainings] = await Promise.all([
     prisma.studySession.findMany({ where: { userId, completed: true, start: { gte: weekStart, lte: weekEnd } } }),
-    prisma.workoutSession.findMany({ where: { userId, date: { gte: weekStart, lte: weekEnd } } }),
+    // completed, like study and football above and like the all-time split
+    // below: an un-ticked workout was time in "this week" and no time at all
+    // in "overall", from the same rows.
+    prisma.workoutSession.findMany({ where: { userId, completed: true, date: { gte: weekStart, lte: weekEnd } } }),
     prisma.footballTraining.findMany({
       where: { profile: { userId }, completed: true, date: { gte: weekStart, lte: weekEnd } },
     }),
@@ -122,7 +125,15 @@ export async function getAnalyticsData(userId: string) {
     { name: "Football", minutes: allFootball.reduce((sum, t) => sum + (t.durationMin ?? 0), 0) },
   ].filter((entry) => entry.minutes > 0);
 
-  const domainValues = [scores.school, scores.gym, scores.football].filter((v) => v > 0);
+  // The domains in use, not the ones scoring above zero: a 0 is a real score
+  // and dropping it made a week with an untouched gym look balanced.
+  const domainValues = [
+    { value: scores.school, inUse: scores.inUse.school },
+    { value: scores.gym, inUse: scores.inUse.gym },
+    { value: scores.football, inUse: scores.inUse.football },
+  ]
+    .filter((d) => d.inUse)
+    .map((d) => d.value);
   const mean = domainValues.length ? domainValues.reduce((a, b) => a + b, 0) / domainValues.length : 0;
   const variance = domainValues.length ? domainValues.reduce((a, b) => a + (b - mean) ** 2, 0) / domainValues.length : 0;
   const balance = domainValues.length ? Math.round(Math.max(0, 100 - Math.sqrt(variance))) : 0;

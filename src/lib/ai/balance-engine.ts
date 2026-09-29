@@ -14,10 +14,16 @@ export async function runWeeklyBalanceCheck(userId: string) {
   const created: string[] = [];
   const loadByDay = days.map((d, i) => ({ day: d, minutes: plans[i].totalCommittedMinutes, overloaded: plans[i].overloaded, reasons: plans[i].reasons }));
 
-  const lightestDay = [...loadByDay].sort((a, b) => a.minutes - b.minutes)[0];
-
   for (const entry of loadByDay) {
     if (!entry.overloaded) continue;
+
+    // The lightest OTHER day. Taking the lightest of all seven meant that in
+    // a week where the lightest day is itself overloaded, the advice read
+    // "move some study time to Tuesday" on Tuesday — and proposedChange
+    // carried the same day on both sides.
+    const lighter = loadByDay
+      .filter((other) => other !== entry && other.minutes < entry.minutes)
+      .sort((a, b) => a.minutes - b.minutes)[0];
 
     const existing = await prisma.aIRecommendation.findFirst({
       where: {
@@ -30,14 +36,19 @@ export async function runWeeklyBalanceCheck(userId: string) {
     if (existing) continue;
 
     const hours = (entry.minutes / 60).toFixed(1);
+    const load = `Your plan for ${format(entry.day, "EEEE")} adds up to about ${hours}h of school, training and study combined.`;
     const rec = await prisma.aIRecommendation.create({
       data: {
         userId,
         type: "BALANCE_WARNING",
         title: `⚠️ ${format(entry.day, "EEEE, MMM d")} is too demanding`,
-        message: `Your plan for ${format(entry.day, "EEEE")} adds up to about ${hours}h of school, training and study combined. Consider moving some study time to ${format(lightestDay.day, "EEEE")}, which is currently your lightest day.`,
+        message: lighter
+          ? `${load} Consider moving some study time to ${format(lighter.day, "EEEE")}, which is lighter.`
+          : `${load} Every other day this week is at least as full, so this one needs something dropped rather than moved.`,
         reasoning: JSON.stringify(entry.reasons),
-        proposedChange: JSON.stringify({ fromDay: entry.day.toISOString(), toDay: lightestDay.day.toISOString() }),
+        proposedChange: JSON.stringify(
+          lighter ? { fromDay: entry.day.toISOString(), toDay: lighter.day.toISOString() } : { fromDay: entry.day.toISOString() }
+        ),
         status: "PENDING",
       },
     });
@@ -45,8 +56,11 @@ export async function runWeeklyBalanceCheck(userId: string) {
   }
 
   if (created.length === 0) {
+    // Written with status "INFO", so looking for "PENDING" never found the
+    // one from last time: a fresh "✅ Your week looks balanced" was inserted
+    // on every check until the panel was nothing else.
     const hasAnyPendingInfo = await prisma.aIRecommendation.findFirst({
-      where: { userId, type: "INFO", status: "PENDING" },
+      where: { userId, type: "INFO", status: "INFO" },
     });
     if (!hasAnyPendingInfo) {
       await prisma.aIRecommendation.create({

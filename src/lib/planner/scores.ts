@@ -1,12 +1,18 @@
 import { prisma } from "@/lib/db/prisma";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
+import { overallScore, type DomainPart } from "./score-math";
 
 export type DomainScores = {
   school: number;
   gym: number;
   football: number;
   recovery: number;
-  overall: number;
+  /** Null when no domain is set up yet — see score-math. */
+  overall: number | null;
+  /** How many of the three domains are actually in use. */
+  tracked: number;
+  /** Which of them, for callers that average or compare domains. */
+  inUse: { school: boolean; gym: boolean; football: boolean };
 };
 
 /** Falls back to the latest baseline self-assessment when there's not enough real activity yet. */
@@ -20,12 +26,16 @@ async function getBaselineScore(userId: string, category: "SCHOOL" | "GYM" | "FO
  * (last 14 days), and exam-readiness (topics tagged HIGH exam relevance with
  * low progress pull the score down as an exam approaches).
  */
-async function computeSchoolScore(userId: string): Promise<number> {
+async function computeSchoolScore(userId: string): Promise<DomainPart> {
   const subjects = await prisma.subject.findMany({
     where: { userId },
     include: { topics: true },
   });
-  if (subjects.length === 0) return (await getBaselineScore(userId, "SCHOOL")) ?? 0;
+  if (subjects.length === 0) {
+    // No subjects: school counts only if they at least sat the baseline.
+    const baseline = await getBaselineScore(userId, "SCHOOL");
+    return { score: baseline ?? 0, inUse: baseline !== null };
+  }
 
   const topics = subjects.flatMap((s) => s.topics);
   let avgProgress: number;
@@ -62,10 +72,10 @@ async function computeSchoolScore(userId: string): Promise<number> {
     examReadiness = readiness.reduce((a, b) => a + b, 0) / readiness.length;
   }
 
-  return Math.round(avgProgress * 0.4 + homeworkRate * 0.3 + examReadiness * 0.3);
+  return { score: Math.round(avgProgress * 0.4 + homeworkRate * 0.3 + examReadiness * 0.3), inUse: true };
 }
 
-async function computeGymScore(userId: string): Promise<number> {
+async function computeGymScore(userId: string): Promise<DomainPart> {
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
 
@@ -76,21 +86,29 @@ async function computeGymScore(userId: string): Promise<number> {
     }),
   ]);
 
-  if (plannedWorkouts === 0 && sessions.length === 0) return (await getBaselineScore(userId, "GYM")) ?? 0;
+  if (plannedWorkouts === 0 && sessions.length === 0) {
+    const baseline = await getBaselineScore(userId, "GYM");
+    return { score: baseline ?? 0, inUse: baseline !== null };
+  }
 
   const targetPerWeek = Math.max(plannedWorkouts, 3);
   const completed = sessions.filter((s) => s.completed).length;
   const consistency = Math.min(100, (completed / targetPerWeek) * 100);
 
-  return Math.round(consistency);
+  // In use, whatever it scored: a planned week with nothing done yet is 0,
+  // and that 0 is the whole point of the number.
+  return { score: Math.round(consistency), inUse: true };
 }
 
-async function computeFootballScore(userId: string): Promise<number> {
+async function computeFootballScore(userId: string): Promise<DomainPart> {
   const profile = await prisma.footballProfile.findUnique({
     where: { userId },
     include: { trainings: true },
   });
-  if (!profile) return (await getBaselineScore(userId, "FOOTBALL")) ?? 0;
+  if (!profile) {
+    const baseline = await getBaselineScore(userId, "FOOTBALL");
+    return { score: baseline ?? 0, inUse: baseline !== null };
+  }
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
@@ -101,12 +119,14 @@ async function computeFootballScore(userId: string): Promise<number> {
   });
 
   if (trainingsThisWeek.length === 0) {
-    if (profile.trainings.length) return 40;
-    return (await getBaselineScore(userId, "FOOTBALL")) ?? 0;
+    if (profile.trainings.length) return { score: 40, inUse: true };
+    const baseline = await getBaselineScore(userId, "FOOTBALL");
+    // A profile with no training at all still counts: it was set up.
+    return { score: baseline ?? 0, inUse: true };
   }
 
   const completed = trainingsThisWeek.filter((t) => t.completed).length;
-  return Math.round((completed / trainingsThisWeek.length) * 100);
+  return { score: Math.round((completed / trainingsThisWeek.length) * 100), inUse: true };
 }
 
 async function computeRecoveryScore(userId: string): Promise<number> {
@@ -138,12 +158,16 @@ export async function computeDomainScores(userId: string): Promise<DomainScores>
     computeRecoveryScore(userId),
   ]);
 
-  const active = [school, gym, football].filter((v) => v > 0);
-  const overall = active.length
-    ? Math.round((active.reduce((a, b) => a + b, 0) / active.length) * 0.85 + recovery * 0.15)
-    : Math.round(recovery * 0.15);
-
-  return { school, gym, football, recovery, overall };
+  const domains = [school, gym, football];
+  return {
+    school: school.score,
+    gym: gym.score,
+    football: football.score,
+    recovery,
+    overall: overallScore(domains, recovery),
+    tracked: domains.filter((d) => d.inUse).length,
+    inUse: { school: school.inUse, gym: gym.inUse, football: football.inUse },
+  };
 }
 
 export async function getTodayWindow() {
