@@ -948,6 +948,33 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("revision-sources").getByText(deckName)).toHaveCount(0);
   });
 
+  test("school: the jump bar reaches every section it names", async () => {
+    // The page is about twenty phone screens. The bar is the way in, and a
+    // chip pointing at a section that was renamed or removed would scroll
+    // nowhere while still looking like a working button.
+    await page.goto("/school");
+    const bar = page.getByTestId("section-jump");
+    await expect(bar).toBeVisible();
+
+    const hrefs = await bar.locator("a").evaluateAll((links) => links.map((l) => l.getAttribute("href") ?? ""));
+    expect(hrefs.length, "the bar has chips at all").toBeGreaterThan(3);
+
+    for (const href of hrefs) {
+      const id = href.replace("#", "");
+      await expect(page.locator(`#${id}`), `the "${id}" chip points at a section that exists`).toHaveCount(1);
+    }
+
+    // And tapping one actually moves the page to it. Sticky positioning and
+    // anchor scrolling both break silently inside a scroll container, which
+    // is exactly what an overflow-hidden wrapper turns its parent into.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await bar.getByRole("link", { name: "Tutor" }).click();
+    await page.waitForTimeout(600);
+    const top = await page.locator("#tutor").evaluate((el) => el.getBoundingClientRect().top);
+    expect(top, "the tutor section is at the top of the screen, not below the fold").toBeLessThan(200);
+    expect(await page.evaluate(() => window.scrollY), "the page itself scrolled").toBeGreaterThan(100);
+  });
+
   test("school: each subject's two slots, and its deck on the flashcards page", async () => {
     // The point of the grid is that a missing link is visible BEFORE you need
     // it. So this walks one subject from nothing saved, through one paste, to

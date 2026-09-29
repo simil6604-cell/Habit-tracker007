@@ -149,3 +149,11 @@ body {
 .animate-fade-in-up {
   animation: fade-in-up 0.35s ease-out both;
 }
+
+/* A row of chips scrolls sideways on a phone; the bar under it is noise. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
