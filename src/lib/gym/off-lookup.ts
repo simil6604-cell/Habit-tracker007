@@ -30,6 +30,13 @@ export async function lookupProduct(barcode: string): Promise<OffProduct | null>
     clearTimeout(timeout);
   }
 
+  // A barcode Open Food Facts has never seen answers 404 on this endpoint,
+  // and that is an answer, not a failure to reach them: reported as a
+  // connection error it sends you to check a connection that is fine. Their
+  // API could not be called from here to confirm the exact code, so the
+  // "no such product" path is taken from the body as well, below.
+  if (res.status === 404) return null;
+
   if (!res.ok) {
     throw new Error("Couldn't reach the product database (Open Food Facts) — check your connection and try again.");
   }

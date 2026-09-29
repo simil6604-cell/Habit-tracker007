@@ -35,6 +35,28 @@ describe("analyzeTable", () => {
     expect(a.maxPoints).toBe(8 + 4 * 3);
   });
 
+  it("never prints the word null when the season is over", () => {
+    // Everyone has played all nine, so there is no points-per-match left to
+    // need — and the insight used to interpolate it anyway: "or null points
+    // per match".
+    const played = MID_SEASON.map((r) => ({ ...r, played: 9 }));
+    const a = analyzeTable(played, "Zug 94", [])!;
+    expect(a.matchesLeft).toBe(0);
+    for (const insight of a.insights) expect(insight).not.toMatch(/null|NaN|undefined/);
+  });
+
+  it("does not suggest turning two draws into wins when there has been one", () => {
+    const oneDraw = [
+      row(1, "FC Leader", 3, 3, 0, 0, 9, 1),
+      row(2, "Zug 94", 3, 0, 1, 2, 2, 6),
+      row(3, "C", 3, 1, 0, 2, 3, 5),
+    ];
+    const a = analyzeTable(oneDraw, "Zug 94", [])!;
+    const draws = a.insights.find((i) => i.includes("draws"))!;
+    expect(draws).toMatch(/turning that one into a win is 2 points/);
+    expect(draws).not.toMatch(/even 2 of those/);
+  });
+
   it("turns the leader's current pace into points needed", () => {
     const a = analyzeTable(MID_SEASON, "Zug 94", [])!;
     // 13 points from 5 = 2.6 a game; four left puts them on ~23.

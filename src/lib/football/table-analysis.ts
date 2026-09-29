@@ -117,8 +117,11 @@ export function analyzeTable(
       `1st is out of reach on points: even a full home-and-away run-in of ${mostMatchesPossible} wins only reaches ${bestCasePoints}, and ${leader.teamName} already has ${leader.points}. Second place is the target now.`
     );
   } else if (mine.rank !== 1) {
+    // pointsPerMatchNeeded is null once there are no matches left to play, and
+    // "or null points per match" is what that used to read as on screen.
+    const perMatch = pointsPerMatchNeeded === null ? "" : `, or ${pointsPerMatchNeeded} points per match`;
     insights.push(
-      `If ${leader.teamName} keeps their current pace (${leaderPace.toFixed(2)} points per match) they finish on about ${leaderProjected}. To beat that you need ${pointsNeeded} points from ${matchesLeft} — that's ${winsNeeded} win${winsNeeded === 1 ? "" : "s"}, or ${pointsPerMatchNeeded} points per match. A projection from their form so far, not a prediction.`
+      `If ${leader.teamName} keeps their current pace (${leaderPace.toFixed(2)} points per match) they finish on about ${leaderProjected}. To beat that you need ${pointsNeeded} points from ${matchesLeft} — that's ${winsNeeded} win${winsNeeded === 1 ? "" : "s"}${perMatch}. A projection from their form so far, not a prediction.`
     );
     if (pointsNeeded > matchesLeft * 3) {
       insights.push(`That's more than the ${matchesLeft * 3} points still available to you, so you also need them to drop points.`);
@@ -141,7 +144,14 @@ export function analyzeTable(
   }
 
   if (mine.played > 0 && mine.drawn >= mine.won && mine.drawn > 0) {
-    insights.push(`${mine.drawn} of your ${mine.played} matches were draws — turning even two of those into wins is ${2 * 2} points, often a place or two.`);
+    // "Even two of those" reads as nonsense when there has been one draw, so
+    // the count is never more than the draws actually played.
+    const turned = Math.min(2, mine.drawn);
+    insights.push(
+      `${mine.drawn} of your ${mine.played} matches were draws — turning ${
+        turned === 1 ? "that one" : `even ${turned} of those`
+      } into ${turned === 1 ? "a win" : "wins"} is ${turned * 2} points, often a place or two.`
+    );
   }
 
   if (weaknesses.length > 0) {

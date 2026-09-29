@@ -14,6 +14,14 @@ export const FOOTBALL_POSITIONS = [
 export type FootballPosition = (typeof FOOTBALL_POSITIONS)[number]["value"];
 
 export const FOOTBALL_SKILLS = [
+  // Keeper and full-back work belongs here too: POSITION_FOCUS names these,
+  // they have cues and example videos, and the save action refuses any skill
+  // that is not on this list — so leaving them off made a goalkeeper's own
+  // first focus unselectable and unsaveable.
+  "Shot Stopping",
+  "Distribution",
+  "Reflexes",
+  "Crossing",
   "Technique",
   "Dribbling",
   "Passing",

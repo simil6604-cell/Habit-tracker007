@@ -14,13 +14,27 @@ async function requireUserId() {
   return session.user.id;
 }
 
+/**
+ * The league table is read on both football pages.
+ *
+ * It is edited on /football/team but rendered on /football as well, so
+ * revalidating only the editor left "Imported 12 teams" sitting above the old
+ * table until the page was reloaded by hand.
+ */
+function revalidateFootball() {
+  revalidatePath("/football");
+  revalidatePath("/football/team");
+}
+
 export async function updateProfile(formData: FormData) {
   const userId = await requireUserId();
   const position = String(formData.get("position") ?? "ST");
   const weaknesses = formData.getAll("weaknesses").map(String);
   const teamName = String(formData.get("teamName") ?? "").trim();
 
-  let teamId: string | undefined;
+  // null, not undefined: Prisma reads undefined as "leave unchanged", so
+  // clearing the Team field silently kept the old team linked.
+  let teamId: string | null = null;
   if (teamName) {
     // Scoped to this user's own profiles on purpose. Looking a team up by name
     // alone made the name the only credential: anyone who typed your club's
@@ -231,13 +245,13 @@ export async function addStanding(formData: FormData) {
       points: Number(formData.get("points") ?? 0),
     },
   });
-  revalidatePath("/football/team");
+  revalidateFootball();
 }
 
 export async function deleteStanding(standingId: string) {
   const userId = await requireUserId();
   await prisma.teamStanding.deleteMany({ where: { id: standingId, team: { profiles: { some: { userId } } } } });
-  revalidatePath("/football/team");
+  revalidateFootball();
 }
 
 export async function importStandingsFromLink(url: string): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
@@ -261,6 +275,6 @@ export async function importStandingsFromLink(url: string): Promise<{ ok: true; 
     }),
   ]);
 
-  revalidatePath("/football/team");
+  revalidateFootball();
   return { ok: true, count: result.data.length };
 }

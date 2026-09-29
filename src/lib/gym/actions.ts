@@ -54,6 +54,17 @@ export async function deleteWorkout(workoutId: string) {
   revalidatePath("/gym");
 }
 
+/**
+ * A number field's value, or the default when it is empty or nonsense.
+ *
+ * `formData.get` returns "" for a cleared input, and `"" ?? 3` is "", which
+ * Number() turns into 0 rather than into the default anyone would expect.
+ */
+function positiveOr(raw: FormDataEntryValue | null, fallback: number): number {
+  const value = Number(String(raw ?? "").trim());
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 export async function addExercise(formData: FormData) {
   const userId = await requireUserId();
   const workoutId = String(formData.get("workoutId") ?? "");
@@ -65,8 +76,11 @@ export async function addExercise(formData: FormData) {
     data: {
       workoutId,
       name: String(formData.get("name") ?? "").trim(),
-      targetSets: Number(formData.get("targetSets") ?? 3),
-      targetReps: Number(formData.get("targetReps") ?? 10),
+      // An empty number input arrives as "", not as null, so `?? 3` never
+      // fired: a cleared box stored 0 sets, and an exercise with zero sets
+      // renders no rows to type into and can never be logged again.
+      targetSets: positiveOr(formData.get("targetSets"), 3),
+      targetReps: positiveOr(formData.get("targetReps"), 10),
       targetWeight: formData.get("targetWeight") ? Number(formData.get("targetWeight")) : null,
       cueText: String(formData.get("cueText") ?? "").trim() || null,
       // Validated, not just trimmed: it is rendered as an href.
@@ -114,7 +128,10 @@ export async function logWorkoutSession(formData: FormData) {
       where: { exerciseId: exercise.id },
       orderBy: { weight: "desc" },
     });
-    let bestWeightSoFar = previousBest?.weight ?? -Infinity;
+    // Starting from -Infinity made the first set a personal best whatever it
+    // weighed — including a bodyweight set at 0 kg, which then showed up as
+    // "🏆 New personal best" at 0 kg in history and in the diary tip.
+    let bestWeightSoFar = previousBest?.weight ?? 0;
 
     for (let setNumber = 1; setNumber <= exercise.targetSets; setNumber++) {
       const repsRaw = formData.get(`reps-${exercise.id}-${setNumber}`);
