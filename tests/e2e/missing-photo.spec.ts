@@ -42,6 +42,14 @@ test("the setup card notices a photo whose file has been deleted", async ({ page
   await page.fill('input[name="caption"]', "Will be deleted");
   await page.getByRole("button", { name: "Add photo" }).click();
   await expect(page.getByText("Will be deleted")).toBeVisible();
+  // The row AND the file: everything below depends on this account having one
+  // real photo. Asserted here so a failed upload fails on the upload, instead
+  // of surfacing later as a settings card that reports no photos and reads
+  // like the card is broken.
+  await expect(
+    page.locator('img[src^="/uploads/"]'),
+    "the uploaded photo is on the page, so the row exists and has a path"
+  ).toHaveCount(1);
 
   await page.goto("/settings");
   await expect(page.getByTestId("check-photo-files")).toContainText(/where the app expects/);
