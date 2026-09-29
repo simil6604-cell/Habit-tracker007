@@ -97,6 +97,12 @@ function MealTypeRow({
       setEstimateNote(
         `Rough estimate — adjust anything that looks off.${result.assumptions ? ` ${result.assumptions}` : ""}`
       );
+    } catch {
+      // A thrown action — expired session, no connection — used to leave the
+      // button spinning back to normal and say nothing at all, which reads as
+      // "the app ignored me".
+      setEstimateError(true);
+      setEstimateNote("That didn't get through — check your connection and try again, or type the numbers in yourself.");
     } finally {
       setEstimating(false);
     }

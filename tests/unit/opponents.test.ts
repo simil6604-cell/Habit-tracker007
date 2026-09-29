@@ -34,6 +34,16 @@ describe("previewOpponents", () => {
     expect(p.standing?.teamName).toBe("FC Rotkreuz");
   });
 
+  it("finds YOUR row by the same matching the opponents get", () => {
+    // The table comes from a league page ("FC Zug 94"), the profile is typed
+    // by hand ("Zug 94"). Matched by exact name, my own row was never found —
+    // and then every six-pointer and must-win read silently vanished, because
+    // a missing rank just falls through to the plain form line.
+    const [p] = previewOpponents([fixture("SC Cham")], TABLE, "Zug 94");
+    expect(p.rankDelta).toBe(1 - 3);
+    expect(p.read).toMatch(/six-pointer/);
+  });
+
   it("frames a team above you as a six-pointer and one below as must-not-drop", () => {
     const [above, below] = previewOpponents([fixture("Baar"), fixture("Rotkreuz")], TABLE, "FC Zug 94");
     expect(above.rankDelta).toBe(2 - 3);

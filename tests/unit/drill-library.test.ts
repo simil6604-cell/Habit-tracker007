@@ -19,6 +19,15 @@ describe("drill library coverage", () => {
     expect(DRILL_CUES[skill], skill).toBeTruthy();
   });
 
+  // A cue is not enough: the chips are rendered from FOOTBALL_SKILLS and the
+  // save action refuses anything not on it. Four keeper and full-back skills
+  // had cues and videos but were missing from the list, so a goalkeeper's own
+  // first focus rendered no selected chip and saving a video for it was
+  // rejected with "That isn't one of the skills."
+  it.each([...new Set(Object.values(POSITION_FOCUS).flat())])("%s is a skill you can actually pick", (skill) => {
+    expect(FOOTBALL_SKILLS, skill).toContain(skill);
+  });
+
   // The training generator names drills from POSITION_FOCUS, and the training
   // list looks each one up in the same two tables.
   it.each([...new Set(Object.values(POSITION_FOCUS).flat())])("%s, used by the generator, has a cue", (skill) => {

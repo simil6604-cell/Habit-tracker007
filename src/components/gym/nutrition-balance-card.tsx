@@ -62,7 +62,9 @@ export function NutritionBalanceCard({ summary }: { summary: NutritionSummary })
         {MACROS.map((m) => {
           const value = summary[m.key];
           const goal = summary[m.goalKey];
-          const macroPct = Math.min(100, Math.round((value / goal) * 100));
+          // A goal of 0 gave 0/0 = NaN ("width: NaN%") and any intake over a
+          // zero goal read as a full bar. No goal means no bar to fill.
+          const macroPct = goal > 0 ? Math.min(100, Math.round((value / goal) * 100)) : 0;
           return (
             <div key={m.key}>
               <div className="flex items-center justify-between text-xs text-muted">

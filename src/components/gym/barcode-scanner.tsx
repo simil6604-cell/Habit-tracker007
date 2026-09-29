@@ -25,6 +25,10 @@ export function BarcodeScanner({ onDetected }: { onDetected: (barcode: string) =
   const videoRef = useRef<HTMLVideoElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const controlsRef = useRef<ScannerControls | null>(null);
+  // Held in a ref so the live scan always calls the latest callback without
+  // the effect having to depend on it — see the effect below.
+  const onDetectedRef = useRef(onDetected);
+  onDetectedRef.current = onDetected;
   const [active, setActive] = useState(false);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +51,7 @@ export function BarcodeScanner({ onDetected }: { onDetected: (barcode: string) =
             controlsRef.current?.stop();
             controlsRef.current = null;
             setActive(false);
-            onDetected(result.getText());
+            onDetectedRef.current(result.getText());
           }
         );
         if (cancelled) {
@@ -74,7 +78,10 @@ export function BarcodeScanner({ onDetected }: { onDetected: (barcode: string) =
       controlsRef.current?.stop();
       controlsRef.current = null;
     };
-  }, [active, onDetected]);
+    // onDetected is deliberately NOT a dependency: the parent re-creates it
+    // on every render (a form submit is enough), and restarting the camera
+    // mid-scan because of that loses whatever it was about to read.
+  }, [active]);
 
   /** Decode one still photo of the barcode. */
   async function readPhoto(file: File) {

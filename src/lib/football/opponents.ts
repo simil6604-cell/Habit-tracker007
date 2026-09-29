@@ -31,7 +31,7 @@ function normalize(name: string): string {
     .trim();
 }
 
-function findStanding(opponent: string, standings: Standing[]): Standing | null {
+export function findStanding(opponent: string, standings: Standing[]): Standing | null {
   const target = normalize(opponent);
   if (!target) return null;
 
@@ -55,7 +55,11 @@ export function previewOpponents(
   myTeamName: string,
   limit = 5
 ): OpponentPreview[] {
-  const mine = standings.find((s) => s.teamName.toLowerCase() === myTeamName.toLowerCase()) ?? null;
+  // The same matching the opponents get. Exact lowercase equality meant a
+  // table that says "FC Zug 94" never matched a profile that says "Zug 94",
+  // and every six-pointer and must-win read quietly disappeared — with no
+  // error anywhere, because a missing rank just renders the plain form line.
+  const mine = findStanding(myTeamName, standings);
 
   return matches.slice(0, limit).map((match) => {
     const standing = findStanding(match.opponent, standings);
