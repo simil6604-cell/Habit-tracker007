@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import type { LibraryItem } from "./library";
+import { preview, type LibraryItem } from "./library";
 
 /**
  * Everything this account has made, as one flat list.
@@ -12,12 +12,6 @@ import type { LibraryItem } from "./library";
  * thousands of characters, and sending all of it to the browser to show two
  * lines is a page that takes a second to load for no visible reason.
  */
-const PREVIEW_CHARS = 160;
-
-function preview(value: string | null | undefined): string {
-  const text = (value ?? "").replace(/\s+/g, " ").trim();
-  return text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS - 1)}…` : text;
-}
 
 export type LibraryFolderRow = { id: string; name: string; count: number };
 

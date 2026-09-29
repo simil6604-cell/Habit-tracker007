@@ -1,3 +1,25 @@
+import { stripMarkdown } from "@/lib/utils/markdown";
+
+/** How much of a note or answer the second line shows. */
+export const PREVIEW_CHARS = 110;
+
+/**
+ * The one-line preview under a library item's title.
+ *
+ * Markdown markers come off first. The AI writes summaries with headings and
+ * bold, and in a clamped single line those render as literal "## Summary
+ * **Key point:**" — the markup, not the text.
+ */
+export function preview(value: string | null | undefined): string {
+  // Strip first, THEN collapse: stripMarkdown anchors its list and heading
+  // rules to the start of a line, so flattening the newlines first left every
+  // bullet but the first one as a literal "- ".
+  const text = stripMarkdown(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS - 1)}…` : text;
+}
+
 /**
  * My Library: one place that holds everything you have made.
  *

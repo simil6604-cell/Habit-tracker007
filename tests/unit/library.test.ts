@@ -12,6 +12,7 @@ import {
   sortItems,
   splitLibraryItemId,
   type LibraryItem,
+  preview,
 } from "@/lib/library/library";
 
 function item(over: Partial<LibraryItem> = {}): LibraryItem {
@@ -201,5 +202,35 @@ describe("splitLibraryItemId", () => {
 
   it("keeps the whole id when the id itself contains a hyphen", () => {
     expect(splitLibraryItemId("flashcard-abc-def")).toEqual({ table: "flashcard", id: "abc-def" });
+  });
+});
+
+describe("preview", () => {
+  it("shows the text, not the markdown the AI wrote it in", () => {
+    // This is one line under a title. Rendering blocks there would break the
+    // clamp, so the markers used to be printed at the reader instead:
+    // "## Summary **Key point:** ...".
+    expect(preview("## Summary\n**Key point:** factorising")).toBe("Summary Key point: factorising");
+  });
+
+  it("turns list markers into something readable rather than leaving them", () => {
+    expect(preview("- first\n- second")).toBe("• first • second");
+  });
+
+  it("collapses the whitespace a transcript arrives with", () => {
+    expect(preview("one\n\n   two\t three")).toBe("one two three");
+  });
+
+  it("cuts a long one and says so with an ellipsis", () => {
+    const long = "x".repeat(200);
+    const short = preview(long);
+    expect(short).toHaveLength(110);
+    expect(short.endsWith("…")).toBe(true);
+  });
+
+  it("gives back an empty string for nothing at all", () => {
+    expect(preview(null)).toBe("");
+    expect(preview(undefined)).toBe("");
+    expect(preview("   ")).toBe("");
   });
 });

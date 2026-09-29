@@ -29,7 +29,17 @@ export function WeekView({ days, items }: { days: Date[]; items: CalendarItem[] 
                   </div>
                 );
               })}
-              {dayItems.length > 6 && <p className="text-xs text-muted">+{dayItems.length - 6} more</p>}
+              {dayItems.length > 6 && (
+                // The thing you tap when you want the rest of the day, so it
+                // has to go somewhere — it was plain text, and tapping it did
+                // nothing at all.
+                <Link
+                  href={`/calendar?view=day&date=${format(day, "yyyy-MM-dd")}`}
+                  className="rounded-lg px-1.5 py-1 text-xs text-muted underline-offset-2 hover:text-accent hover:underline"
+                >
+                  +{dayItems.length - 6} more
+                </Link>
+              )}
             </div>
           </div>
         );
