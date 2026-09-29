@@ -86,4 +86,20 @@ describe("shortSubjectNames", () => {
     expect(shortSubjectNames([])).toEqual([]);
     expect(shortSubjectNames(["Literature"])).toEqual(["Literature"]);
   });
+
+  it("keeps the level when the subject name alone is not unique", () => {
+    // The stated rule is that no cut may merge two subjects, and this pair
+    // walked straight through it: both passes shorten to "Mathematics", and
+    // the fallback returned the first pass — which was the collision.
+    expect(shortSubjectNames(["Mathematics IGCSE", "Mathematics A-Level"])).toEqual([
+      "Mathematics IGCSE",
+      "Mathematics A-Level",
+    ]);
+    expect(shortSubjectNames(["German A-Level", "German IGCSE"])).toEqual(["German A-Level", "German IGCSE"]);
+  });
+
+  it("still shortens the rows that are not part of a collision", () => {
+    const short = shortSubjectNames(["Mathematics IGCSE", "Mathematics A-Level", "Biology IGCSE"]);
+    expect(short[2]).toBe("Biology");
+  });
 });

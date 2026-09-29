@@ -32,10 +32,17 @@ export default async function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Today&apos;s Score</CardTitle>
-            <span className="text-xl font-semibold tabular-nums">{scores.overall}%</span>
+            <span className="text-xl font-semibold tabular-nums">
+              {scores.overall === null ? "—" : `${scores.overall}%`}
+            </span>
           </CardHeader>
           <CardContent>
-            <ProgressBar value={scores.overall} size="lg" className="mb-5" />
+            <ProgressBar value={scores.overall ?? 0} size="lg" className="mb-5" />
+            {scores.overall === null && (
+              <p className="mb-5 -mt-3 text-xs text-muted">
+                Nothing to score yet — add subjects, a workout plan or your football profile and this fills in.
+              </p>
+            )}
             <div className="flex flex-col gap-2.5">
               <ScoreRow label="School" value={scores.school} colorClassName="bg-cat-school" />
               <ScoreRow label="Gym" value={scores.gym} colorClassName="bg-cat-gym" />

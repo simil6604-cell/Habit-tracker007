@@ -123,7 +123,9 @@ export default async function HomePage() {
           <CardContent className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Today&apos;s Optimization</h2>
-              <span className="text-2xl font-semibold tabular-nums">{scores.overall}%</span>
+              <span className="text-2xl font-semibold tabular-nums">
+                {scores.overall === null ? "—" : `${scores.overall}%`}
+              </span>
             </div>
             <div className="flex flex-col gap-2.5">
               <ScoreRow label="School" value={scores.school} colorClassName="bg-cat-school" />

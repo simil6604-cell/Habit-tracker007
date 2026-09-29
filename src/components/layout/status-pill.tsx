@@ -6,7 +6,24 @@ function statusFor(score: number) {
   return { label: "Needs focus", dot: "bg-danger", text: "text-danger", ring: "ring-danger/20", bg: "bg-danger/10" };
 }
 
-export function StatusPill({ score, className }: { score: number; className?: string }) {
+export function StatusPill({ score, className }: { score: number | null; className?: string }) {
+  // Null means nothing is set up yet. Reading that as 0 would put a red
+  // "Needs focus" on an account that has not been asked to do anything.
+  if (score === null) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-border",
+          className
+        )}
+        title="No subjects, workouts or football profile yet — there is nothing to score."
+      >
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted" />
+        Not set up yet
+      </span>
+    );
+  }
+
   const s = statusFor(score);
   return (
     <span
