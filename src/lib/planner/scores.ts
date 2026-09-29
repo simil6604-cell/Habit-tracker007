@@ -9,8 +9,6 @@ export type DomainScores = {
   recovery: number;
   /** Null when no domain is set up yet — see score-math. */
   overall: number | null;
-  /** How many of the three domains are actually in use. */
-  tracked: number;
   /** Which of them, for callers that average or compare domains. */
   inUse: { school: boolean; gym: boolean; football: boolean };
 };
@@ -165,7 +163,6 @@ export async function computeDomainScores(userId: string): Promise<DomainScores>
     football: football.score,
     recovery,
     overall: overallScore(domains, recovery),
-    tracked: domains.filter((d) => d.inUse).length,
     inUse: { school: school.inUse, gym: gym.inUse, football: football.inUse },
   };
 }
