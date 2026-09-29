@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { TimetableDiagram } from "@/components/school/timetable-diagram";
 import { SubjectCard } from "@/components/school/subject-card";
 import { SchoolHero } from "@/components/school/school-hero";
+import { SectionJump, type JumpSection } from "@/components/school/section-jump";
 import { getSchoolHeroData } from "@/lib/school/hero";
 import { SchoolAISection } from "@/components/school/school-ai-section";
 import { getSchoolAISectionData } from "@/lib/school/school-ai-section";
@@ -29,6 +30,22 @@ import { getCalendarItems } from "@/lib/calendar/items";
 import { SubjectProgressChart } from "@/components/charts/subject-progress-chart";
 import { getAnalyticsData } from "@/lib/analytics/data";
 import { addDays, startOfDay } from "date-fns";
+
+/**
+ * The chips in the jump bar, in the order they are wanted rather than the
+ * order they appear: the tutor and today are what you open the page for.
+ * Every id here must exist on the page — an e2e test checks exactly that.
+ */
+const SCHOOL_SECTIONS: readonly JumpSection[] = [
+  { id: "tutor", label: "Tutor" },
+  { id: "today", label: "Today" },
+  { id: "progress", label: "Progress" },
+  { id: "revision-sources", label: "Links" },
+  { id: "timetable", label: "Timetable" },
+  { id: "subjects", label: "Subjects" },
+  { id: "homework", label: "Homework" },
+  { id: "notes", label: "Notes" },
+];
 
 export default async function SchoolPage({
   searchParams,
@@ -100,6 +117,13 @@ export default async function SchoolPage({
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <SchoolHero data={heroData} />
 
+      {/*
+        This page is long on purpose — everything about school lives here — so
+        it gets a way in that is not scrolling. Nothing moves; each chip is an
+        anchor to a section that was already there.
+      */}
+      <SectionJump sections={SCHOOL_SECTIONS} className="sticky top-0 z-30 mt-3 border-b border-border/60 bg-background/85 backdrop-blur" />
+
       <InsightsPanel insights={insights} />
 
       <div id="progress" className="mt-4 scroll-mt-20">
@@ -134,9 +158,11 @@ export default async function SchoolPage({
         </CardContent>
       </Card>
 
-      <SchoolAISection data={aiSection} />
+      <div id="tutor" className="scroll-mt-16">
+        <SchoolAISection data={aiSection} />
+      </div>
 
-      <Card className="mt-4">
+      <Card id="today" className="mt-4 scroll-mt-16">
         <CardHeader>
           <CardTitle>Today</CardTitle>
         </CardHeader>
@@ -145,7 +171,7 @@ export default async function SchoolPage({
         </CardContent>
       </Card>
 
-      <Card className="mt-4">
+      <Card id="timetable" className="mt-4 scroll-mt-16">
         <CardHeader>
           <CardTitle>Timetable</CardTitle>
           <Link href="/school/timetable"><Button variant="outline" size="sm">Edit timetable</Button></Link>
@@ -172,7 +198,7 @@ export default async function SchoolPage({
         </CardContent>
       </Card>
 
-      <Card className="mt-4">
+      <Card id="subjects" className="mt-4 scroll-mt-16">
         <CardHeader>
           <CardTitle>Subjects</CardTitle>
         </CardHeader>
@@ -199,7 +225,7 @@ export default async function SchoolPage({
         </CardContent>
       </Card>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div id="homework" className="mt-4 grid gap-4 scroll-mt-16 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Homework</CardTitle>
@@ -247,7 +273,7 @@ export default async function SchoolPage({
         </Card>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div id="notes" className="mt-4 grid gap-4 scroll-mt-16 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>My notes &amp; recordings</CardTitle>
