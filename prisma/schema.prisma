@@ -117,6 +117,10 @@ model School {
   name            String
   educationSystem String // IGCSE | AS_LEVEL | A_LEVEL | OTHER
   yearGroup       String?
+  // A photo of the printed timetable, as handed out by school. The grid built
+  // from TimetableSlot is the one the app reasons with; this is the one you
+  // actually glance at, and it is right even when nothing has been typed in.
+  timetableImage  String?
 }
 
 model Subject {

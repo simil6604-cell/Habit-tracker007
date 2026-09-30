@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { slotsToGridRows } from "@/lib/school/timetable-grid";
 import { TimetableEditor } from "@/components/school/timetable-editor";
+import { TimetablePhoto } from "@/components/school/timetable-photo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -11,9 +12,10 @@ export default async function TimetableEditorPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [slots, subjects] = await Promise.all([
+  const [slots, subjects, school] = await Promise.all([
     prisma.timetableSlot.findMany({ where: { userId }, include: { subject: true } }),
     prisma.subject.findMany({ where: { userId }, orderBy: { name: "asc" } }),
+    prisma.school.findUnique({ where: { userId }, select: { timetableImage: true } }),
   ]);
 
   const rows = slotsToGridRows(slots);
@@ -28,6 +30,18 @@ export default async function TimetableEditorPage() {
         Define each period once (name, time, type), then fill in Monday–Friday. Matches a real school day —
         registration, lessons, breaks, study periods and clubs all fit.
       </p>
+
+      {/*
+        First, because it is the one that is already right: the photo school
+        handed out. The grid below is what the app plans with, and filling it
+        in is work — the photo is not.
+      */}
+      <Card className="mt-6">
+        <CardHeader><CardTitle>Your timetable, photographed</CardTitle></CardHeader>
+        <CardContent>
+          <TimetablePhoto imagePath={school?.timetableImage ?? null} />
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader><CardTitle>Weekly grid</CardTitle></CardHeader>

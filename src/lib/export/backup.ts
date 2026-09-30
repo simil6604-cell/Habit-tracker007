@@ -40,11 +40,14 @@ function collectPhotoPaths(data: Record<string, unknown>): string[] {
     }
     if (value && typeof value === "object") {
       for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        if (key === "imagePath" && typeof child === "string" && child.startsWith("/uploads/")) found.push(child);
-        // A school-AI question carries several photos at once, stored as a JSON
-        // array in one column. Walking only `imagePath` would leave every one
-        // of them out of the archive while the message that refers to them is
-        // in it — a backup that restores into broken images.
+        // ANY string that points into /uploads, whatever its column is called.
+        // Keyed on the name "imagePath" before, which meant the next photo
+        // field to be added — a timetable photo, in the event — was left out
+        // of the archive while the row referring to it was in it. A backup
+        // that restores into broken images is worse than a loud failure.
+        if (typeof child === "string" && child.startsWith("/uploads/")) found.push(child);
+        // Several photos in one column, as JSON: a school-AI question about
+        // three pages of a past paper is one message, not three.
         else if (key === "imagePaths" && typeof child === "string") {
           for (const path of parseJsonPaths(child)) found.push(path);
         } else walk(child);
