@@ -1397,6 +1397,28 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("drill-saved")).toHaveCount(0);
   });
 
+  test("football: when the page can't be read, the table can be pasted", async () => {
+    // Reported: a real league link comes back as an error. Some league pages
+    // build their table in the browser, and some refuse a server outright —
+    // neither is something this app can fix from its own side. The browser in
+    // front of the page has already seen the table, so it can be copied in.
+    await page.goto("/football/team");
+    await page.getByRole("button", { name: /Paste the table instead/ }).click();
+
+    const box = page.locator('textarea[aria-label="Paste the league table"]');
+    await expect(box).toBeVisible();
+
+    // Nothing pasted: it says what to do rather than failing quietly.
+    await page.getByRole("button", { name: "Read pasted table" }).click();
+    await expect(page.getByText(/Paste the table itself/)).toBeVisible();
+
+    // With a table, and no AI key in this suite on purpose: the honest
+    // refusal, not an invented standing.
+    await box.fill("Rang Verein Sp S U N Tore Pkt\n1 FC Zug 94 10 7 2 1 24:9 23\n2 SC Cham 10 6 3 1 19:11 21");
+    await page.getByRole("button", { name: "Read pasted table" }).click();
+    await expect(page.getByText(/needs a real AI/)).toBeVisible();
+  });
+
   test("football: league table, race for 1st and opponent scouting", async () => {
     await page.goto("/football");
     await expect(page.getByText("League table & race for 1st")).toBeVisible();

@@ -73,6 +73,39 @@ export async function fetchAndParseStandings(url: string): Promise<ImportResult>
     };
   }
 
+  return parseStandingsText(text);
+}
+
+/** How much pasted text is worth sending — a league table is a few hundred characters. */
+export const MAX_PASTED_TABLE = 18000;
+
+/**
+ * The same rows, from text the person copied out of their own browser.
+ *
+ * Some league pages build their table with JavaScript, and some cannot be
+ * reached from this server at all. The browser sitting in front of the page
+ * has neither problem: select the table, copy, paste. It is the one route
+ * that works whatever the site does, and it needs no permission from anyone.
+ */
+export async function importStandingsFromText(raw: string): Promise<ImportResult> {
+  const text = raw.trim().slice(0, MAX_PASTED_TABLE);
+  if (text.length < 20) {
+    return { ok: false, error: "Paste the table itself — select it on the league page, copy, and paste it here." };
+  }
+  if (!isRealAIConfigured) {
+    return {
+      ok: false,
+      error: "Reading a pasted table needs a real AI — set ANTHROPIC_API_KEY in Settings, or enter the rows by hand below.",
+    };
+  }
+  return parseStandingsText(text);
+}
+
+/**
+ * Text in, rows out. Never invents a team: no table found is an error, not a
+ * guess, and a row without a name is dropped rather than filled in.
+ */
+async function parseStandingsText(text: string): Promise<ImportResult> {
   const prompt = `Below is text extracted from a football/soccer league standings webpage. It may be in German, French, Italian or English. Find the league table and extract EVERY row as a JSON array, one object per team, with exactly these fields: rank (integer), teamName (string), played (integer), won (integer), drawn (integer), lost (integer), goalsFor (integer), goalsAgainst (integer), points (integer).
 
 Common German headers: Rang=rank, Verein/Team/Mannschaft=teamName, Sp/Spiele=played, S/Siege=won, U/Unentschieden=drawn, N/Niederlagen=lost, Tore (shown as "12:5")=goalsFor:goalsAgainst, Pkt/Punkte=points. Ignore a "Diff" column — it's derived, not one of the fields above.
