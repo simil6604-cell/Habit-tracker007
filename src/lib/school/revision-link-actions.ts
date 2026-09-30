@@ -40,8 +40,12 @@ export async function addRevisionLink(_prev: LinkFormState, formData: FormData):
 
   let topicId: string | null = null;
   if (parsedTopic.name && subjectId) {
+    // The subject was proved to be this account's two lines up, so `subjectId`
+    // is safe — but the ownership scanner cannot see that, and a check it
+    // cannot see is one the next edit can quietly drop. The query carries its
+    // own proof instead.
     const existing = await prisma.topic.findFirst({
-      where: { subjectId, name: { equals: parsedTopic.name } },
+      where: { subjectId, name: { equals: parsedTopic.name }, subject: { userId } },
       select: { id: true },
     });
     // Typing a name you already have must attach to that topic rather than
