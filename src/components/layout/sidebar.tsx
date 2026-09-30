@@ -6,11 +6,11 @@ import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
 import { NavIcon } from "./nav-icon";
 import { Logo } from "./logo";
-import { StatusPill } from "./status-pill";
+import { ConnectionPill } from "./connection-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "./sign-out-button";
 
-export function Sidebar({ overallScore, libraryCount }: { overallScore: number | null; libraryCount: number }) {
+export function Sidebar({ libraryCount }: { libraryCount: number }) {
   const pathname = usePathname();
   // Longest matching href wins: /school/ai sits under /school, and without this
   // both light up at once — two "you are here" markers, neither of them wrong.
@@ -25,7 +25,7 @@ export function Sidebar({ overallScore, libraryCount }: { overallScore: number |
           <Logo size={36} />
           <span className="text-lg font-semibold tracking-tight">Momentum</span>
         </div>
-        <StatusPill score={overallScore} className="self-start" />
+        <ConnectionPill className="self-start" />
       </div>
 
       <nav className="mt-4 flex flex-1 flex-col gap-1">

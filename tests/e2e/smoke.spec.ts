@@ -995,6 +995,40 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByRole("cell", { name: /Rates of Reaction/ })).toBeVisible();
   });
 
+  test("school: the timetable you were handed, photographed", async () => {
+    // The grid the app plans with has to be typed in. The photo is right the
+    // moment it is taken — including the option blocks and room numbers — so
+    // it is the one you glance at.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwACRgFxfyRfSwAAAABJRU5ErkJggg==",
+      "base64"
+    );
+
+    await page.goto("/school/timetable");
+    await expect(page.getByText("No timetable photo yet")).toBeVisible();
+    await page.setInputFiles('input[name="photo"]', { name: "timetable.png", mimeType: "image/png", buffer: png });
+    await page.getByRole("button", { name: "Save photo" }).click();
+
+    const photo = page.getByTestId("timetable-photo");
+    await expect(photo).toBeVisible();
+    const src = await photo.locator("img").getAttribute("src");
+    expect(src, "served from this account's own folder").toMatch(/^\/uploads\//);
+
+    // It is the file itself, not a broken image with a row pointing at it.
+    const served = await page.request.get(src!);
+    expect(served.status(), "the photo actually loads").toBe(200);
+
+    // And it is on the School page, where the Timetable chip lands.
+    await page.goto("/school");
+    await expect(page.getByTestId("timetable-photo")).toBeVisible();
+
+    // Taken back out again, with the file gone too.
+    await page.goto("/school/timetable");
+    await page.getByRole("button", { name: "Remove timetable photo" }).click();
+    await expect(page.getByText("No timetable photo yet")).toBeVisible();
+    expect((await page.request.get(src!)).status(), "the file is deleted, not just unlinked").toBe(404);
+  });
+
   test("school: the jump bar reaches every section it names", async () => {
     // The page is about twenty phone screens. The bar is the way in, and a
     // chip pointing at a section that was renamed or removed would scroll
@@ -1949,9 +1983,14 @@ test.describe.serial("full app walkthrough", () => {
     expect(personal, "pages or photos left in the offline cache").toEqual([]);
     expect(cached).toContain("/offline");
 
+    // The pill under the app's name says which side of the line you are on,
+    // so it has to actually follow the connection rather than being a badge.
+    await expect(page.getByTestId("connection-pill")).toContainText("Online");
+
     // Now pull the plug.
     await page.context().setOffline(true);
     try {
+      await expect(page.getByTestId("connection-pill")).toContainText("Offline");
       await page.goto("/school");
       await expect(page.getByRole("heading", { name: /You're offline/ })).toBeVisible();
       await expect(page.getByText(/needs a connection/)).toBeVisible();

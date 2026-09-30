@@ -5,6 +5,7 @@ import { createSubject } from "@/lib/school/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TimetableDiagram } from "@/components/school/timetable-diagram";
+import { TimetablePhoto } from "@/components/school/timetable-photo";
 import { SubjectCard } from "@/components/school/subject-card";
 import { SchoolHero } from "@/components/school/school-hero";
 import { SectionJump, type JumpSection } from "@/components/school/section-jump";
@@ -67,12 +68,13 @@ export default async function SchoolPage({
   const schoolProgress = await getSchoolProgress(userId, now);
   const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [subjects, slots, homework, exams, checklist] = await Promise.all([
+  const [subjects, slots, homework, exams, checklist, school] = await Promise.all([
     prisma.subject.findMany({ where: { userId }, include: { topics: true }, orderBy: { createdAt: "asc" } }),
     prisma.timetableSlot.findMany({ where: { userId }, include: { subject: true } }),
     prisma.homework.findMany({ where: { userId, status: "PENDING" }, include: { subject: true }, orderBy: { dueDate: "asc" }, take: 20 }),
     prisma.exam.findMany({ where: { userId, date: { gte: now, lte: in14 } }, include: { subject: true }, orderBy: { date: "asc" } }),
     getTodaySchoolChecklist(userId),
+    prisma.school.findUnique({ where: { userId }, select: { timetableImage: true } }),
   ]);
 
   const heroData = await getSchoolHeroData(userId, checklist, now);
@@ -176,7 +178,9 @@ export default async function SchoolPage({
           <CardTitle>Timetable</CardTitle>
           <Link href="/school/timetable"><Button variant="outline" size="sm">Edit timetable</Button></Link>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          {/* The photo first when there is one: it is what you came to look at. */}
+          {school?.timetableImage && <TimetablePhoto imagePath={school.timetableImage} />}
           <TimetableDiagram slots={slots} />
         </CardContent>
       </Card>

@@ -66,7 +66,11 @@ export async function fetchAndParseStandings(url: string): Promise<ImportResult>
 
   const text = htmlToText(html).slice(0, 18000);
   if (text.length < 50) {
-    return { ok: false, error: "That page came back empty — it may need JavaScript to load, which this can't render." };
+    return {
+      ok: false,
+      error:
+        "That page was reached, but it came back with no readable text — it builds its table in the browser with JavaScript, which this cannot run. Enter the table by hand below instead.",
+    };
   }
 
   const prompt = `Below is text extracted from a football/soccer league standings webpage. It may be in German, French, Italian or English. Find the league table and extract EVERY row as a JSON array, one object per team, with exactly these fields: rank (integer), teamName (string), played (integer), won (integer), drawn (integer), lost (integer), goalsFor (integer), goalsAgainst (integer), points (integer).
