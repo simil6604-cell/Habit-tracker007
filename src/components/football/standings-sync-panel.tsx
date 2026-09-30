@@ -24,12 +24,24 @@ export function StandingsSyncPanel({
     }
     setStatus(null);
     startTransition(async () => {
-      const result = await importStandingsFromLink(url);
-      if (result.ok) {
-        setStatus({ ok: true, message: `Imported ${result.count} teams.` });
-        setSyncedAt(new Date());
-      } else {
-        setStatus({ ok: false, message: result.error });
+      try {
+        const result = await importStandingsFromLink(url);
+        if (result.ok) {
+          setStatus({ ok: true, message: `Imported ${result.count} teams.` });
+          setSyncedAt(new Date());
+        } else {
+          setStatus({ ok: false, message: result.error });
+        }
+      } catch {
+        // Every refusal this action means to give is a sentence it RETURNS.
+        // A throw is something else — the request dying, the server erroring —
+        // and without this it reached the user as a bare "Error", which says
+        // nothing about what to do next.
+        setStatus({
+          ok: false,
+          message:
+            "That didn't get through — the page may be too slow to read, or the connection dropped. Try again, or enter the table by hand below.",
+        });
       }
     });
   }
