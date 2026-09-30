@@ -913,8 +913,16 @@ test.describe.serial("full app walkthrough", () => {
 
     const deckName = `Heart deck ${Date.now()}`;
     await form.locator('input[name="title"]').fill(deckName);
+    await form.locator('select[name="subjectId"]').selectOption({ index: 1 });
     await form.getByRole("button", { name: "Save link" }).click();
     await expect(panel.getByTestId("revision-links").first()).toContainText(deckName);
+
+    // Saving said nothing at all before, while emptying the form — so you
+    // could not tell a save from a failure, and the next attempt complained
+    // about a field the app itself had cleared.
+    await expect(form.getByRole("status"), "it says the link was saved").toContainText(/saved/i);
+    expect(await form.locator('select[name="subjectId"]').inputValue(), "the subject is kept for the next link").not.toBe("");
+    await expect(form.locator('input[name="url"]'), "the address is cleared for the next one").toHaveValue("");
 
     // A Save My Exams page with no name typed takes the service's name, so a
     // saved link never reads as a bare URL.
@@ -929,8 +937,16 @@ test.describe.serial("full app walkthrough", () => {
     const third = await openForm();
     await third.locator('input[name="url"]').evaluate((el) => el.removeAttribute("type"));
     await third.locator('input[name="url"]').fill("javascript:alert(1)");
+    // Picked on purpose: a refusal used to throw away the subject AND the
+    // address, so the next press failed on an empty field and the whole thing
+    // read as "choosing a subject breaks saving".
+    await third.locator('select[name="subjectId"]').selectOption({ index: 1 });
     await third.getByRole("button", { name: "Save link" }).click();
     await expect(third.getByRole("alert")).toContainText(/full link starting with https/i);
+    await expect(third.locator('input[name="url"]'), "what you typed survives a refusal").toHaveValue(
+      "javascript:alert(1)"
+    );
+    expect(await third.locator('select[name="subjectId"]').inputValue(), "so does the subject").not.toBe("");
 
     await page.reload();
     expect(await page.locator('a[href^="javascript"]').count(), "no javascript: href anywhere").toBe(0);
