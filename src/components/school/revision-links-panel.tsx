@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { ExternalLink, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { addRevisionLink, deleteRevisionLink, type LinkFormState } from "@/lib/school/revision-link-actions";
@@ -46,6 +46,35 @@ export function RevisionLinksPanel({
   const provider = url ? detectProvider(url) : null;
   const topics = subjects.find((s) => s.id === subjectId)?.topics ?? [];
 
+  /**
+   * Emptied only when something was actually saved.
+   *
+   * This used to run after every submit, success or not — so a save that came
+   * back with an error wiped the address you had just pasted, and the next
+   * press complained that the field was empty. From the outside that reads as
+   * "picking a subject breaks it", which is what it was reported as.
+   *
+   * The subject stays selected on purpose: the next thing anyone does is add
+   * the OTHER link for the same subject. React 19 resets a form after its
+   * action, including the selects, so it is put back by hand.
+   */
+  useEffect(() => {
+    if (!state) return;
+    const form = formRef.current;
+    if (!form) return;
+
+    // The subject goes back whatever happened. On a refusal you want to fix
+    // the address and press Save again, not to hunt for your subject in a
+    // dropdown that quietly forgot it.
+    const subject = form.elements.namedItem("subjectId");
+    if (subject instanceof HTMLSelectElement) subject.value = subjectId;
+
+    if (!state.ok) return;
+    setUrl("");
+    const title = form.elements.namedItem("title");
+    if (title instanceof HTMLInputElement) title.value = "";
+  }, [state, subjectId]);
+
   const decks = links.filter((link) => link.kind === "FLASHCARDS");
   const rest = links.filter((link) => link.kind !== "FLASHCARDS");
 
@@ -79,12 +108,7 @@ export function RevisionLinksPanel({
       {open ? (
         <form
           ref={formRef}
-          action={async (formData) => {
-            await formAction(formData);
-            setUrl("");
-            const title = formRef.current?.elements.namedItem("title");
-            if (title instanceof HTMLInputElement) title.value = "";
-          }}
+          action={formAction}
           className="flex flex-col gap-2 rounded-2xl border border-border bg-surface-muted p-4"
           data-testid="add-revision-link"
         >
@@ -149,6 +173,12 @@ export function RevisionLinksPanel({
 
           {state?.error && (
             <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">{state.error}</p>
+          )}
+
+          {state?.ok && !url && (
+            <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success" role="status">
+              Saved. The subject is still selected — paste the other link for it and press Save again.
+            </p>
           )}
         </form>
       ) : (
