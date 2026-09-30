@@ -964,6 +964,37 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("revision-sources").getByText(deckName)).toHaveCount(0);
   });
 
+  test("school: a link's topic is typed, and a name that is new becomes a real topic", async () => {
+    // Reported from use: the topic could only be picked from a list, and the
+    // list is empty until you have made topics some other way — so the field
+    // could not be used at all by the person who most needed it.
+    await page.goto("/school");
+    const panel = page.getByTestId("revision-sources");
+    if ((await page.getByTestId("add-revision-link").count()) === 0) {
+      await panel.getByRole("button", { name: /Add a link/ }).click();
+    }
+    const form = page.getByTestId("add-revision-link");
+    const topic = form.locator('input[name="topicName"]');
+    await expect(topic, "the topic can be typed in").toBeEditable();
+
+    // A topic with no subject is refused, and what you typed stays put.
+    await form.locator('input[name="url"]').fill("https://www.savemyexams.com/igcse/chemistry/cie/revision-notes/");
+    await topic.fill("Rates of Reaction");
+    await form.getByRole("button", { name: "Save link" }).click();
+    await expect(form.getByRole("alert")).toContainText(/subject first/i);
+    await expect(topic, "a refusal keeps the topic you typed").toHaveValue("Rates of Reaction");
+
+    // With the subject chosen it saves, and the topic now exists for real.
+    await form.locator('select[name="subjectId"]').selectOption({ label: "Chemistry" });
+    await form.getByRole("button", { name: "Save link" }).click();
+    await expect(form.getByRole("status")).toContainText(/saved/i);
+
+    await page.goto("/school");
+    await chemistryCard(page).click();
+    await page.waitForURL("**/school/subjects/**");
+    await expect(page.getByRole("cell", { name: /Rates of Reaction/ })).toBeVisible();
+  });
+
   test("school: the jump bar reaches every section it names", async () => {
     // The page is about twenty phone screens. The bar is the way in, and a
     // chip pointing at a section that was renamed or removed would scroll

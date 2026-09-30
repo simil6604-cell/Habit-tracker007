@@ -106,6 +106,30 @@ export function parseLinkInput(input: { title: unknown; url: unknown; kind: unkn
   return { ok: true, value: { title, url, kind } };
 }
 
+/** A topic name is a label on a chart and in a list, not an essay. */
+export const MAX_TOPIC_NAME = 80;
+
+export type TopicNameResult = { ok: true; name: string | null } | { ok: false; error: string };
+
+/**
+ * The topic a link belongs to, typed rather than picked.
+ *
+ * A dropdown of topics is no use to someone who has not made any yet — which
+ * is everyone at the start, and was the reported problem: the field could not
+ * be written in. So it is an input with the existing names offered as
+ * suggestions, and a name that does not exist yet becomes a real topic.
+ *
+ * A topic belongs to a subject, so one without a subject is refused rather
+ * than silently dropped: you typed it, you expect it to be somewhere.
+ */
+export function parseTopicName(raw: unknown, hasSubject: boolean): TopicNameResult {
+  const name = String(raw ?? "").trim().replace(/\s+/g, " ");
+  if (!name) return { ok: true, name: null };
+  if (!hasSubject) return { ok: false, error: "Choose the subject first — a topic belongs to one." };
+  if (name.length > MAX_TOPIC_NAME) return { ok: false, error: `Keep the topic name under ${MAX_TOPIC_NAME} characters.` };
+  return { ok: true, name };
+}
+
 export type StoredLink = {
   id: string;
   title: string;

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { MAX_REVISION_LINKS, parseLinkInput } from "./revision-links";
+import { MAX_REVISION_LINKS, parseLinkInput, parseTopicName } from "./revision-links";
 
 async function requireUserId() {
   const session = await auth();
@@ -33,12 +33,26 @@ export async function addRevisionLink(_prev: LinkFormState, formData: FormData):
     subjectId = subject.id;
   }
 
-  const rawTopic = String(formData.get("topicId") ?? "").trim();
+  // Typed, not picked — see parseTopicName. The subject was just proved to be
+  // this account's, so a topic under it is this account's too.
+  const parsedTopic = parseTopicName(formData.get("topicName"), subjectId !== null);
+  if (!parsedTopic.ok) return { error: parsedTopic.error };
+
   let topicId: string | null = null;
-  if (rawTopic) {
-    const topic = await prisma.topic.findFirst({ where: { id: rawTopic, subject: { userId } }, select: { id: true } });
-    if (!topic) return { error: "That topic is not one of yours." };
-    topicId = topic.id;
+  if (parsedTopic.name && subjectId) {
+    // The subject was proved to be this account's two lines up, so `subjectId`
+    // is safe — but the ownership scanner cannot see that, and a check it
+    // cannot see is one the next edit can quietly drop. The query carries its
+    // own proof instead.
+    const existing = await prisma.topic.findFirst({
+      where: { subjectId, name: { equals: parsedTopic.name }, subject: { userId } },
+      select: { id: true },
+    });
+    // Typing a name you already have must attach to that topic rather than
+    // making a second one beside it with the same name.
+    topicId =
+      existing?.id ??
+      (await prisma.topic.create({ data: { subjectId, name: parsedTopic.name }, select: { id: true } })).id;
   }
 
   const existing = await prisma.revisionLink.count({ where: { userId } });

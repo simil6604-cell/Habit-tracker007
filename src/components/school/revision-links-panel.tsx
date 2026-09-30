@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { ExternalLink, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { addRevisionLink, deleteRevisionLink, type LinkFormState } from "@/lib/school/revision-link-actions";
-import { detectKind, detectProvider, REVISION_KINDS, type StoredLink } from "@/lib/school/revision-links";
+import { detectKind, detectProvider, MAX_TOPIC_NAME, REVISION_KINDS, type StoredLink } from "@/lib/school/revision-links";
 
 const KIND_LABEL: Record<string, string> = Object.fromEntries(REVISION_KINDS.map((k) => [k.value, k.label]));
 const KIND_ICON: Record<string, string> = {
@@ -37,6 +37,11 @@ export function RevisionLinksPanel({
   const [state, formAction, pending] = useActionState<LinkFormState, FormData>(addRevisionLink, undefined);
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
+  // Controlled for the same reason as the address: React 19 resets a form
+  // after its action, so anything uncontrolled is wiped even when the save
+  // was refused and you need to fix one field and try again.
+  const [title, setTitle] = useState("");
+  const [topicName, setTopicName] = useState("");
   const [subjectId, setSubjectId] = useState(defaultSubjectId ?? "");
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -71,8 +76,8 @@ export function RevisionLinksPanel({
 
     if (!state.ok) return;
     setUrl("");
-    const title = form.elements.namedItem("title");
-    if (title instanceof HTMLInputElement) title.value = "";
+    setTitle("");
+    setTopicName("");
   }, [state, subjectId]);
 
   const decks = links.filter((link) => link.kind === "FLASHCARDS");
@@ -132,6 +137,8 @@ export function RevisionLinksPanel({
           <div className="flex flex-wrap gap-2">
             <input
               name="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               placeholder="What is it? (optional)"
               aria-label="Name"
               autoComplete="off"
@@ -157,12 +164,28 @@ export function RevisionLinksPanel({
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <select name="topicId" aria-label="Topic" defaultValue="" className={FIELD} disabled={topics.length === 0}>
-              <option value="">{topics.length === 0 ? "No topics" : "Whole subject"}</option>
+            {/*
+              Typed, not picked. A dropdown of topics is empty for anyone who
+              has not made any yet, which is everyone at the start — the field
+              could not be written in at all. The ones you already have are
+              offered as suggestions; a new name becomes a real topic.
+            */}
+            <input
+              name="topicName"
+              value={topicName}
+              onChange={(e) => setTopicName(e.target.value)}
+              list="revision-topic-names"
+              placeholder={subjectId ? "Topic (optional)" : "Topic — choose a subject first"}
+              aria-label="Topic"
+              autoComplete="off"
+              maxLength={MAX_TOPIC_NAME}
+              className={`min-w-[10rem] ${FIELD}`}
+            />
+            <datalist id="revision-topic-names">
               {topics.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.name} />
               ))}
-            </select>
+            </datalist>
             <Button type="submit" size="sm" variant="secondary" disabled={pending}>
               {pending ? "Saving…" : "Save link"}
             </Button>
