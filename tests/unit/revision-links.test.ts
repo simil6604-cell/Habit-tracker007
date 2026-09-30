@@ -7,6 +7,7 @@ import {
   MAX_LINK_TITLE,
   parseLinkInput,
   revisionLinksPrompt,
+  parseTopicName,
   stuckLinks,
   type StoredLink,
 } from "@/lib/school/revision-links";
@@ -308,5 +309,39 @@ describe("bestLink and stuckLinks", () => {
     const picked = stuckLinks(links, {}, { anySubject: true });
     expect(picked.lookUp).toBeNull();
     expect(picked.testYourself?.id).toBe("deck");
+  });
+});
+
+describe("parseTopicName", () => {
+  it("takes whatever you typed, tidied", () => {
+    expect(parseTopicName("  Cell   Biology ", true)).toEqual({ ok: true, name: "Cell Biology" });
+  });
+
+  it("treats an empty box as no topic, which is the normal case", () => {
+    expect(parseTopicName("", true)).toEqual({ ok: true, name: null });
+    expect(parseTopicName("   ", true)).toEqual({ ok: true, name: null });
+    expect(parseTopicName(null, true)).toEqual({ ok: true, name: null });
+  });
+
+  it("refuses a topic with no subject rather than dropping it silently", () => {
+    // You typed it, so you expect it to end up somewhere. A topic belongs to
+    // a subject, so without one there is nowhere for it to go.
+    const result = parseTopicName("Genetics", false);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/subject first/i);
+  });
+
+  it("does not mind an empty box when no subject is chosen either", () => {
+    expect(parseTopicName("", false)).toEqual({ ok: true, name: null });
+  });
+
+  it("refuses a name too long to read in a list", () => {
+    const result = parseTopicName("x".repeat(81), true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/80/);
+  });
+
+  it("allows one exactly at the limit", () => {
+    expect(parseTopicName("x".repeat(80), true)).toEqual({ ok: true, name: "x".repeat(80) });
   });
 });
