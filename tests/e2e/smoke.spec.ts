@@ -1949,9 +1949,14 @@ test.describe.serial("full app walkthrough", () => {
     expect(personal, "pages or photos left in the offline cache").toEqual([]);
     expect(cached).toContain("/offline");
 
+    // The pill under the app's name says which side of the line you are on,
+    // so it has to actually follow the connection rather than being a badge.
+    await expect(page.getByTestId("connection-pill")).toContainText("Online");
+
     // Now pull the plug.
     await page.context().setOffline(true);
     try {
+      await expect(page.getByTestId("connection-pill")).toContainText("Offline");
       await page.goto("/school");
       await expect(page.getByRole("heading", { name: /You're offline/ })).toBeVisible();
       await expect(page.getByText(/needs a connection/)).toBeVisible();
