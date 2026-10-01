@@ -1,11 +1,18 @@
 "use server";
 
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { parseRevisionUrl } from "@/lib/utils/revision-url";
 import { generateIndividualTraining } from "./training-generator";
-import { fetchAndParseStandings, importStandingsFromText, type ImportedStanding } from "./standings-import";
+import {
+  fetchAndParseStandings,
+  importStandingsFromText,
+  readStandingsFromImage,
+  type ImportResult,
+  type ImportedStanding,
+} from "./standings-import";
 import { cleanLine, cleanNote, parseMatchDate, MAX_LOCATION } from "./match-details";
 import type { FootballPosition } from "@/lib/data/football";
 
@@ -301,6 +308,72 @@ export async function importStandingsFromPaste(
   const parsed = await importStandingsFromText(text);
   if (!parsed.ok) return parsed;
   return replaceStandings(userId, parsed.data, { dataSource: "PASTED" });
+}
+
+/** What a phone camera produces, and what the API accepts. */
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Reads a photo of the league table and hands the rows back WITHOUT saving.
+ *
+ * Deliberately two steps. A model reading a column of numbers off a photo is
+ * right most of the time and not all of the time, and a points column one out
+ * changes what the app says about the race for first without ever looking
+ * wrong. So the rows come back to be looked at, and saving them is a separate
+ * decision made by the person who took the picture.
+ *
+ * The photo is never written to disk. It goes to the AI and is gone — there is
+ * no reason to keep a picture of a table once the table itself is in.
+ */
+export async function readStandingsPhoto(formData: FormData): Promise<ImportResult> {
+  await requireUserId();
+
+  const file = formData.get("photo");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Pick a photo of the table first." };
+  }
+  if (file.size > MAX_PHOTO_BYTES) {
+    return { ok: false, error: "That picture is too big (8MB max). Most phones let you send a smaller copy." };
+  }
+  if (!PHOTO_TYPES.includes(file.type)) {
+    return { ok: false, error: "That file is not a picture. A photo or a screenshot of the table works — JPG, PNG or WebP." };
+  }
+
+  const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+  return readStandingsFromImage(base64, file.type);
+}
+
+/**
+ * Saves rows that came back from a photo, after they have been looked at.
+ *
+ * The rows arrive from the browser, so they are checked here rather than
+ * trusted: this is the user's own table, but a number that arrives as a string
+ * or a name a thousand characters long would be written exactly as sent.
+ */
+export async function saveCheckedStandings(rows: unknown): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const userId = await requireUserId();
+
+  const schema = z.array(
+    z.object({
+      rank: z.coerce.number().int().min(0).max(999),
+      teamName: z.string().trim().min(1).max(80),
+      played: z.coerce.number().int().min(0).max(999),
+      won: z.coerce.number().int().min(0).max(999),
+      drawn: z.coerce.number().int().min(0).max(999),
+      lost: z.coerce.number().int().min(0).max(999),
+      goalsFor: z.coerce.number().int().min(0).max(9999),
+      goalsAgainst: z.coerce.number().int().min(0).max(9999),
+      points: z.coerce.number().int().min(-99).max(999),
+    })
+  ).min(1).max(60);
+
+  const parsed = schema.safeParse(rows);
+  if (!parsed.success) {
+    return { ok: false, error: "Some of those rows could not be read. Check the numbers and try again." };
+  }
+
+  return replaceStandings(userId, parsed.data, { dataSource: "PHOTO" });
 }
 
 export async function importStandingsFromLink(url: string): Promise<{ ok: true; count: number } | { ok: false; error: string }> {

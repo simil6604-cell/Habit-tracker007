@@ -1632,6 +1632,43 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText(/needs a real AI/)).toBeVisible();
   });
 
+  test("football: a photo of the table is read by the app's own AI, and checked before it counts", async () => {
+    // Asked for: the AI inside the app fills in the app's own table. This is
+    // the route that needs nothing from the league's website — no fetch it can
+    // refuse, no page that renders only in a browser, no selecting a table
+    // with a fingertip.
+    await page.goto("/football/team");
+    const panel = page.getByTestId("standings-photo");
+    await expect(panel).toBeVisible();
+
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwACRgFxfyRfSwAAAABJRU5ErkJggg==",
+      "base64"
+    );
+
+    // Nothing picked: it says what to do rather than failing quietly.
+    await panel.locator('input[name="photo"]').setInputFiles({ name: "t.png", mimeType: "image/png", buffer: png });
+
+    // A file that is not a picture is refused by name, not by a stack trace.
+    await panel.locator('input[name="photo"]').setInputFiles({
+      name: "table.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4", "utf8"),
+    });
+    await panel.getByRole("button", { name: "Read the photo" }).click();
+    await expect(panel.getByRole("status")).toContainText(/not a picture/i);
+
+    // And with no AI key — which is how this server runs — it says that
+    // plainly instead of pretending to read the picture and saving nothing.
+    // Silence here would look exactly like a photo it could not make out.
+    await panel.locator('input[name="photo"]').setInputFiles({ name: "t.png", mimeType: "image/png", buffer: png });
+    await panel.getByRole("button", { name: "Read the photo" }).click();
+    await expect(panel.getByRole("status")).toContainText(/needs a real AI/i);
+
+    // Nothing was saved on the way to finding that out.
+    await expect(page.getByTestId("standings-preview")).toHaveCount(0);
+  });
+
   test("football: league table, race for 1st and opponent scouting", async () => {
     await page.goto("/football");
     await expect(page.getByText("League table & race for 1st")).toBeVisible();
