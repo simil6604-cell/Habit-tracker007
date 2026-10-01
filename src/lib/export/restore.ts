@@ -237,6 +237,7 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   // Left alone, they point at files that are still there and the sweep removes
   // both within a day.
   await tx.drillVideo.deleteMany({ where: { userId } });
+  await tx.footballLink.deleteMany({ where: { userId } });
   await tx.assessment.deleteMany({ where: { userId } });
 }
 
@@ -495,6 +496,7 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       ["progressEntries", (row: Record<string, unknown>) => tx.progress.create({ data: row as never })],
       ["chatMessages", (row: Record<string, unknown>) => tx.chatMessage.create({ data: row as never })],
       ["drillVideos", (row: Record<string, unknown>) => tx.drillVideo.create({ data: row as never })],
+      ["footballLinks", (row: Record<string, unknown>) => tx.footballLink.create({ data: row as never })],
       ["assessments", (row: Record<string, unknown>) => tx.assessment.create({ data: row as never })],
     ] as const) {
       for (const entry of rows(data[key])) {

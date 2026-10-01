@@ -1485,6 +1485,60 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("drill-saved")).toHaveCount(0);
   });
 
+  test("football: the league's own pages, saved as links that always work", async () => {
+    // Reported: the real league link can't be added. The importer asks this
+    // server to fetch the page, and matchcenter.el-pl.ch answers 403 to
+    // anything that is not a browser — nothing this app can fix. A link is the
+    // one route that cannot fail for a reason outside the app: the phone
+    // opening it IS a browser.
+    await page.goto("/football");
+    const panel = page.getByTestId("league-links");
+    await expect(panel).toBeVisible();
+
+    // A link that would run code when the button is tapped never becomes one.
+    await panel.locator('input[name="url"]').fill("javascript:alert(1)");
+    await panel.getByRole("button", { name: "Save link" }).click();
+    await expect(panel.getByRole("alert")).toContainText(/not a web address/i);
+    await expect(panel.locator("a[href^='javascript']")).toHaveCount(0);
+
+    // The real one — the exact page that the importer is refused by.
+    const leagueUrl = "https://matchcenter.el-pl.ch/default.aspx?v=397&oid=3&lng=1&t=31562&a=trr";
+    await panel.locator('input[name="url"]').fill(leagueUrl);
+    await panel.locator('select[name="kind"]').selectOption("TABLE");
+    await panel.locator('input[name="title"]').fill("Tabelle 2. Liga");
+    await panel.getByRole("button", { name: "Save link" }).click();
+
+    const tableLink = panel.getByRole("link", { name: /Tabelle 2\. Liga/ });
+    await expect(tableLink).toHaveAttribute("href", leagueUrl);
+    await expect(tableLink).toHaveAttribute("target", "_blank");
+    await expect(tableLink).toHaveAttribute("rel", /noopener/);
+    // It says which site it goes to, so a stale link is recognisable.
+    await expect(panel.getByText("matchcenter.el-pl.ch")).toBeVisible();
+
+    // A second one, unnamed: it is named after what it is. Typing the kind in
+    // the box as well would be work, and naming it after the host would give
+    // two buttons both reading matchcenter.el-pl.ch.
+    await panel.locator('input[name="url"]').fill("https://www.football.ch/gruppe/42");
+    await panel.locator('select[name="kind"]').selectOption("FIXTURES");
+    await panel.getByRole("button", { name: "Save link" }).click();
+    await expect(panel.getByRole("link", { name: /Fixtures/ })).toBeVisible();
+
+    // Both survive a reload, table first — the order you want them in, not the
+    // order they were typed.
+    await page.reload();
+    const names = await page.getByTestId("league-links").locator("a .font-medium").allInnerTexts();
+    expect(names).toEqual(["Tabelle 2. Liga", "Fixtures"]);
+
+    // And on the team page, which is where you land from the table card.
+    await page.goto("/football/team");
+    await expect(page.getByTestId("league-links").getByRole("link", { name: /Tabelle 2\. Liga/ })).toBeVisible();
+
+    // Taken back out again.
+    await page.getByTestId("league-links").getByRole("button", { name: "Remove Tabelle 2. Liga" }).click();
+    await expect(page.getByTestId("league-links").getByRole("link", { name: /Tabelle 2\. Liga/ })).toHaveCount(0);
+    await expect(page.getByTestId("league-links").getByRole("link", { name: /Fixtures/ })).toBeVisible();
+  });
+
   test("football: when the page can't be read, the table can be pasted", async () => {
     // Reported: a real league link comes back as an error. Some league pages
     // build their table in the browser, and some refuse a server outright —
@@ -1881,6 +1935,12 @@ test.describe.serial("full app walkthrough", () => {
     await freshPage.goto("/school/timetable");
     await expect(freshPage.locator('input[value="Chemistry"]')).toBeVisible();
     await expect(freshPage.locator('input[value="Morning break"]')).toBeVisible();
+
+    // The league link too. It is a table the backup scanner only started
+    // covering when it was added, and a link that silently did not come back
+    // would be a page you can no longer reach from the app.
+    await freshPage.goto("/football");
+    await expect(freshPage.getByTestId("league-links").getByRole("link", { name: /Fixtures/ })).toBeVisible();
 
     // The photo came back as a file, not just as a row: this is a real
     // request through the serving route, which only answers for the owner.

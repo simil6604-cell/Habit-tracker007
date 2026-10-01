@@ -18,6 +18,7 @@ import { parseMilestoneTab } from "@/lib/progress/milestones";
 import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
 import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
 import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
+import { LeagueLinksPanel } from "@/components/football/league-links-panel";
 import { LeagueSnapshot } from "@/components/football/league-snapshot";
 import { UpcomingOpponentsCard } from "@/components/football/upcoming-opponents-card";
 import { analyzeTable } from "@/lib/football/table-analysis";
@@ -66,6 +67,11 @@ export default async function FootballPage({
     getCalendarItems(userId, weekDays[0], addDays(weekDays[6], 1)),
     getSavedDrillVideos(),
   ]);
+  const leagueLinks = await prisma.footballLink.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, kind: true, title: true, url: true },
+  });
   const footballWeekItems = weekItems.filter((i) => i.category === "FOOTBALL");
 
   const upcomingTrainings = profile?.trainings.filter((t) => !t.date || t.date >= now) ?? [];
@@ -151,6 +157,19 @@ export default async function FootballPage({
                 <Button type="submit" size="sm" variant="secondary">Add match</Button>
               </form>
               <MatchList matches={upcomingMatches} />
+            </CardContent>
+          </Card>
+
+          {/*
+            The league's own pages, above the table the app builds. One tap and
+            you are on the real thing — which is the only route that cannot
+            fail for a reason outside this app, since a league site is free to
+            refuse the importer below and some do.
+          */}
+          <Card className="mt-4">
+            <CardHeader><CardTitle>Your league&apos;s pages</CardTitle></CardHeader>
+            <CardContent>
+              <LeagueLinksPanel links={leagueLinks} />
             </CardContent>
           </Card>
 
