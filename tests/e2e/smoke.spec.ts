@@ -1029,6 +1029,94 @@ test.describe.serial("full app walkthrough", () => {
     expect((await page.request.get(src!)).status(), "the file is deleted, not just unlinked").toBe(404);
   });
 
+  test("school: one tap fills in the week off the Year 12 sheet", async ({ browser }: { browser: Browser }) => {
+    // Typing forty cells into a grid on a phone is the kind of job that gets
+    // abandoned halfway, after which everything that reads the timetable has
+    // half a week to work from. This is the whole week in one press.
+    //
+    // On its own account: it replaces Monday to Friday by design, which would
+    // take the main account's hand-built grid with it.
+    const context = await browser.newContext();
+    const importer = await context.newPage();
+    try {
+      await importer.goto("/register");
+      await importer.fill('input[name="name"]', "Year 12");
+      await importer.fill('input[name="email"]', `e2e_y12_${Date.now()}@example.com`);
+      await importer.fill('input[name="password"]', password);
+      await importer.fill('input[name="invite"]', E2E_INVITE_CODE);
+      await importer.getByRole("button", { name: /create account/i }).click();
+      await importer.waitForURL(/\/onboarding|\/$/);
+
+      // Onboarding is a gate, not a suggestion: an account that skips it is
+      // sent back here from every page, timetable included.
+      await importer.click('button:has-text("Continue")'); // domains
+      await importer.click('button:has-text("School")');
+      await importer.click('button:has-text("Continue")'); // main focus
+      await importer.fill('input[placeholder*="Riverside"]', "ISCS");
+      await importer.click('button:has-text("Continue")'); // school
+      await importer.click('button:has-text("Continue")'); // gym
+      await importer.click('button:has-text("Continue")'); // football
+      await importer.click('button:has-text("Finish setup")');
+      await importer.waitForURL("/");
+
+      // A subject that is already there, spelled the way someone actually
+      // types it. It must be matched, not duplicated: a second Economics
+      // would take the lessons while the topics, flashcards, homework and
+      // revision links stayed behind on the first one.
+      await importer.goto("/school");
+      await importer.fill('input[placeholder="Subject name"]', "economics");
+      await importer.click('button:has-text("Add subject")');
+      await expect(subjectLink(importer, "economics")).toBeVisible();
+
+      await importer.goto("/school/timetable");
+      await importer.getByTestId("import-year12").click();
+      const report = importer.getByRole("status");
+      await expect(report).toContainText("Monday to Friday");
+      await expect(report, "the one already there was not created again").not.toContainText("Economics");
+
+      // The subjects it needed were created, not assumed to be there.
+      await importer.goto("/school");
+      for (const name of ["German", "English", "EPQ", "Maths"]) {
+        await expect(subjectLink(importer, name), `${name} is missing`).toBeVisible();
+      }
+      // And still exactly one Economics, the one that was already there.
+      await expect(subjectLink(importer, "economics")).toHaveCount(1);
+
+      // The grid holds real lessons linked to those subjects...
+      await importer.goto("/school/timetable");
+      await expect(importer.locator('input[value="economics"]').first()).toBeVisible();
+      expect(await importer.locator('input[value="German"]').count(), "five German periods").toBe(5);
+      // ...and the free periods say why they are free, rather than being blank.
+      await expect(importer.locator('input[value="Free — Maths with Year 11"]').first()).toBeVisible();
+
+      // Pressing it again leaves the same week, not two overlapping copies.
+      //
+      // Counted in the data, not on the page: both the editor and the diagram
+      // show one cell per day and period, so a second slot sitting underneath
+      // the first is invisible in either. The backup is the rows themselves.
+      const countSlots = async () => {
+        const archive = await importer.request.get("/api/export");
+        expect(archive.status()).toBe(200);
+        const dir = mkdtempSync(path.join(tmpdir(), "momentum-e2e-y12-"));
+        const file = path.join(dir, "backup.tar.gz");
+        writeFileSync(file, await archive.body());
+        execFileSync("tar", ["-xzf", file, "-C", dir]);
+        const root = readdirSync(dir).find((entry) => entry.startsWith("momentum-backup-"))!;
+        const data = JSON.parse(readFileSync(path.join(dir, root, "data.json"), "utf8"));
+        return (data.timetableSlots as unknown[]).length;
+      };
+
+      const first = await countSlots();
+      expect(first, "the whole week is in the database").toBe(52);
+
+      await importer.getByTestId("import-year12").click();
+      await expect(importer.getByRole("status")).toContainText("Monday to Friday");
+      expect(await countSlots(), "still one week, not two stacked on each other").toBe(first);
+    } finally {
+      await context.close();
+    }
+  });
+
   test("school: the jump bar reaches every section it names", async () => {
     // The page is about twenty phone screens. The bar is the way in, and a
     // chip pointing at a section that was renamed or removed would scroll

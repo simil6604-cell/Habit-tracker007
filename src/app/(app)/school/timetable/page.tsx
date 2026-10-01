@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { slotsToGridRows } from "@/lib/school/timetable-grid";
 import { TimetableEditor } from "@/components/school/timetable-editor";
 import { TimetablePhoto } from "@/components/school/timetable-photo";
+import { Year12ImportPanel } from "@/components/school/year12-import-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -40,6 +41,17 @@ export default async function TimetableEditorPage() {
         <CardHeader><CardTitle>Your timetable, photographed</CardTitle></CardHeader>
         <CardContent>
           <TimetablePhoto imagePath={school?.timetableImage ?? null} />
+        </CardContent>
+      </Card>
+
+      {/*
+        Then the shortcut. The grid below can do anything; this does the one
+        week we already know, so the forty cells are not typed on a phone.
+      */}
+      <Card className="mt-6">
+        <CardHeader><CardTitle>Fill it in for me</CardTitle></CardHeader>
+        <CardContent>
+          <Year12ImportPanel hasSlots={slots.length > 0} />
         </CardContent>
       </Card>
 
