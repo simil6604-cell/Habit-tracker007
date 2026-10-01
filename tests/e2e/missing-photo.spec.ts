@@ -65,5 +65,5 @@ test("the setup card notices a photo whose file has been deleted", async ({ page
 
   await page.goto("/settings");
   await expect(page.getByTestId("check-photo-files")).toContainText(/missing from disk/);
-  await expect(page.getByTestId("setup-checks")).toContainText(/lose data/);
+  await expect(page.getByTestId("setup-checks")).toContainText(/needs fixing now/);
 });

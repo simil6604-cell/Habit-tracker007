@@ -1496,10 +1496,25 @@ test.describe.serial("full app walkthrough", () => {
     await expect(panel).toBeVisible();
 
     // A link that would run code when the button is tapped never becomes one.
+    // The box takes plain text so this reaches the check that refuses it —
+    // behind type="url" the browser blocked it first, with a bubble that says
+    // "enter a URL" and leaves you no wiser about why yours was refused.
     await panel.locator('input[name="url"]').fill("javascript:alert(1)");
     await panel.getByRole("button", { name: "Save link" }).click();
-    await expect(panel.getByRole("alert")).toContainText(/not a web address/i);
+    await expect(panel.getByRole("alert")).toContainText(/no web address/i);
     await expect(panel.locator("a[href^='javascript']")).toHaveCount(0);
+
+    // What a phone actually hands you: the address bar without its scheme.
+    // This was refused as "not a web address" when it is exactly the address.
+    await panel.locator('input[name="url"]').fill("www.football.ch/gruppe/7");
+    await panel.locator('select[name="kind"]').selectOption("RESULTS");
+    await panel.getByRole("button", { name: "Save link" }).click();
+    await expect(panel.getByRole("link", { name: /Results/ })).toHaveAttribute(
+      "href",
+      "https://www.football.ch/gruppe/7"
+    );
+    await panel.getByRole("button", { name: "Remove Results" }).click();
+    await expect(panel.getByRole("link", { name: /Results/ })).toHaveCount(0);
 
     // The real one — the exact page that the importer is refused by.
     const leagueUrl = "https://matchcenter.el-pl.ch/default.aspx?v=397&oid=3&lng=1&t=31562&a=trr";
@@ -2071,6 +2086,12 @@ test.describe.serial("full app walkthrough", () => {
     const card = page.getByTestId("setup-checks");
     await expect(card).toBeVisible();
 
+    // The schema row. This server starts from `prisma db push`, so it passes —
+    // and that is the point: the row exists and reports, rather than only
+    // appearing once something is already broken. The deployment that lost the
+    // league-links table had no signal at all until a feature failed.
+    await expect(card.getByTestId("check-schema")).toContainText(/every table and column/i);
+
     // This server runs with an invite code set, so the row says the door is
     // shut — and it must not print the code, because every invited guest can
     // open this page and would otherwise be able to invite the next one.
@@ -2104,7 +2125,7 @@ test.describe.serial("full app walkthrough", () => {
     await expect(timezone.locator("xpath=..")).toContainText(/TZ=Europe\/Zurich/);
 
     // The headline leads with the worst row, and says it in words.
-    await expect(card).toContainText(/lose data|worth fixing|checks out/);
+    await expect(card).toContainText(/needs fixing now|worth fixing|checks out/);
   });
 
   test("offline: the installed app says the signal is gone, and keeps nothing personal to say it", async () => {

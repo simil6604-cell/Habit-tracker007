@@ -155,7 +155,14 @@ describe("summarize", () => {
   });
 
   it("says what it means without a status code", () => {
-    expect(summarize([check("fail")]).label).toMatch(/lose data/);
+    expect(summarize([check("fail")]).label).toMatch(/needs fixing/);
     expect(summarize([check("ok")]).label).toMatch(/checks out/);
+  });
+
+  it("does not promise what kind of failure it is — the rows do that", () => {
+    // It said "will lose data" while every failure was about persistence. A
+    // missing database table loses nothing and breaks a feature outright, so
+    // the headline can no longer name the consequence.
+    expect(summarize([check("fail")]).label).not.toMatch(/lose data/);
   });
 });

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { parseLink } from "./links";
+import { schemaErrorMessage } from "@/lib/config/schema-check";
 
 async function requireUserId() {
   const session = await auth();
@@ -30,9 +31,18 @@ export async function addFootballLink(_prev: SaveLinkState, formData: FormData):
   const parsed = parseLink(formData.get("url"), formData.get("title"), formData.get("kind"));
   if (!parsed.ok) return { ok: false, error: parsed.error };
 
-  await prisma.footballLink.create({
-    data: { userId, kind: parsed.kind, title: parsed.title, url: parsed.url },
-  });
+  try {
+    await prisma.footballLink.create({
+      data: { userId, kind: parsed.kind, title: parsed.title, url: parsed.url },
+    });
+  } catch (error) {
+    // A deployment whose database was never brought up to date has no table to
+    // write to. Thrown, that reaches the screen as a blank failure and reads as
+    // a bug in this panel; said out loud, it names the real problem.
+    const schema = schemaErrorMessage(error);
+    if (schema) return { ok: false, error: schema };
+    throw error;
+  }
 
   revalidateFootball();
   return { ok: true };

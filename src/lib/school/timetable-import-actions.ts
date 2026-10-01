@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { SUBJECT_COLORS } from "@/lib/data/cambridge";
 import { YEAR12_SUBJECTS, YEAR12_TIMETABLE } from "./year12-timetable";
+import { schemaErrorMessage } from "@/lib/config/schema-check";
 
 async function requireUserId() {
   const session = await auth();
@@ -32,7 +33,16 @@ export type ImportResult = { ok: true; slots: number; createdSubjects: string[] 
  */
 export async function importYear12Timetable(): Promise<ImportResult> {
   const userId = await requireUserId();
+  try {
+    return await writeYear12Week(userId);
+  } catch (error) {
+    const schema = schemaErrorMessage(error);
+    if (schema) return { ok: false, error: schema };
+    throw error;
+  }
+}
 
+async function writeYear12Week(userId: string): Promise<ImportResult> {
   const existing = await prisma.subject.findMany({ where: { userId }, select: { id: true, name: true } });
   const byName = new Map(existing.map((s) => [s.name.trim().toLowerCase(), s.id]));
   const createdSubjects: string[] = [];

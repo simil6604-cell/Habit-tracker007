@@ -84,7 +84,8 @@ export function LeagueLinksPanel({ links }: { links: StoredLink[] }) {
               name="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              type="url"
+              type="text"
+              inputMode="url"
               required
               placeholder="https://matchcenter.el-pl.ch/…"
               aria-label="Link to the page"

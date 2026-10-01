@@ -26,6 +26,8 @@ import {
 import { getAIHealth } from "@/lib/ai/health";
 import { UPLOAD_ROOT, uploadedImageExists } from "@/lib/uploads/save-image";
 import { SetupChecksCard } from "@/components/settings/setup-checks-card";
+import { schemaCheck } from "@/lib/config/schema-check";
+import { findDeployedSchemaGaps } from "@/lib/config/schema-probe";
 import { getSignupState } from "@/lib/auth/signup-state";
 import { Badge } from "@/components/ui/badge";
 
@@ -80,7 +82,12 @@ export default async function SettingsPage() {
 
   const isProduction = process.env.NODE_ENV === "production";
   const signup = await getSignupState();
+  // First in the list on purpose: a missing table is not a risk to come, it is
+  // a feature that is broken right now, and it makes other checks here lie.
+  const schemaGaps = await findDeployedSchemaGaps();
+
   const checks = [
+    schemaCheck(schemaGaps),
     signupCheck(signup),
     photoStorageCheck(UPLOAD_ROOT, isProduction),
     photoFilesCheck({ total: totalPhotos, missing: missingPhotos, checked: imagePaths.length }),
