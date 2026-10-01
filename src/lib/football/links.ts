@@ -1,4 +1,4 @@
-import { parseRevisionUrl, revisionHost } from "@/lib/utils/revision-url";
+import { normalizeUserUrl, revisionHost } from "@/lib/utils/revision-url";
 
 /**
  * The pages of a league's own site, saved as links you tap.
@@ -49,11 +49,12 @@ export type ParsedLink = { ok: true; kind: LinkKind; title: string; url: string 
  * than an empty button, and it is what you would have typed anyway.
  */
 export function parseLink(rawUrl: unknown, rawTitle: unknown, rawKind: unknown): ParsedLink {
-  const url = parseRevisionUrl(typeof rawUrl === "string" ? rawUrl : "");
+  const url = normalizeUserUrl(typeof rawUrl === "string" ? rawUrl : "");
   if (!url) {
     return {
       ok: false,
-      error: "That is not a web address. Copy the page's link from your browser — it starts with https://",
+      error:
+        "No web address in that. Open the page in your browser, copy the address from the top bar, and paste the whole thing here.",
     };
   }
 

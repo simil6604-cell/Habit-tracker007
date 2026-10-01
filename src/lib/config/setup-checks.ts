@@ -309,10 +309,18 @@ export function signupCheck(state: SignupState): SetupCheck {
   };
 }
 
-/** The headline: what the whole list adds up to. */
+/**
+ * The headline: what the whole list adds up to.
+ *
+ * It used to read "Something here will lose data", because every failure this
+ * card knew about was about persistence. The schema check broke that: a
+ * missing table loses nothing and breaks a feature outright, and a headline
+ * warning about data loss over it is both frightening and wrong. The rows say
+ * which it is; the headline only has to say that one of them needs you.
+ */
 export function summarize(checks: SetupCheck[]): { status: CheckStatus; label: string } {
   if (checks.some((check) => check.status === "fail")) {
-    return { status: "fail", label: "Something here will lose data" };
+    return { status: "fail", label: "Something here needs fixing now" };
   }
   if (checks.some((check) => check.status === "warn")) {
     return { status: "warn", label: "Working, with something worth fixing" };
