@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { parseRevisionUrl } from "@/lib/utils/revision-url";
 import { generateIndividualTraining } from "./training-generator";
 import { fetchAndParseStandings, importStandingsFromText, type ImportedStanding } from "./standings-import";
+import { cleanLine, cleanNote, parseMatchDate, MAX_LOCATION } from "./match-details";
 import type { FootballPosition } from "@/lib/data/football";
 
 async function requireUserId() {
@@ -191,18 +192,22 @@ export async function createMatch(formData: FormData) {
   const profile = await prisma.footballProfile.findUnique({ where: { userId } });
   if (!profile) return;
 
-  const dateStr = String(formData.get("date") ?? "");
-  if (!dateStr) return;
+  const date = parseMatchDate(formData.get("date"));
+  const opponent = cleanLine(formData.get("opponent"), 80);
+  if (!date || !opponent) return;
 
   await prisma.footballMatch.create({
     data: {
       profileId: profile.id,
-      opponent: String(formData.get("opponent") ?? "").trim(),
-      date: new Date(dateStr),
+      opponent,
+      date,
       isHome: formData.get("isHome") === "on",
+      location: cleanLine(formData.get("location"), MAX_LOCATION),
+      notes: cleanNote(formData.get("notes")),
     },
   });
-  revalidatePath("/football");
+  revalidateFootball();
+  revalidatePath("/calendar");
 }
 
 export async function recordMatchResult(matchId: string, formData: FormData) {

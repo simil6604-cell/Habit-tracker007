@@ -597,8 +597,14 @@ model FootballMatch {
   opponent     String
   date         DateTime
   isHome       Boolean         @default(true)
+  // Where to be. A match you cannot find is a match you miss, and "home" is
+  // not an address — junior football plays on whichever pitch the club was
+  // given that week.
+  location     String?
   scoreFor     Int?
   scoreAgainst Int?
+  // Free text for the things a fixture list never has: what time to be there,
+  // which kit, who is driving.
   notes        String?
 
   @@index([profileId, date])

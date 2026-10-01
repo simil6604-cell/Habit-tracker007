@@ -5,6 +5,7 @@ export type UpcomingMatch = {
   opponent: string;
   date: Date;
   isHome: boolean;
+  location?: string | null;
 };
 
 export type OpponentPreview = {

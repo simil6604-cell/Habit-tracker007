@@ -5,9 +5,19 @@ import { format } from "date-fns";
 import { recordMatchResult, deleteMatch } from "@/lib/football/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { MapPin, Trash2 } from "lucide-react";
+import { matchWhereLine } from "@/lib/football/match-details";
 
-type Match = { id: string; opponent: string; date: Date; isHome: boolean; scoreFor: number | null; scoreAgainst: number | null };
+type Match = {
+  id: string;
+  opponent: string;
+  date: Date;
+  isHome: boolean;
+  location: string | null;
+  notes: string | null;
+  scoreFor: number | null;
+  scoreAgainst: number | null;
+};
 
 export function MatchList({ matches }: { matches: Match[] }) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -21,9 +31,15 @@ export function MatchList({ matches }: { matches: Match[] }) {
       {matches.map((m) => (
         <li key={m.id} className="py-2.5">
           <div className="flex items-center justify-between gap-2 text-sm">
-            <div>
+            <div className="min-w-0">
               <p className="font-medium">{m.isHome ? "vs" : "@"} {m.opponent}</p>
-              <p className="text-xs text-muted">{format(m.date, "EEE, MMM d · HH:mm")}</p>
+              {/* Day, kick-off, place — the line you read on the way out. */}
+              <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
+                <span>{format(m.date, "EEE, d MMM · HH:mm")}</span>
+                <MapPin size={11} className="shrink-0" />
+                <span>{matchWhereLine(m)}</span>
+              </p>
+              {m.notes && <p className="mt-1 whitespace-pre-line text-xs text-muted">{m.notes}</p>}
             </div>
             <div className="flex items-center gap-2">
               {m.scoreFor !== null ? (
