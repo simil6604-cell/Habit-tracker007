@@ -80,6 +80,7 @@ model User {
   examPlans          ExamPlan[]
   libraryFolders     LibraryFolder[]
   revisionLinks      RevisionLink[]
+  footballLinks      FootballLink[]
 }
 
 model Account {
@@ -860,4 +861,26 @@ model RevisionLink {
   @@index([userId, kind])
   @@index([subjectId])
   @@index([topicId])
+}
+
+/**
+ * A page on your league's own site, saved so it is one tap away.
+ * Deliberately a link and nothing more. The standings importer asks this
+ * server to fetch such a page, and plenty of them refuse a server outright
+ * (matchcenter.el-pl.ch answers 403) or build their table in the browser, so
+ * there is nothing to read. Your phone's browser has neither problem — it is
+ * the thing the site is built for. So the table, the fixture list and the
+ * results get a button each, and tapping one opens the real page.
+ */
+model FootballLink {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // TABLE | FIXTURES | RESULTS | TEAM | OTHER
+  kind      String   @default("OTHER")
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+
+  @@index([userId, kind])
 }

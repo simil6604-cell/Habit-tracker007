@@ -125,6 +125,7 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
       examPlans: { include: { days: true, checkIns: true } },
       libraryFolders: true,
       revisionLinks: true,
+      footballLinks: true,
       assessments: true,
       // These hang off topics as well, and are included there. Kept at the top
       // level too so an entry whose topic was deleted is still in the backup.

@@ -7,6 +7,7 @@ import { previewOpponents } from "@/lib/football/opponents";
 import { RaceToFirstCard } from "@/components/football/race-to-first-card";
 import { UpcomingOpponentsCard } from "@/components/football/upcoming-opponents-card";
 import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
+import { LeagueLinksPanel } from "@/components/football/league-links-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,12 @@ export default async function FootballTeamPage() {
     take: 5,
   });
 
+  const leagueLinks = await prisma.footballLink.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, kind: true, title: true, url: true },
+  });
+
   const weaknesses = profile.weaknesses ? profile.weaknesses.split(",").filter(Boolean) : [];
   const analysis = analyzeTable(profile.team.standings, profile.team.name, weaknesses);
   const opponents = previewOpponents(upcomingMatches, profile.team.standings, profile.team.name);
@@ -41,7 +48,15 @@ export default async function FootballTeamPage() {
           : "Paste a link to your league's table below to sync it automatically, or enter standings yourself. Nothing here is invented."}
       </p>
 
+      {/* The real pages first: one tap to the league's own table. */}
       <Card className="mt-6">
+        <CardHeader><CardTitle>Your league&apos;s pages</CardTitle></CardHeader>
+        <CardContent>
+          <LeagueLinksPanel links={leagueLinks} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
         <CardHeader><CardTitle>Upcoming opponents</CardTitle></CardHeader>
         <CardContent>
           <UpcomingOpponentsCard previews={opponents} />
