@@ -102,29 +102,32 @@ export async function importStandingsFromText(raw: string): Promise<ImportResult
 }
 
 /**
- * Text in, rows out. Never invents a team: no table found is an error, not a
- * guess, and a row without a name is dropped rather than filled in.
+ * What the model is asked for, in one place.
+ *
+ * Shared by the three ways a table gets in — a fetched page, a pasted block,
+ * a photograph. They differ only in what the table arrives as; the columns,
+ * the German headers and the refusal word are the same question every time,
+ * and three copies of it would answer three slightly different questions.
  */
-async function parseStandingsText(text: string): Promise<ImportResult> {
-  const prompt = `Below is text extracted from a football/soccer league standings webpage. It may be in German, French, Italian or English. Find the league table and extract EVERY row as a JSON array, one object per team, with exactly these fields: rank (integer), teamName (string), played (integer), won (integer), drawn (integer), lost (integer), goalsFor (integer), goalsAgainst (integer), points (integer).
+export const STANDINGS_TASK = `Find the league table and extract EVERY row as a JSON array, one object per team, with exactly these fields: rank (integer), teamName (string), played (integer), won (integer), drawn (integer), lost (integer), goalsFor (integer), goalsAgainst (integer), points (integer).
 
 Common German headers: Rang=rank, Verein/Team/Mannschaft=teamName, Sp/Spiele=played, S/Siege=won, U/Unentschieden=drawn, N/Niederlagen=lost, Tore (shown as "12:5")=goalsFor:goalsAgainst, Pkt/Punkte=points. Ignore a "Diff" column — it's derived, not one of the fields above.
 
-Respond with ONLY the JSON array — no explanation, no markdown code fences. If you cannot find a clear standings table in this text, respond with exactly: NONE
+Respond with ONLY the JSON array — no explanation, no markdown code fences. If you cannot find a clear standings table, respond with exactly: NONE`;
 
----
-${text}`;
-
-  let raw: string;
-  try {
-    raw = await getAIProvider().generate(prompt, { maxTokens: 3000 });
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "The AI couldn't process that page." };
-  }
-
+/**
+ * The model's reply, turned into rows — or into a reason there are none.
+ *
+ * Pure, and separate from the asking, because this is the part that has to
+ * survive a model that wrapped its JSON in a code fence, answered in prose,
+ * returned an object instead of an array, or filled a column with a dash. It
+ * never invents a team: no table is an error rather than a guess, and a row
+ * with no name is dropped rather than named.
+ */
+export function parseStandingsReply(raw: string, noTableError: string): ImportResult {
   const trimmed = raw.trim();
   if (trimmed === "NONE" || trimmed.length === 0) {
-    return { ok: false, error: "Couldn't find a standings table on that page — double-check the link, or enter standings manually below." };
+    return { ok: false, error: noTableError };
   }
 
   let data: unknown;
@@ -132,11 +135,11 @@ ${text}`;
     const jsonMatch = trimmed.match(/\[[\s\S]*\]/);
     data = JSON.parse(jsonMatch ? jsonMatch[0] : trimmed);
   } catch {
-    return { ok: false, error: "The AI's response wasn't valid table data — try again, or enter standings manually below." };
+    return { ok: false, error: "The AI's answer was not table data — try again, or enter the rows by hand below." };
   }
 
   if (!Array.isArray(data) || data.length === 0) {
-    return { ok: false, error: "No standings rows found on that page." };
+    return { ok: false, error: noTableError };
   }
 
   const rows: ImportedStanding[] = [];
@@ -159,9 +162,92 @@ ${text}`;
   }
 
   if (rows.length === 0) {
-    return { ok: false, error: "Couldn't parse any valid rows from that page's table." };
+    return { ok: false, error: "Every row came back without a team name, so there was nothing to save." };
   }
 
   rows.sort((a, b) => a.rank - b.rank);
   return { ok: true, data: rows };
+}
+
+/** Text in, rows out. */
+async function parseStandingsText(text: string): Promise<ImportResult> {
+  const prompt = `Below is text extracted from a football/soccer league standings webpage. It may be in German, French, Italian or English. ${STANDINGS_TASK}
+
+---
+${text}`;
+
+  let raw: string;
+  try {
+    raw = await getAIProvider().generate(prompt, { maxTokens: 3000 });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "The AI couldn't read that." };
+  }
+
+  return parseStandingsReply(
+    raw,
+    "Couldn't find a standings table in that — double-check the link, or enter the rows by hand below."
+  );
+}
+
+/**
+ * The same rows, read off a photograph of the table.
+ *
+ * This is the route that needs nothing from the league's website at all: no
+ * fetch it can refuse, no page that renders in a browser only, no copying on
+ * a phone. You take a picture of the table — on the screen or on paper — and
+ * the AI in this app reads it.
+ *
+ * What comes back is shown before it is saved. A model reading a column of
+ * numbers off a photo is right most of the time and not all of the time, and
+ * a wrong points column quietly changes what the app tells you about the race
+ * for first — so the rows are checked by the person who took the photo.
+ */
+export async function readStandingsFromImage(base64: string, mediaType: string): Promise<ImportResult> {
+  if (!isRealAIConfigured) {
+    return {
+      ok: false,
+      error: "Reading a photo needs a real AI — set ANTHROPIC_API_KEY in Settings, or enter the rows by hand below.",
+    };
+  }
+
+  const prompt = `The image is a photograph or screenshot of a football/soccer league table. It may be in German, French, Italian or English. ${STANDINGS_TASK}`;
+
+  let raw: string;
+  try {
+    raw = await getAIProvider().generate(prompt, {
+      maxTokens: 3000,
+      imageBase64: base64,
+      imageMediaType: mediaType,
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "The AI couldn't read that photo." };
+  }
+
+  return parseStandingsReply(
+    raw,
+    "No league table could be read in that picture. Make sure the whole table is in frame and the numbers are sharp, then try again."
+  );
+}
+
+/**
+ * Where the table on screen came from, in one line under the team's name.
+ *
+ * It used to read "Paste a link to your league's table below" for everything
+ * that was not a link — so after reading a table off a photograph the page
+ * told you to go and paste a link, about the table it had just filled in.
+ */
+export function standingsSourceLine(dataSource: string, hasRows: boolean): string {
+  if (!hasRows) {
+    return "No table yet. Photograph it, paste it, or type the rows in below — nothing here is ever invented.";
+  }
+  switch (dataSource) {
+    case "API":
+      return "Read from your league's own table page. Refresh it any time results change.";
+    case "PASTED":
+      return "Read from the table you pasted. Paste a newer one any time results change.";
+    case "PHOTO":
+      return "Read from your photo of the table, and checked by you. Photograph it again any time results change.";
+    default:
+      return "These rows were typed in by hand. Change them below, or read a new table from a photo or a link.";
+  }
 }

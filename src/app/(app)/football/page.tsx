@@ -18,6 +18,7 @@ import { parseMilestoneTab } from "@/lib/progress/milestones";
 import { POSITION_FOCUS, type FootballPosition } from "@/lib/data/football";
 import { DomainTasksPanel } from "@/components/tasks/domain-tasks-panel";
 import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
+import { StandingsPhotoPanel } from "@/components/football/standings-photo-panel";
 import { LeagueLinksPanel } from "@/components/football/league-links-panel";
 import { LeagueSnapshot } from "@/components/football/league-snapshot";
 import { UpcomingOpponentsCard } from "@/components/football/upcoming-opponents-card";
@@ -220,6 +221,7 @@ export default async function FootballPage({
               <CardHeader><CardTitle>League table &amp; race for 1st</CardTitle></CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <StandingsSyncPanel initialUrl={profile.team.sourceUrl} lastSyncedAt={profile.team.lastSyncedAt} />
+                <StandingsPhotoPanel />
                 <LeagueSnapshot standings={standings} myTeamName={profile.team.name} analysis={analysis} />
               </CardContent>
             </Card>

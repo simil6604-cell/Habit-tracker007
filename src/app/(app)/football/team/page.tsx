@@ -7,6 +7,8 @@ import { previewOpponents } from "@/lib/football/opponents";
 import { RaceToFirstCard } from "@/components/football/race-to-first-card";
 import { UpcomingOpponentsCard } from "@/components/football/upcoming-opponents-card";
 import { StandingsSyncPanel } from "@/components/football/standings-sync-panel";
+import { StandingsPhotoPanel } from "@/components/football/standings-photo-panel";
+import { standingsSourceLine } from "@/lib/football/standings-import";
 import { LeagueLinksPanel } from "@/components/football/league-links-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,9 +45,7 @@ export default async function FootballTeamPage() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-semibold tracking-tight">{profile.team.name}</h1>
       <p className="mt-1 text-muted">
-        {profile.team.dataSource === "API"
-          ? "Synced from your league's own table page — refresh it any time results change."
-          : "Paste a link to your league's table below to sync it automatically, or enter standings yourself. Nothing here is invented."}
+        {standingsSourceLine(profile.team.dataSource, profile.team.standings.length > 0)}
       </p>
 
       {/* The real pages first: one tap to the league's own table. */}
@@ -86,6 +86,7 @@ export default async function FootballTeamPage() {
         <CardHeader><CardTitle>League Table</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
           <StandingsSyncPanel initialUrl={profile.team.sourceUrl} lastSyncedAt={profile.team.lastSyncedAt} />
+          <StandingsPhotoPanel />
 
           <form action={addStanding} className="grid grid-cols-2 gap-2 sm:grid-cols-9">
             <input name="rank" type="number" placeholder="#" required className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm" />
