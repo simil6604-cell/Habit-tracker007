@@ -44,7 +44,7 @@ export async function getAgendaForDay(userId: string, day: Date): Promise<Agenda
     items.push({ id: `foot-${t.id}`, title: t.title, time: t.date ? fmtTime(t.date) : undefined, category: "FOOTBALL" });
   }
   for (const m of matches) {
-    items.push({ id: `match-${m.id}`, title: `Match vs ${m.opponent}`, time: fmtTime(m.date), category: "FOOTBALL" });
+    items.push({ id: `match-${m.id}`, title: m.location ? `Match vs ${m.opponent} · ${m.location}` : `Match vs ${m.opponent}`, time: fmtTime(m.date), category: "FOOTBALL" });
   }
   for (const t of tasks) {
     items.push({ id: `task-${t.id}`, title: t.title, category: "TASK" });

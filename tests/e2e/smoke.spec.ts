@@ -1440,6 +1440,62 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText("🎯 Individual Training")).toBeVisible();
   });
 
+  test("football: a match says when, where and what else you need to know", async () => {
+    // Asked for: somewhere to write down when and where, at what time. A
+    // fixture list gives you none of the last part — which pitch, what time to
+    // be there, which kit — and that is the half you actually look up on the
+    // morning of the game.
+    await page.goto("/football");
+
+    const soon = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const when = `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}T14:00`;
+
+    // Scoped to the match form: the training form above it has a date field
+    // of its own, and an unscoped fill lands in that one and leaves this empty.
+    const form = page.getByTestId("match-form");
+    await form.locator('input[name="opponent"]').fill("FC Baar");
+    await form.locator('input[name="date"]').fill(when);
+    await form.locator('input[name="location"]').fill("Sportplatz Herti, Zug — pitch 2");
+    await form.locator('textarea[name="notes"]').fill("Besammlung 13:00\nRotes Trikot");
+    await expect(form.locator('input[name="date"]'), "the date really went in").toHaveValue(when);
+    await form.getByRole("button", { name: "Add match" }).click();
+
+    const match = page.getByRole("listitem").filter({ hasText: "FC Baar" }).first();
+    await expect(match).toContainText("14:00");
+    await expect(match).toContainText("Sportplatz Herti, Zug — pitch 2");
+    await expect(match).toContainText("Besammlung 13:00");
+    // The line breaks in the note survive, so it reads as the list it is.
+    await expect(match).toContainText("Rotes Trikot");
+
+    // It reaches the places you look on the day, not only the form you typed it into.
+    await expect(
+      page.getByTestId("upcoming-opponents"),
+      "the opponents card repeats where and when"
+    ).toContainText("Sportplatz Herti");
+
+    // The day view for that date, not the default week: a fixture five days
+    // out falls into next week as often as not, so a week-view assertion
+    // fails on a Thursday and passes on a Monday. The month view is no good
+    // either — it draws a coloured dot per day, not the titles.
+    const day = `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}`;
+    await page.goto(`/calendar?view=day&date=${day}`);
+    await expect(page.getByText(/Match vs FC Baar · Sportplatz Herti/).first()).toBeVisible();
+
+    // A match with no place still says the one thing you always know.
+    await page.goto("/football");
+    const form2 = page.getByTestId("match-form");
+    await form2.locator('input[name="opponent"]').fill("SC Cham");
+    await form2.locator('input[name="date"]').fill(when);
+    await form2.locator('input[name="isHome"]').uncheck();
+    await form2.getByRole("button", { name: "Add match" }).click();
+    const away = page.getByRole("listitem").filter({ hasText: "SC Cham" }).first();
+    await expect(away).toContainText("Away");
+
+    await away.locator('button[type="submit"]').click();
+    await expect(page.getByRole("listitem").filter({ hasText: "SC Cham" })).toHaveCount(0);
+  });
+
   test("football: every skill has a cue, and the ones without a video say so and take yours", async () => {
     await page.goto("/football");
     const library = page.getByTestId("drill-library");

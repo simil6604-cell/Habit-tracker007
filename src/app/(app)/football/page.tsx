@@ -150,11 +150,53 @@ export default async function FootballPage({
           <Card className="mt-4">
             <CardHeader><CardTitle>Matches</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <form action={createMatch} className="flex flex-wrap items-center gap-2">
-                <input name="opponent" required placeholder="Opponent" className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
-                <input name="date" type="datetime-local" required className="rounded-lg border border-border bg-surface px-2 py-2 text-sm" />
-                <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="isHome" defaultChecked /> Home</label>
-                <Button type="submit" size="sm" variant="secondary">Add match</Button>
+              {/*
+                Labelled, not just placeheld: a placeholder disappears the
+                moment you type, and this gets filled in on a phone the night
+                before, one field at a time, with the team chat open next to it.
+              */}
+              <form action={createMatch} data-testid="match-form" className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-xs font-medium text-muted">Against</span>
+                  <input
+                    name="opponent"
+                    required
+                    placeholder="FC Baar"
+                    className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-xs font-medium text-muted">Day and kick-off time</span>
+                  <input
+                    name="date"
+                    type="datetime-local"
+                    required
+                    className="rounded-lg border border-border bg-surface px-2 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                  <span className="text-xs font-medium text-muted">Where</span>
+                  <input
+                    name="location"
+                    placeholder="Sportplatz Herti, Zug — pitch 2"
+                    className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                  <span className="text-xs font-medium text-muted">Anything else (optional)</span>
+                  <textarea
+                    name="notes"
+                    rows={2}
+                    placeholder={"Besammlung 13:00\nRotes Trikot\nPapa fährt"}
+                    className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  />
+                </label>
+                <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+                  <label className="flex items-center gap-1.5 text-sm">
+                    <input type="checkbox" name="isHome" defaultChecked /> Home game
+                  </label>
+                  <Button type="submit" size="sm" variant="secondary">Add match</Button>
+                </div>
               </form>
               <MatchList matches={upcomingMatches} />
             </CardContent>
