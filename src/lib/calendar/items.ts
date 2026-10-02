@@ -47,14 +47,31 @@ export async function getCalendarItems(userId: string, rangeStart: Date, rangeEn
 
   for (const h of homework) items.push({ id: `hw-${h.id}`, date: h.dueDate, title: `📓 ${h.title}`, category: "SCHOOL" });
   for (const e of exams) items.push({ id: `exam-${e.id}`, date: e.date, time: e.date.toTimeString().slice(0, 5), title: `📝 ${e.title}`, category: "EXAM" });
-  for (const s of studySessions) items.push({ id: `study-${s.id}`, date: s.start, time: s.start.toTimeString().slice(0, 5), title: s.topicLabel ?? s.subject?.name ?? "Study", category: "STUDY" });
+  for (const s of studySessions) {
+    // A block with no fixed time belongs to the day, so it is listed without
+    // one rather than at 00:00 — which would sort it above the school day.
+    const anytime = s.start.getTime() === s.end.getTime();
+    items.push({
+      id: `study-${s.id}`,
+      date: s.start,
+      time: anytime ? undefined : s.start.toTimeString().slice(0, 5),
+      title: s.topicLabel ?? s.subject?.name ?? "Study",
+      category: "STUDY",
+    });
+  }
   for (const w of workoutSessions) items.push({ id: `gym-${w.id}`, date: w.date, time: w.date.toTimeString().slice(0, 5), title: w.workout?.name ?? "Workout", category: "GYM" });
   for (const t of trainings) if (t.date) items.push({ id: `train-${t.id}`, date: t.date, time: t.date.toTimeString().slice(0, 5), title: t.title, category: "FOOTBALL" });
   for (const m of matches) items.push({ id: `match-${m.id}`, date: m.date, time: m.date.toTimeString().slice(0, 5), title: m.location ? `Match vs ${m.opponent} · ${m.location}` : `Match vs ${m.opponent}`, category: "FOOTBALL" });
   for (const t of tasks) if (t.dueDate) items.push({ id: `task-${t.id}`, date: t.dueDate, title: `✅ ${t.title}`, category: "TASK" });
   for (const ev of events) {
     if (!["STUDY", "RECOVERY"].includes(ev.category)) continue;
-    items.push({ id: `ev-${ev.id}`, date: ev.start, time: ev.start.toTimeString().slice(0, 5), title: ev.title, category: ev.category as CalendarItem["category"] });
+    // Every study block writes a StudySession AND a mirror CalendarEvent, and
+    // the sessions are already listed above — so without this every block the
+    // planner wrote appeared in the calendar twice, under the same name at the
+    // same time. The event stays: the daily agenda reads these, not sessions.
+    if (ev.sourceType === "StudySession") continue;
+    const evAnytime = ev.start.getTime() === ev.end.getTime();
+    items.push({ id: `ev-${ev.id}`, date: ev.start, time: evAnytime ? undefined : ev.start.toTimeString().slice(0, 5), title: ev.title, category: ev.category as CalendarItem["category"] });
   }
 
   return items

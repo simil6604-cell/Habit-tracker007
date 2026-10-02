@@ -576,6 +576,9 @@ test.describe.serial("full app walkthrough", () => {
     // is the one on the server. That is what this removes the attribute to
     // reach, and the refusal has to be a sentence rather than a silent no-op.
     await form.locator('input[name="title"]').fill("Too short to be a block");
+    // A time is given on purpose: without one the block is an untimed to-do
+    // and the length check never runs, which is what this is here to reach.
+    await form.locator('input[name="time"]').fill("18:30");
     // Only `min` is removed, and the value stays a multiple of the field's
     // step. Removing more, or picking 2 minutes, leaves the input invalid on
     // `step` instead and the browser never submits the form at all — so the
@@ -597,9 +600,12 @@ test.describe.serial("full app walkthrough", () => {
       page.getByTestId("own-blocks").locator("li", { hasText: ownWords }).getByRole("button", { name: /as not done/ })
     ).toBeVisible();
 
-    // It reached the calendar too, rather than living only on this page.
+    // It reached the calendar too, rather than living only on this page —
+    // once, not twice. Every block writes a StudySession and a mirror
+    // CalendarEvent, and the calendar read both lists, so each one appeared
+    // under its own name at its own time twice over.
     await page.goto("/calendar");
-    await expect(page.getByText(ownWords).first()).toBeVisible();
+    await expect(page.getByText(ownWords)).toHaveCount(1);
 
     // And it can be taken back out again, from both places.
     await page.goto("/school/planner");
@@ -612,6 +618,46 @@ test.describe.serial("full app walkthrough", () => {
 
     await page.goto("/calendar");
     await expect(page.getByText(ownWords)).toHaveCount(0);
+  });
+
+  test("school: a day can hold a thing to do, with no clock time invented for it", async () => {
+    // Reported: you could not write down what to do on which day. The form
+    // insisted on a start time and a length, so "Monday: finish the Economics
+    // essay" needed both invented for something that has neither.
+    await page.goto("/school/planner");
+    const form = page.getByTestId("add-study-block");
+
+    const todo = `Economics Aufsatz fertig ${Date.now()}`;
+    await form.locator('input[name="title"]').fill(todo);
+    await form.locator('select[name="date"]').selectOption({ index: 2 });
+    // Time and minutes deliberately left alone — they start empty now.
+    await expect(form.locator('input[name="time"]')).toHaveValue("");
+    await form.getByRole("button", { name: /Add my block/ }).click();
+
+    const block = page.getByTestId("own-blocks").locator("li", { hasText: todo });
+    await expect(block).toBeVisible();
+    // It says Anytime, not 00:00–00:00.
+    await expect(block).toContainText("Anytime");
+    await expect(block).not.toContainText("00:00");
+
+    // Really written, and on the day that was picked rather than today.
+    await page.reload();
+    await expect(page.getByTestId("own-blocks").locator("li", { hasText: todo })).toBeVisible();
+
+    // In the calendar once, with no time against it.
+    await page.goto("/calendar?view=week");
+    await expect(page.getByText(todo)).toHaveCount(1);
+
+    // A length with no time to measure it from is refused rather than quietly
+    // dropping the minutes that were typed.
+    await page.goto("/school/planner");
+    const form2 = page.getByTestId("add-study-block");
+    await form2.locator('input[name="title"]').fill("Half an answer");
+    await form2.locator('input[name="minutes"]').fill("45");
+    await form2.getByRole("button", { name: /Add my block/ }).click();
+    await expect(form2.getByRole("alert")).toContainText(/start time/i);
+    await page.reload();
+    await expect(page.getByTestId("own-blocks").locator("li", { hasText: "Half an answer" })).toHaveCount(0);
   });
 
   test("school: insights report what is measured, and say so when nothing is", async () => {

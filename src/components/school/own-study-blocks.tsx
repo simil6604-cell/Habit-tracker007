@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { deleteStudyBlock, toggleStudyBlockDone } from "@/lib/school/planner-actions";
+import { isAnytime } from "@/lib/school/planner-entry";
 
 export type OwnBlock = {
   id: string;
@@ -36,7 +37,7 @@ export function OwnStudyBlocks({ blocks }: { blocks: OwnBlock[] }) {
           </form>
 
           <span className={block.completed ? "text-muted line-through" : "font-medium"}>
-            {format(block.start, "HH:mm")}–{format(block.end, "HH:mm")} {block.title}
+            {isAnytime(block) ? "Anytime" : `${format(block.start, "HH:mm")}–${format(block.end, "HH:mm")}`} {block.title}
           </span>
 
           {block.subjectName && (
