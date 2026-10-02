@@ -51,7 +51,10 @@ export async function getAgendaForDay(userId: string, day: Date): Promise<Agenda
   }
   for (const ev of events) {
     if (["STUDY", "RECOVERY"].includes(ev.category)) {
-      items.push({ id: `ev-${ev.id}`, title: ev.title, time: fmtTime(ev.start), category: ev.category as AgendaItem["category"] });
+      // start === end means "sometime that day", so it gets no clock time —
+      // printing 00:00 would sort it above every lesson.
+      const anytime = ev.start.getTime() === ev.end.getTime();
+      items.push({ id: `ev-${ev.id}`, title: ev.title, time: anytime ? undefined : fmtTime(ev.start), category: ev.category as AgendaItem["category"] });
     }
   }
 

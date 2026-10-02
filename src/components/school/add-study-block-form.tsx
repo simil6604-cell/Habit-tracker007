@@ -65,26 +65,45 @@ export function AddStudyBlockForm({
         </select>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <select name="date" aria-label="Day" className={FIELD} defaultValue={days[0]?.value}>
-          {days.map((d) => (
-            <option key={d.value} value={d.value}>{d.label}</option>
-          ))}
-        </select>
-        <input name="time" type="time" required defaultValue="17:00" aria-label="Start time" className={FIELD} />
-        <input
-          name="minutes"
-          type="number"
-          required
-          min={10}
-          max={360}
-          step={5}
-          defaultValue={45}
-          aria-label="Minutes"
-          className={`w-24 ${FIELD}`}
-        />
-        <span className="text-xs text-muted">minutes</span>
-        <Button type="submit" size="sm" variant="secondary" disabled={pending}>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">Which day</span>
+          <select name="date" aria-label="Day" className={FIELD} defaultValue={days[0]?.value}>
+            {days.map((d) => (
+              <option key={d.value} value={d.value}>{d.label}</option>
+            ))}
+          </select>
+        </label>
+
+        {/*
+          Blank by default, and not required. The form used to insist on a
+          clock time and a length, so writing down "Monday: finish the
+          Economics essay" meant inventing both for something that has
+          neither — reported as not being able to write down what to do on
+          which day, which is what it was.
+        */}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">At (optional)</span>
+          <input name="time" type="time" aria-label="Start time (optional)" className={FIELD} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">For (optional)</span>
+          <span className="flex items-center gap-1.5">
+            <input
+              name="minutes"
+              type="number"
+              min={10}
+              max={360}
+              step={5}
+              placeholder="45"
+              aria-label="Minutes"
+              className={`w-20 ${FIELD}`}
+            />
+            <span className="text-xs text-muted">min</span>
+          </span>
+        </label>
+
+        <Button type="submit" size="sm" variant="secondary" disabled={pending} className="mb-0.5">
           {pending ? "Adding…" : "Add my block"}
         </Button>
       </div>

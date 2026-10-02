@@ -3,6 +3,7 @@ import {
   MAX_BLOCK_MINUTES,
   MAX_TITLE_LENGTH,
   MIN_BLOCK_MINUTES,
+  isAnytime,
   parseBlockInput,
   parseClockTime,
   parseLocalDate,
@@ -147,5 +148,70 @@ describe("parseBlockInput", () => {
     if (!result.ok) return;
     expect(result.value.end.getTime()).toBeGreaterThan(result.value.start.getTime());
     expect(result.value.end.getDate()).toBe(6);
+  });
+});
+
+describe("a block with no fixed time", () => {
+  const base = { title: "Finish the Economics essay", date: "2026-10-05", subjectId: "" };
+
+  it("is written down for the day, with no hour invented for it", () => {
+    // The reported problem: the form demanded a clock time and a length, so
+    // there was no way to put down a thing to do on a day.
+    const result = parseBlockInput({ ...base, time: "", minutes: "" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.start.getFullYear()).toBe(2026);
+    expect(result.value.start.getMonth()).toBe(9);
+    expect(result.value.start.getDate()).toBe(5);
+    expect(result.value.start.getHours()).toBe(0);
+    expect(isAnytime(result.value)).toBe(true);
+  });
+
+  it("lands on the day you picked, not the evening before", () => {
+    // The same trap parseLocalDate exists for: built field by field, so a
+    // machine west of UTC does not file Monday under Sunday.
+    const result = parseBlockInput({ ...base, date: "2026-10-05", time: "", minutes: "" });
+    expect(result.ok && result.value.start.getDate()).toBe(5);
+  });
+
+  it("logs no study time, because none was done by writing it down", () => {
+    // Analytics counts end minus start on completed sessions. A block that
+    // claimed a duration it never had would report study that never happened.
+    const result = parseBlockInput({ ...base, time: "", minutes: "" });
+    expect(result.ok && result.value.end.getTime() - result.value.start.getTime()).toBe(0);
+  });
+
+  it("treats a missing time field the same as an empty one", () => {
+    expect(parseBlockInput({ ...base, time: undefined, minutes: undefined }).ok).toBe(true);
+    expect(parseBlockInput({ ...base, time: "   ", minutes: "  " }).ok).toBe(true);
+  });
+
+  it("refuses a length with no time to measure it from", () => {
+    // Half an answer. Accepting it would silently drop the 45 minutes typed.
+    const result = parseBlockInput({ ...base, time: "", minutes: "45" });
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toMatch(/start time/i);
+  });
+
+  it("still keeps the subject you picked", () => {
+    const result = parseBlockInput({ ...base, subjectId: "subj_1", time: "", minutes: "" });
+    expect(result.ok && result.value.subjectId).toBe("subj_1");
+  });
+
+  it("still refuses a block with nothing written in it", () => {
+    expect(parseBlockInput({ ...base, title: "   ", time: "", minutes: "" }).ok).toBe(false);
+  });
+});
+
+describe("isAnytime", () => {
+  it("is true only for a block of no length", () => {
+    const day = new Date(2026, 9, 5);
+    expect(isAnytime({ start: day, end: new Date(day) })).toBe(true);
+    expect(isAnytime({ start: day, end: new Date(day.getTime() + 60_000) })).toBe(false);
+  });
+
+  it("cannot collide with a real timed block, which is never that short", () => {
+    const timed = parseBlockInput({ title: "x", date: "2026-10-05", time: "17:00", minutes: String(MIN_BLOCK_MINUTES) });
+    expect(timed.ok && isAnytime(timed.value)).toBe(false);
   });
 });

@@ -68,8 +68,9 @@ export default async function StudyPlannerPage() {
         <CardContent>
           <AddStudyBlockForm days={dayOptions} subjects={subjects} />
           <p className="mt-2 text-xs text-muted">
-            Yours to write — anything, in your own words. It goes straight into your calendar, and once you tick it off
-            it counts towards your logged study time.
+            Yours to write — anything, in your own words. Leave the time blank and it is simply something to do that
+            day; give it a time and a length and it becomes a block in your calendar that counts towards your logged
+            study time once you tick it off.
           </p>
         </CardContent>
       </Card>

@@ -21,6 +21,19 @@ export type ParsedBlock = {
   end: Date;
 };
 
+/**
+ * A block with no fixed time is stored with start === end.
+ *
+ * No extra column, and nothing ambiguous about it: a timed block is at least
+ * MIN_BLOCK_MINUTES long, so zero length cannot mean anything else. It also
+ * falls out right everywhere that already reads these rows — analytics counts
+ * end minus start, and "something to do on Tuesday" is not study time logged
+ * until you actually do it.
+ */
+export function isAnytime(block: { start: Date; end: Date }): boolean {
+  return block.start.getTime() === block.end.getTime();
+}
+
 export type ParseResult = { ok: true; value: ParsedBlock } | { ok: false; error: string };
 
 /**
@@ -70,10 +83,38 @@ export function parseBlockInput(input: {
   const day = parseLocalDate(String(input.date ?? ""));
   if (!day) return { ok: false, error: "Pick a date." };
 
-  const clock = parseClockTime(String(input.time ?? ""));
-  if (!clock) return { ok: false, error: "Pick a start time." };
+  /*
+   * The time is optional, and that is the whole point of this form.
+   *
+   * It used to be required, together with a length in minutes — so writing
+   * down "Monday: finish the Economics essay" meant inventing a clock time
+   * and a duration for something that has neither. Reported as not being able
+   * to write down what to do on which day, which is exactly what it was: the
+   * form asked for a timetable entry when what was wanted was a plan.
+   *
+   * Leave it blank and the block belongs to the day rather than to an hour.
+   */
+  const rawTime = String(input.time ?? "").trim();
+  const rawMinutes = String(input.minutes ?? "").trim();
 
-  const minutes = Number(String(input.minutes ?? "").trim());
+  if (!rawTime) {
+    // A length without a time is half an answer: there is no hour to measure
+    // it from, so it is refused rather than quietly thrown away.
+    if (rawMinutes) {
+      return { ok: false, error: "Give a start time as well, or clear the minutes and write it down for the day." };
+    }
+    const anytime = new Date(day);
+    const rawSubjectAnytime = String(input.subjectId ?? "").trim();
+    return {
+      ok: true,
+      value: { title, subjectId: rawSubjectAnytime || null, start: anytime, end: new Date(anytime) },
+    };
+  }
+
+  const clock = parseClockTime(rawTime);
+  if (!clock) return { ok: false, error: "That start time can't be read — use HH:MM, or leave it blank." };
+
+  const minutes = Number(rawMinutes);
   if (!Number.isInteger(minutes) || minutes < MIN_BLOCK_MINUTES || minutes > MAX_BLOCK_MINUTES) {
     // Said as a range rather than clamped: a silently shortened block is a
     // block you planned and the app quietly changed behind your back.
