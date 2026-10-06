@@ -6,6 +6,7 @@ import { computeDomainScores } from "@/lib/planner/scores";
 import { runWeeklyBalanceCheck } from "./balance-engine";
 import { getAIProvider, isRealAIConfigured } from "./provider";
 import { buildAcademicSystemPrompt } from "./academic-prompt";
+import { SPOKEN_STYLE } from "./spoken-mode";
 
 const KEYWORDS = {
   exam: /\b(exam|test|klausur|pr[uü]fung)\b/i,
@@ -67,7 +68,20 @@ const COACH_DIAGRAM_PROMPT = [
   "Your reply may be read aloud, so write in plain speakable sentences: no markdown headings, no asterisks for emphasis, and no LaTeX math delimiters. Use real symbols (², √, ×, ≤) where natural.",
 ].join("\n");
 
-export async function generateCoachReply(userId: string, userMessage: string): Promise<string> {
+/**
+ * `spoken` means the reply is going to a speech synthesiser.
+ *
+ * In voice mode the canned branches below are skipped entirely when a real AI
+ * is connected. They answer from stored data in written shapes — a scores
+ * line, a list of recommendations — which read badly out loud and cannot
+ * follow up on what was actually said. A conversation needs the model.
+ */
+export async function generateCoachReply(userId: string, userMessage: string, spoken = false): Promise<string> {
+  if (spoken && isRealAIConfigured) {
+    const result = await askCoachAI(userId, userMessage, true);
+    if (result.ok) return result.text;
+  }
+
   if (KEYWORDS.optimizeWeek.test(userMessage)) {
     await runWeeklyBalanceCheck(userId);
     const scores = await computeDomainScores(userId);
@@ -181,7 +195,7 @@ export async function generateCoachReply(userId: string, userMessage: string): P
  */
 type CoachAIResult = { ok: true; text: string } | { ok: false; error: string };
 
-async function askCoachAI(userId: string, userMessage: string): Promise<CoachAIResult> {
+async function askCoachAI(userId: string, userMessage: string, spoken = false): Promise<CoachAIResult> {
   {
     const [school, scores, exam, user] = await Promise.all([
       prisma.school.findUnique({ where: { userId } }),
@@ -197,7 +211,11 @@ async function askCoachAI(userId: string, userMessage: string): Promise<CoachAIR
       `Current scores — School ${scores.school}%, Gym ${scores.gym}%, Football ${scores.football}%, Recovery ${scores.recovery}%.`,
       exam ? `Next exam: ${exam.subject?.name ?? exam.title} in ${daysToExam} day${daysToExam === 1 ? "" : "s"}.` : "No upcoming exam logged yet.",
       describeMainFocus(user?.mainFocus),
-      COACH_DIAGRAM_PROMPT,
+      // Spoken, a diagram is worse than useless — it is read out as its own
+      // markup — so the drawing instructions come out and the speech ones go
+      // in. Everything above stays: who they are and what their week looks
+      // like matter just as much out loud.
+      spoken ? SPOKEN_STYLE : COACH_DIAGRAM_PROMPT,
     ].join("\n");
 
     try {

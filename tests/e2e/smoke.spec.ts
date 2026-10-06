@@ -1933,16 +1933,25 @@ test.describe.serial("full app walkthrough", () => {
 
   test("ai coach: offers voice, and degrades honestly without a microphone", async () => {
     await page.goto("/coach");
-    await expect(page.getByRole("button", { name: /Talk/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Dictate/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Speak replies/ })).toBeVisible();
+    // Voice chat is the conversational one: it greets, takes your turn when
+    // you stop talking, answers out loud and listens again.
+    await expect(page.getByTestId("voice-mode")).toBeVisible();
 
     // Each control is only offered when the browser actually supports it.
     const caps = await page.evaluate(() => ({
       recognition: Boolean(window.SpeechRecognition || window.webkitSpeechRecognition),
       synthesis: "speechSynthesis" in window,
     }));
-    expect(await page.getByRole("button", { name: /Talk/ }).isEnabled()).toBe(caps.recognition);
+    expect(await page.getByRole("button", { name: /Dictate/ }).isEnabled()).toBe(caps.recognition);
     expect(await page.getByRole("button", { name: /Speak replies/ }).isEnabled()).toBe(caps.synthesis);
+    // Voice chat needs BOTH halves — listening and talking. Offering it where
+    // only one works would open a conversation that can never take a turn.
+    expect(await page.getByTestId("voice-mode").isEnabled()).toBe(caps.recognition && caps.synthesis);
+
+    // It is not a mode you can get stuck in: nothing about it disables typing.
+    await expect(page.locator('input[name="message"]')).toBeEnabled();
 
     if (caps.recognition) {
       // What a microphone does depends entirely on the machine: it may listen,
@@ -1950,7 +1959,7 @@ test.describe.serial("full app walkthrough", () => {
       // makes is narrower and testable everywhere — pressing Talk either starts
       // listening or says why it didn't, and typing keeps working either way.
       // Never a dead button and never a stuck "Listening…".
-      await page.getByRole("button", { name: /Talk/ }).click();
+      await page.getByRole("button", { name: /Dictate/ }).click();
       await expect(
         page.getByText(/Listening…|No microphone was found|Microphone access was blocked|Couldn't start the microphone|speech recognition/i)
       ).toBeVisible({ timeout: 15000 });
@@ -1958,7 +1967,7 @@ test.describe.serial("full app walkthrough", () => {
 
       // And whichever happened, there is a way onward: either Stop & send (it
       // is listening) or Talk again (it isn't).
-      await expect(page.getByRole("button", { name: /Stop & send|Talk/ }).first()).toBeEnabled();
+      await expect(page.getByRole("button", { name: /Stop & send|Dictate/ }).first()).toBeEnabled();
     }
   });
 

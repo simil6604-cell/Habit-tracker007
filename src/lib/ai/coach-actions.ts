@@ -39,13 +39,13 @@ export async function getCoachMessages(): Promise<CoachMessage[]> {
  * relying on a page revalidation — a spoken turn has to land without the page
  * navigating out from under the microphone.
  */
-export async function sendCoachMessageLive(content: string): Promise<CoachMessage[]> {
+export async function sendCoachMessageLive(content: string, spoken = false): Promise<CoachMessage[]> {
   const userId = await requireUserId();
   const trimmed = content.trim();
   if (!trimmed) return getCoachMessages();
 
   await prisma.chatMessage.create({ data: { userId, role: "USER", content: trimmed } });
-  const reply = await generateCoachReply(userId, trimmed);
+  const reply = await generateCoachReply(userId, trimmed, spoken);
   await prisma.chatMessage.create({ data: { userId, role: "ASSISTANT", content: reply } });
 
   revalidatePath("/coach");
