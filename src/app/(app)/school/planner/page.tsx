@@ -5,7 +5,7 @@ import { generateDayPlan } from "@/lib/ai/schedule-generator";
 import { PlanDayCard } from "@/components/school/plan-day-card";
 import { AddStudyBlockForm } from "@/components/school/add-study-block-form";
 import { OwnStudyBlocks, type OwnBlock } from "@/components/school/own-study-blocks";
-import { PLANNER_DAYS } from "@/lib/school/planner-entry";
+import { MAX_PLAN_AHEAD_DAYS, dayKey, plannerDays } from "@/lib/school/planner-entry";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata = { title: "Study Planner" };
@@ -15,17 +15,21 @@ export default async function StudyPlannerPage() {
   const userId = session!.user.id;
 
   const today = startOfDay(new Date());
-  const days = Array.from({ length: PLANNER_DAYS }, (_, i) => addDays(today, i));
-  const rangeEnd = addDays(days[days.length - 1], 1);
+  // Everything still to come, not just this week: a block written for an exam
+  // three weeks out has to come back, or writing it was pointless.
+  const horizonEnd = addDays(today, MAX_PLAN_AHEAD_DAYS + 1);
 
   const [subjects, sessions] = await Promise.all([
     prisma.subject.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.studySession.findMany({
-      where: { userId, start: { gte: today, lt: rangeEnd } },
+      where: { userId, start: { gte: today, lt: horizonEnd } },
       include: { subject: { select: { name: true } } },
       orderBy: { start: "asc" },
     }),
   ]);
+
+  // The week always, plus every later day something was written on.
+  const days = plannerDays(today, sessions.map((s) => dayKey(s.start)));
 
   // Only the first three days get a generated suggestion. Each one is a real
   // query over exams, topics and that day's commitments, and running seven of
@@ -49,10 +53,9 @@ export default async function StudyPlannerPage() {
     byDay.set(key, list);
   }
 
-  const dayOptions = days.map((d, i) => ({
-    value: format(d, "yyyy-MM-dd"),
-    label: i === 0 ? `Today, ${format(d, "EEE d MMM")}` : format(d, "EEEE d MMM"),
-  }));
+  // The field is a date picker now rather than a list of the days on screen,
+  // so these are the ends of what it will accept, not a menu.
+  const dateBounds = { min: dayKey(today), max: dayKey(addDays(today, MAX_PLAN_AHEAD_DAYS)) };
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -66,7 +69,7 @@ export default async function StudyPlannerPage() {
           <CardTitle>Write your own block</CardTitle>
         </CardHeader>
         <CardContent>
-          <AddStudyBlockForm days={dayOptions} subjects={subjects} />
+          <AddStudyBlockForm bounds={dateBounds} subjects={subjects} />
           <p className="mt-2 text-xs text-muted">
             Yours to write — anything, in your own words. Leave the time blank and it is simply something to do that
             day; give it a time and a length and it becomes a block in your calendar that counts towards your logged

@@ -20,11 +20,11 @@ const FIELD = "rounded-lg border border-border bg-surface px-3 py-2 text-sm outl
  * phone reads as "these are your options".
  */
 export function AddStudyBlockForm({
-  days,
+  bounds,
   subjects,
 }: {
-  /** The dates the planner is showing, as yyyy-mm-dd, earliest first. */
-  days: { value: string; label: string }[];
+  /** The earliest and latest date the field will take, as yyyy-mm-dd. */
+  bounds: { min: string; max: string };
   subjects: { id: string; name: string }[];
 }) {
   const [state, formAction, pending] = useActionState<PlannerFormState, FormData>(addStudyBlock, undefined);
@@ -66,13 +66,24 @@ export function AddStudyBlockForm({
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
+        {/*
+          A date picker rather than a list of the days on screen. The list was
+          this week and nothing else, so an exam three weeks out could not be
+          prepared for in the one place meant for preparing. Any day it takes
+          gets a card on the page as soon as something is written on it.
+        */}
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">Which day</span>
-          <select name="date" aria-label="Day" className={FIELD} defaultValue={days[0]?.value}>
-            {days.map((d) => (
-              <option key={d.value} value={d.value}>{d.label}</option>
-            ))}
-          </select>
+          <input
+            name="date"
+            type="date"
+            required
+            defaultValue={bounds.min}
+            min={bounds.min}
+            max={bounds.max}
+            aria-label="Day"
+            className={FIELD}
+          />
         </label>
 
         {/*

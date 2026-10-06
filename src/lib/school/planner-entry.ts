@@ -11,8 +11,57 @@ export const MIN_BLOCK_MINUTES = 10;
 export const MAX_BLOCK_MINUTES = 6 * 60;
 export const MAX_TITLE_LENGTH = 80;
 
-/** How many days the planner shows, and therefore how far ahead you can write. */
+/**
+ * The run of days the planner always shows, starting today.
+ *
+ * Not a limit on how far ahead you can write any more — that was the old
+ * meaning, and it meant an exam three weeks out could not be prepared for in
+ * the one place meant for preparing. A day further out than this appears as
+ * soon as something is written on it, so the page stays a week long when you
+ * are living a week at a time and grows only where you have made plans.
+ */
 export const PLANNER_DAYS = 7;
+
+/** How far ahead anything can be written down at all. */
+export const MAX_PLAN_AHEAD_DAYS = 365;
+
+/** `yyyy-MM-dd` for a local date, without pulling in a formatter. */
+export function dayKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Which days the planner draws a card for.
+ *
+ * The next PLANNER_DAYS always, so today is at the top and the week is there
+ * whether or not anything is in it — plus every later day that has something
+ * written on it. Writing for a date beyond the window would otherwise store a
+ * block the page never shows, which is worse than refusing it.
+ *
+ * `written` is whatever the database returned; days before today and anything
+ * unparseable are dropped rather than trusted, and duplicates collapse.
+ */
+export function plannerDays(today: Date, written: string[] = []): Date[] {
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const byKey = new Map<string, Date>();
+
+  for (let i = 0; i < PLANNER_DAYS; i += 1) {
+    const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    byKey.set(dayKey(day), day);
+  }
+
+  // A key already in the week re-parses to the same day and overwrites itself,
+  // so there is nothing to skip — the Map does the de-duplicating.
+  for (const key of written) {
+    const day = parseLocalDate(key);
+    if (!day || day < start) continue;
+    byKey.set(key, day);
+  }
+
+  return [...byKey.values()].sort((a, b) => a.getTime() - b.getTime());
+}
 
 export type ParsedBlock = {
   title: string;
@@ -73,6 +122,8 @@ export function parseBlockInput(input: {
   time: unknown;
   minutes: unknown;
   subjectId?: unknown;
+  /** Today, when the caller wants the horizon checked. The server passes it. */
+  today?: Date;
 }): ParseResult {
   const title = String(input.title ?? "").trim();
   if (!title) return { ok: false, error: "Write what you want to study." };
@@ -82,6 +133,19 @@ export function parseBlockInput(input: {
 
   const day = parseLocalDate(String(input.date ?? ""));
   if (!day) return { ok: false, error: "Pick a date." };
+
+  /*
+   * The horizon. A date in the past cannot be planned for and would be
+   * written somewhere the planner never looks; a date years out is a typo in
+   * the year far more often than a real plan. Both are said out loud rather
+   * than quietly accepted into a row nothing will ever show.
+   */
+  if (input.today instanceof Date) {
+    const start = new Date(input.today.getFullYear(), input.today.getMonth(), input.today.getDate());
+    if (day < start) return { ok: false, error: "That day has already gone — pick today or a day after it." };
+    const limit = new Date(start.getFullYear(), start.getMonth(), start.getDate() + MAX_PLAN_AHEAD_DAYS);
+    if (day > limit) return { ok: false, error: "That is more than a year away. Check the year on that date." };
+  }
 
   /*
    * The time is optional, and that is the whole point of this form.
