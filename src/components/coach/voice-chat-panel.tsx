@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
-import { Mic, MicOff, Send, Trash2, Volume2, VolumeX } from "lucide-react";
+import { AudioLines, Mic, MicOff, Send, Trash2, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
+import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import {
   sendCoachMessageLive,
   clearCoachChat,
@@ -33,6 +34,17 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
 
   const mic = useSpeechRecognition();
 
+  /*
+   * Voice mode, separate from the dictation button above it and deliberately
+   * so. Dictation is for when you want to say a long thing and check it before
+   * it goes; this is for talking. They do not mix: voice mode closes the
+   * microphone while it answers, which would fight the dictation box.
+   */
+  const voice = useVoiceConversation({
+    who: "coach",
+    onSend: (heard) => send(heard, true),
+  });
+
   useEffect(() => setCanSpeak(speechSupported()), []);
 
   useEffect(() => {
@@ -47,7 +59,7 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
     if (mic.listening && mic.transcript) setInput(mic.transcript);
   }, [mic.transcript, mic.listening]);
 
-  function send(text: string) {
+  function send(text: string, spoken = false) {
     const trimmed = text.trim();
     if (!trimmed || pending) return;
     setInput("");
@@ -58,7 +70,7 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
     ]);
     startTransition(async () => {
       try {
-        setMessages(await sendCoachMessageLive(trimmed));
+        setMessages(await sendCoachMessageLive(trimmed, spoken));
       } catch {
         // Without this the optimistic bubble just sat there with no reply and
         // no error — indistinguishable from the coach ignoring you.
@@ -96,8 +108,19 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
   const lastReply = [...messages].reverse().find((m) => m.role === "ASSISTANT");
 
   useEffect(() => {
-    if (!speakReplies || !canSpeak || !lastReply || pending) return;
+    if (!lastReply || pending) return;
     if (lastReply.id === spokenRef.current || lastReply.id.startsWith("pending-")) return;
+
+    // In voice mode the conversation owns the speaking, because it also has to
+    // reopen the microphone when the sentence ends. Reading it out here as
+    // well would talk over itself and leave the mic shut.
+    if (voice.active) {
+      spokenRef.current = lastReply.id;
+      voice.speak(lastReply.content);
+      return;
+    }
+
+    if (!speakReplies || !canSpeak) return;
     spokenRef.current = lastReply.id;
 
     const text = speakableText(lastReply.content);
@@ -106,7 +129,7 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = navigator.language || "en-GB";
     window.speechSynthesis.speak(utterance);
-  }, [lastReply, speakReplies, canSpeak, pending]);
+  }, [lastReply, speakReplies, canSpeak, pending, voice]);
 
   // Leaving the page mid-sentence shouldn't leave the browser talking.
   useEffect(() => () => { if (speechSupported()) window.speechSynthesis.cancel(); }, []);
@@ -122,17 +145,39 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/*
+            First, because it is the one most people want: press it and talk.
+            It greets you, takes your turn when you stop, answers out loud and
+            listens again — no button between finishing a sentence and being
+            answered.
+          */}
+          <Button
+            type="button"
+            size="sm"
+            variant={voice.active ? "secondary" : "outline"}
+            onClick={() => (voice.active ? voice.stop() : voice.start())}
+            disabled={!voice.supported || pending}
+            data-testid="voice-mode"
+            title={
+              voice.supported
+                ? "Talk to your coach out loud"
+                : "This browser can't do both speech recognition and speech"
+            }
+          >
+            <AudioLines size={14} />
+            {voice.active ? "End voice chat" : "Voice chat"}
+          </Button>
           <Button
             type="button"
             size="sm"
             variant={mic.listening ? "secondary" : "outline"}
             onClick={toggleMic}
             disabled={!mic.supported || pending}
-            title={mic.supported ? "Talk to your coach" : "This browser has no speech recognition"}
+            title={mic.supported ? "Dictate a message" : "This browser has no speech recognition"}
           >
             {mic.listening ? <MicOff size={14} /> : <Mic size={14} />}
-            {mic.listening ? "Stop & send" : "Talk"}
+            {mic.listening ? "Stop & send" : "Dictate"}
           </Button>
           <Button
             type="button"
@@ -146,6 +191,25 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
             {speakReplies ? "Speaking" : "Speak replies"}
           </Button>
         </div>
+      {/*
+        Outside the message list on purpose. It lived inside it at first, which
+        meant the one moment it matters most — pressing Voice chat on a page
+        with no messages yet — rendered nothing at all, because the empty state
+        replaces that list. Pressing a button and getting silence is how a
+        voice feature gets written off as broken.
+      */}
+      {voice.active && (
+        <p className="mb-2 text-xs text-muted" role="status" data-testid="voice-state">
+          {voice.speaking
+            ? "Talking…"
+            : pending
+              ? "Thinking…"
+              : voice.interim
+                ? voice.interim
+                : "Listening — just talk, it sends when you stop."}
+        </p>
+      )}
+      {voice.error && <p className="mb-2 text-xs text-danger" role="alert">{voice.error}</p>}
         {messages.length > 0 && (
           <button
             onClick={() => startTransition(async () => setMessages(await clearCoachChat()))}
@@ -174,7 +238,7 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center text-muted">
           <span className="text-3xl">✨</span>
           <p className="text-sm">
-            Press <strong>Talk</strong> and just say it — or type. Ask things like &ldquo;I have an exam tomorrow and
+            Press <strong>Voice chat</strong> and just talk — it answers out loud and keeps listening. Or type. Ask things like &ldquo;I have an exam tomorrow and
             football training today, what should I do?&rdquo; When a picture explains it better, your coach draws one.
           </p>
         </div>

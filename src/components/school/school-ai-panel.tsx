@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
+import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
 import {
   clearSchoolAIChat,
@@ -41,6 +42,16 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
 
   const mic = useSpeechRecognition();
 
+  /*
+   * Voice mode, separate from the dictation button. Dictation is for saying a
+   * long question and checking it before it goes — and for sending it with
+   * photos attached, which this cannot do. This one is for talking.
+   */
+  const voice = useVoiceConversation({
+    who: "tutor",
+    onSend: (heard) => send(heard, true),
+  });
+
   useEffect(() => setCanSpeak(speechSupported()), []);
 
   useEffect(() => {
@@ -53,7 +64,7 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
     if (mic.listening && mic.transcript) setInput(mic.transcript);
   }, [mic.transcript, mic.listening]);
 
-  function send(text: string) {
+  function send(text: string, spoken = false) {
     const trimmed = text.trim();
     if ((!trimmed && staged.length === 0) || pending || uploading) return;
     const photos = staged;
@@ -71,7 +82,7 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
         createdAt: new Date(),
       },
     ]);
-    startTransition(async () => setMessages(await sendSchoolAIMessage(trimmed, photos)));
+    startTransition(async () => setMessages(await sendSchoolAIMessage(trimmed, photos, spoken)));
   }
 
   /**
@@ -139,8 +150,19 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
   const lastReply = [...messages].reverse().find((m) => m.role === "ASSISTANT");
 
   useEffect(() => {
-    if (!speakReplies || !canSpeak || !lastReply || pending) return;
+    if (!lastReply || pending) return;
     if (lastReply.id === spokenRef.current || lastReply.id.startsWith("pending-")) return;
+
+    // In voice mode the conversation owns the speaking: it also has to reopen
+    // the microphone when the sentence ends, and reading it out here as well
+    // would talk over itself and leave the mic shut.
+    if (voice.active) {
+      spokenRef.current = lastReply.id;
+      voice.speak(lastReply.content);
+      return;
+    }
+
+    if (!speakReplies || !canSpeak) return;
     spokenRef.current = lastReply.id;
 
     const text = speakableText(lastReply.content);
@@ -149,7 +171,7 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = navigator.language || "en-GB";
     window.speechSynthesis.speak(utterance);
-  }, [lastReply, speakReplies, canSpeak, pending]);
+  }, [lastReply, speakReplies, canSpeak, pending, voice]);
 
   // Leaving the page mid-sentence shouldn't leave the browser talking.
   useEffect(() => () => { if (speechSupported()) window.speechSynthesis.cancel(); }, []);
@@ -166,16 +188,37 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
+          {/*
+            First, because it is the one most people want: press it and talk.
+            It greets you, takes your turn when you stop, answers out loud and
+            listens again.
+          */}
+          <Button
+            type="button"
+            size="sm"
+            variant={voice.active ? "secondary" : "outline"}
+            onClick={() => (voice.active ? voice.stop() : voice.start())}
+            disabled={!voice.supported || pending}
+            data-testid="voice-mode"
+            title={
+              voice.supported
+                ? "Talk it through out loud"
+                : "This browser can't do both speech recognition and speech"
+            }
+          >
+            <AudioLines size={14} />
+            {voice.active ? "End voice chat" : "Voice chat"}
+          </Button>
           <Button
             type="button"
             size="sm"
             variant={mic.listening ? "secondary" : "outline"}
             onClick={toggleMic}
             disabled={!mic.supported || pending}
-            title={mic.supported ? "Ask out loud" : "This browser has no speech recognition"}
+            title={mic.supported ? "Dictate a question" : "This browser has no speech recognition"}
           >
             {mic.listening ? <MicOff size={14} /> : <Mic size={14} />}
-            {mic.listening ? "Stop & send" : "Talk"}
+            {mic.listening ? "Stop & send" : "Dictate"}
           </Button>
           <Button
             type="button"
@@ -209,6 +252,25 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
             onChange={(e) => void addPhotos(e.target.files)}
           />
         </div>
+      {/*
+        Outside the message list on purpose. It lived inside it at first, which
+        meant the one moment it matters most — pressing Voice chat on a page
+        with no messages yet — rendered nothing at all, because the empty state
+        replaces that list. Pressing a button and getting silence is how a
+        voice feature gets written off as broken.
+      */}
+      {voice.active && (
+        <p className="mb-2 text-xs text-muted" role="status" data-testid="voice-state">
+          {voice.speaking
+            ? "Talking…"
+            : pending
+              ? "Thinking…"
+              : voice.interim
+                ? voice.interim
+                : "Listening — just talk, it sends when you stop."}
+        </p>
+      )}
+      {voice.error && <p className="mb-2 text-xs text-danger" role="alert">{voice.error}</p>}
         {messages.length > 0 && (
           <button
             onClick={() => startTransition(async () => setMessages(await clearSchoolAIChat()))}
@@ -238,7 +300,7 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center text-muted">
           <span className="text-3xl">🎓</span>
           <p className="max-w-md text-sm">
-            This one only does school — Cambridge IGCSE and A Level. Press <strong>Talk</strong> and ask, or photograph
+            This one only does school — Cambridge IGCSE and A Level. Press <strong>Voice chat</strong> and talk it through, or photograph
             a question, your notes, or your own attempt and send up to {MAX_PHOTOS_PER_MESSAGE} pictures at once.
           </p>
         </div>

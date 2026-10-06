@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
+import { SPOKEN_STYLE } from "@/lib/ai/spoken-mode";
 import type { ProviderImage } from "@/lib/ai/anthropic-provider";
 import { deleteUploadedImage, readUploadedImage, saveUploadedImage } from "@/lib/uploads/save-image";
 import {
@@ -183,7 +184,11 @@ async function loadImages(paths: string[]): Promise<{ images: ProviderImage[]; s
   return { images, skipped };
 }
 
-export async function sendSchoolAIMessage(content: string, imagePaths: string[] = []): Promise<SchoolAIMessageEntry[]> {
+export async function sendSchoolAIMessage(
+  content: string,
+  imagePaths: string[] = [],
+  spoken = false
+): Promise<SchoolAIMessageEntry[]> {
   const userId = await requireUserId();
   const trimmed = content.trim();
   const photos = ownedUploadPaths(imagePaths, userId).slice(0, MAX_PHOTOS_PER_MESSAGE);
@@ -227,7 +232,10 @@ export async function sendSchoolAIMessage(content: string, imagePaths: string[] 
     }));
 
     const { images, skipped } = await loadImages(photos);
-    const system = await buildSchoolAISystemPrompt(userId);
+    // Appended rather than replacing: which syllabus they are on and what is
+    // coming up still apply out loud. Only the shape of the answer changes.
+    const base = await buildSchoolAISystemPrompt(userId);
+    const system = spoken ? `${base}\n${SPOKEN_STYLE}` : base;
     const prompt = buildSchoolAIPrompt(turns, trimmed || "Have a look at these and tell me what you see.", images.length);
 
     try {
