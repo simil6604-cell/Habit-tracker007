@@ -17,7 +17,7 @@ const FIELD = "rounded-lg border border-border bg-surface px-3 py-2 text-sm outl
  * than one scale, and would quietly turn "the grade I got" into "the nearest
  * grade this app knows about".
  */
-export function AddPaperForm({ subjects }: { subjects: { id: string; name: string }[] }) {
+export function AddPaperForm() {
   const [state, formAction, pending] = useActionState<PaperFormState, FormData>(addMarkedPaper, null);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -52,14 +52,22 @@ export function AddPaperForm({ subjects }: { subjects: { id: string; name: strin
       </label>
 
       <div className="flex flex-wrap gap-2">
+        {/*
+          Typed, with no list attached. Asked for in those words — and a menu
+          on a phone reads as "these are your options", which is wrong here:
+          a paper can be for something you do not keep as a subject in the app
+          at all. What you write links itself up if it happens to match one.
+        */}
         <label className="flex min-w-[10rem] flex-1 flex-col gap-1">
           <span className="text-xs font-medium text-muted">Subject</span>
-          <select name="subjectId" aria-label="Subject" className={FIELD} defaultValue="">
-            <option value="">No subject</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          <input
+            name="subject"
+            autoComplete="off"
+            maxLength={60}
+            placeholder="Economics"
+            aria-label="Subject"
+            className={FIELD}
+          />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">When you sat it</span>

@@ -14,17 +14,14 @@ export default async function MarkedWorkPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [subjects, papers] = await Promise.all([
-    prisma.subject.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.markedPaper.findMany({
-      where: { userId },
-      orderBy: [{ satOn: "desc" }, { createdAt: "desc" }],
-      include: {
-        subject: { select: { name: true } },
-        questions: { select: { marksScored: true, marksTotal: true, analysis: true } },
-      },
-    }),
-  ]);
+  const papers = await prisma.markedPaper.findMany({
+    where: { userId },
+    orderBy: [{ satOn: "desc" }, { createdAt: "desc" }],
+    include: {
+      subject: { select: { name: true } },
+      questions: { select: { marksScored: true, marksTotal: true, analysis: true } },
+    },
+  });
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -40,7 +37,7 @@ export default async function MarkedWorkPage() {
       <Card className="mt-6">
         <CardHeader><CardTitle>Add a paper</CardTitle></CardHeader>
         <CardContent>
-          <AddPaperForm subjects={subjects} />
+          <AddPaperForm />
         </CardContent>
       </Card>
 
@@ -69,7 +66,7 @@ export default async function MarkedWorkPage() {
                         <span className="block truncate font-medium">{paper.title}</span>
                         <span className="block truncate text-xs text-muted">
                           {[
-                            paper.subject?.name,
+                            paper.subject?.name ?? paper.subjectLabel,
                             paper.satOn ? format(paper.satOn, "d MMM yyyy") : null,
                             marks.scored !== null && marks.total !== null
                               ? `${marks.scored}/${marks.total}${pct === null ? "" : ` · ${pct}%`}`
