@@ -238,6 +238,8 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   // both within a day.
   await tx.drillVideo.deleteMany({ where: { userId } });
   await tx.footballLink.deleteMany({ where: { userId } });
+  // Questions cascade from the paper, so the paper alone is enough.
+  await tx.markedPaper.deleteMany({ where: { userId } });
   await tx.assessment.deleteMany({ where: { userId } });
 }
 
@@ -416,6 +418,35 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       if (row.subjectId != null && !link(row, "subjectId")) row.subjectId = null;
       if (row.topicId != null && !link(row, "topicId")) row.topicId = null;
       await create((r) => tx.revisionLink.create({ data: r as never }), withNewId(row));
+    }
+
+    /**
+     * Marked papers come after subjects, because a paper remembers which
+     * subject it belongs to. A paper whose subject did not survive is kept and
+     * simply unattached — the questions, the answers and the analysis are the
+     * part worth keeping, and losing a whole mock because a subject was
+     * renamed away would throw out work that cannot be got back.
+     *
+     * The questions are restored under each paper's new id, in the order they
+     * were written, so "question 3" stays question 3.
+     */
+    for (const entry of rows(data.markedPapers)) {
+      const row = scalars(entry, owned);
+      if (!row) continue;
+      if (row.subjectId != null && !link(row, "subjectId")) row.subjectId = null;
+      const oldId = typeof row.id === "string" ? row.id : null;
+      const paperRow = withNewId(row);
+      await create((r) => tx.markedPaper.create({ data: r as never }), paperRow);
+
+      const newId = typeof paperRow.id === "string" ? paperRow.id : null;
+      if (!oldId || !newId) continue;
+      const nested = rows((entry as Record<string, unknown>).questions);
+      for (const q of nested) {
+        const qRow = scalars(q);
+        if (!qRow) continue;
+        qRow.paperId = newId;
+        await create((r) => tx.paperQuestion.create({ data: r as never }), withNewId(qRow));
+      }
     }
 
     /**

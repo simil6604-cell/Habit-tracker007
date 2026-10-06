@@ -45,6 +45,7 @@ const SCHOOL_SECTIONS: readonly JumpSection[] = [
   { id: "timetable", label: "Timetable" },
   { id: "subjects", label: "Subjects" },
   { id: "homework", label: "Homework" },
+  { id: "marked-work", label: "Marked work" },
   { id: "notes", label: "Notes" },
 ];
 
@@ -97,9 +98,15 @@ export default async function SchoolPage({
 
   // Next seven days, narrowed to what actually belongs to school.
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(now), i));
-  const [weekItems, analytics] = await Promise.all([
+  const [weekItems, analytics, markedPapers] = await Promise.all([
     getCalendarItems(userId, weekDays[0], addDays(weekDays[6], 1)),
     getAnalyticsData(userId),
+    prisma.markedPaper.findMany({
+      where: { userId },
+      orderBy: [{ satOn: "desc" }, { createdAt: "desc" }],
+      take: 5,
+      select: { id: true, title: true, gradeAwarded: true, gradeTarget: true },
+    }),
   ]);
   const schoolWeekItems = weekItems.filter((i) => ["SCHOOL", "STUDY", "EXAM"].includes(i.category));
 
@@ -276,6 +283,38 @@ export default async function SchoolPage({
           </CardContent>
         </Card>
       </div>
+
+      {/*
+        The papers that have come back. Separate page because a paper is a
+        page's worth of questions and answers on its own, and this one is long
+        enough already.
+      */}
+      <Card id="marked-work" className="mt-4 scroll-mt-16">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Marked work</CardTitle>
+          <Link href="/school/grades"><Button variant="outline" size="sm">Open</Button></Link>
+        </CardHeader>
+        <CardContent>
+          {markedPapers.length === 0 ? (
+            <p className="text-sm text-muted">
+              Put in a paper that has come back, with the questions and what you wrote, and the AI reads the gap
+              between what was asked and what you answered — and what it takes to get to the grade you want.
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border text-sm" data-testid="school-marked-papers">
+              {markedPapers.map((paper) => (
+                <li key={paper.id} className="py-2">
+                  <Link href={`/school/grades/${paper.id}`} className="flex items-center gap-2 hover:text-accent">
+                    <span className="min-w-0 flex-1 truncate">{paper.title}</span>
+                    {paper.gradeAwarded && <span className="shrink-0 text-xs text-muted">{paper.gradeAwarded}</span>}
+                    {paper.gradeTarget && <span className="shrink-0 text-xs text-muted">→ {paper.gradeTarget}</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <div id="notes" className="mt-4 grid gap-4 scroll-mt-16 lg:grid-cols-2">
         <Card>

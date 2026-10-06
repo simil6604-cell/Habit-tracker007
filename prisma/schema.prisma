@@ -81,6 +81,7 @@ model User {
   libraryFolders     LibraryFolder[]
   revisionLinks      RevisionLink[]
   footballLinks      FootballLink[]
+  markedPapers       MarkedPaper[]
 }
 
 model Account {
@@ -151,6 +152,7 @@ model Subject {
   studySessions  StudySession[]
   flashcards     Flashcard[]
   revisionLinks  RevisionLink[]
+  markedPapers   MarkedPaper[]
 
   @@index([userId])
 }
@@ -889,4 +891,77 @@ model FootballLink {
   createdAt DateTime @default(now())
 
   @@index([userId, kind])
+}
+
+/**
+ * A piece of marked work: the paper itself, the grade it came back with, and
+ * the grade you are aiming for.
+ * The grade is free text on purpose. This app is used at an international
+ * school in Switzerland, where a report can say A*, 5.5 or 62% depending on
+ * who wrote it — pinning it to one scale would make the feature wrong for
+ * most of the papers it is meant to hold. Marks are stored separately, as
+ * numbers, for the arithmetic a letter cannot do.
+ */
+model MarkedPaper {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId    String?
+  subject      Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  title        String
+  satOn        DateTime?
+  /**
+   * What it came back as, in whatever the marker wrote.
+   */
+  gradeAwarded String?
+  /**
+   * What you are aiming for. The whole analysis is pointed at this.
+   */
+  gradeTarget  String?
+  marksScored  Int?
+  marksTotal   Int?
+  /**
+   * The AI's write-up for the paper as a whole. Null until it is asked.
+   */
+  analysis     String?
+  analysedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  questions PaperQuestion[]
+
+  @@index([userId, createdAt])
+}
+
+/**
+ * One question, what you wrote for it, and what it was worth.
+ * The question text matters as much as the answer: most marks lost at IGCSE
+ * and A Level go to answering a different question from the one asked —
+ * describing where it said evaluate, listing where it said explain. The
+ * analysis cannot see that without both halves.
+ */
+model PaperQuestion {
+  id           String      @id @default(cuid())
+  paperId      String
+  paper        MarkedPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  position     Int
+  /**
+   * The question as it was printed.
+   */
+  prompt       String
+  /**
+   * What you actually wrote.
+   */
+  answer       String
+  marksScored  Int?
+  marksTotal   Int?
+  /**
+   * What the marker said, if they said anything.
+   */
+  examinerNote String?
+  /**
+   * The AI's write-up for this question. Null until it is asked.
+   */
+  analysis     String?
+
+  @@index([paperId, position])
 }
