@@ -198,3 +198,26 @@ export function weakestQuestions(questions: QuestionInput[], limit = 5): Questio
     })
     .slice(0, limit);
 }
+
+/**
+ * The subject you typed, matched to one of your own if it is one.
+ *
+ * Typed rather than picked from a list, which is what was asked for — so the
+ * matching happens here instead of being guaranteed by a dropdown. A match
+ * links the paper to the real subject, which is what lets the analysis know
+ * whether this is IGCSE or A Level; no match is not an error, because a paper
+ * can be for something you do not keep as a subject in the app.
+ *
+ * Case and surrounding space are ignored: "economics" and "Economics " are the
+ * same subject, and failing to match them would quietly split one subject's
+ * papers into two piles.
+ */
+export function matchSubject<T extends { id: string; name: string }>(
+  typed: string | null,
+  subjects: T[]
+): T | null {
+  if (!typed) return null;
+  const target = typed.trim().toLowerCase();
+  if (!target) return null;
+  return subjects.find((s) => s.name.trim().toLowerCase() === target) ?? null;
+}

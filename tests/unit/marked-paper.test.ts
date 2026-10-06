@@ -8,6 +8,7 @@ import {
   paperMarks,
   commandWord,
   weakestQuestions,
+  matchSubject,
   MAX_GRADE,
   type QuestionInput,
 } from "@/lib/school/marked-paper";
@@ -215,5 +216,44 @@ describe("cleanOneLine and cleanMultiline", () => {
   it("is nothing when only whitespace was given", () => {
     expect(cleanOneLine("   ", 100)).toBeNull();
     expect(cleanMultiline("\n\n  \n", 100)).toBeNull();
+  });
+});
+
+describe("matchSubject", () => {
+  const subjects = [
+    { id: "s1", name: "Economics" },
+    { id: "s2", name: "German" },
+  ];
+
+  it("links a typed subject to the real one", () => {
+    expect(matchSubject("Economics", subjects)?.id).toBe("s1");
+  });
+
+  it("ignores case and surrounding space", () => {
+    // Failing to match these would quietly split one subject's papers into
+    // two piles, which nothing on screen would explain.
+    expect(matchSubject("economics", subjects)?.id).toBe("s1");
+    expect(matchSubject("  ECONOMICS  ", subjects)?.id).toBe("s1");
+  });
+
+  it("is nothing for a subject you do not keep in the app", () => {
+    // Not an error: a paper can be for General Paper, or for a class that was
+    // never set up as a subject here.
+    expect(matchSubject("General Paper", subjects)).toBeNull();
+  });
+
+  it("is nothing when nothing was typed", () => {
+    expect(matchSubject("", subjects)).toBeNull();
+    expect(matchSubject("   ", subjects)).toBeNull();
+    expect(matchSubject(null, subjects)).toBeNull();
+  });
+
+  it("does not half-match a longer name", () => {
+    expect(matchSubject("Econ", subjects)).toBeNull();
+    expect(matchSubject("Economics Paper 1", subjects)).toBeNull();
+  });
+
+  it("copes with an account that has no subjects yet", () => {
+    expect(matchSubject("Economics", [])).toBeNull();
   });
 });

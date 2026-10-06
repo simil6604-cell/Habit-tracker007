@@ -10,6 +10,7 @@ import { schemaErrorMessage } from "@/lib/config/schema-check";
 import {
   cleanGrade,
   cleanOneLine,
+  matchSubject,
   cleanMultiline,
   parseMarks,
   MAX_PAPER_TITLE,
@@ -53,21 +54,26 @@ export async function addMarkedPaper(_prev: PaperFormState, formData: FormData):
   const marks = parseMarks(formData.get("marksScored"), formData.get("marksTotal"));
   if (!marks.ok) return { ok: false, error: marks.error };
 
-  // A subject id arrives from a select the browser can rewrite, so it is
-  // checked against this account rather than trusted.
-  let subjectId: string | null = null;
-  const rawSubject = String(formData.get("subjectId") ?? "").trim();
-  if (rawSubject) {
-    const subject = await prisma.subject.findFirst({ where: { id: rawSubject, userId }, select: { id: true } });
-    if (!subject) return { ok: false, error: "That subject is not one of yours." };
-    subjectId = subject.id;
-  }
+  /*
+   * The subject is typed, not picked from a list. If what was typed is one of
+   * your own subjects it links up, which is what lets the analysis know
+   * whether this is IGCSE or A Level — and if it is not, the paper simply
+   * keeps the words you wrote rather than refusing them.
+   *
+   * Matched in code rather than in the query: SQLite compares strings case
+   * sensitively, so "economics" would miss "Economics" and quietly split one
+   * subject's papers into two piles.
+   */
+  const subjectLabel = cleanOneLine(formData.get("subject"), 60);
+  const mine = await prisma.subject.findMany({ where: { userId }, select: { id: true, name: true } });
+  const subjectId = matchSubject(subjectLabel, mine)?.id ?? null;
 
   try {
     const created = await prisma.markedPaper.create({
       data: {
         userId,
         subjectId,
+        subjectLabel,
         title,
         satOn: parseDay(formData.get("satOn")),
         gradeAwarded: cleanGrade(formData.get("gradeAwarded")),
@@ -197,7 +203,7 @@ export async function analyseMarkedPaper(paperId: string): Promise<AnalyseResult
   const prompt = buildAnalysisPrompt(
     {
       title: paper.title,
-      subjectName: paper.subject?.name ?? null,
+      subjectName: paper.subject?.name ?? paper.subjectLabel,
       gradeAwarded: paper.gradeAwarded,
       gradeTarget: paper.gradeTarget,
       marksScored: paper.marksScored,

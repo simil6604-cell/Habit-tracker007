@@ -54,7 +54,7 @@ export default async function MarkedPaperPage({ params }: { params: Promise<{ id
           <h1 className="text-2xl font-semibold tracking-tight">{paper.title}</h1>
           <p className="mt-1 text-sm text-muted">
             {[
-              paper.subject?.name,
+              paper.subject?.name ?? paper.subjectLabel,
               paper.satOn ? format(paper.satOn, "d MMM yyyy") : null,
               marks.scored !== null && marks.total !== null
                 ? `${marks.scored}/${marks.total}${pct === null ? "" : ` · ${pct}%`}`

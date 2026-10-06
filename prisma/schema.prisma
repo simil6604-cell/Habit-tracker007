@@ -908,6 +908,13 @@ model MarkedPaper {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   subjectId    String?
   subject      Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  /**
+   * The subject as it was typed. Kept even when it matched one of your own
+   * subjects, so a paper still says what it was for after that subject is
+   * renamed or deleted — and so a paper for something you do not keep as a
+   * subject in the app is not forced to be for nothing.
+   */
+  subjectLabel String?
   title        String
   satOn        DateTime?
   /**

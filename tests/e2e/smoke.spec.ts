@@ -719,6 +719,11 @@ test.describe.serial("full app walkthrough", () => {
 
     const title = `Economics Paper 1 mock ${Date.now()}`;
     await paperForm.locator('input[name="title"]').fill(title);
+    // Typed, not picked: the subject box is a plain text input, and what is
+    // typed links itself to a real subject when it matches one. "chemistry"
+    // in lower case has to find the Chemistry subject added earlier — a
+    // case-sensitive match would quietly file this paper under nothing.
+    await paperForm.locator('input[name="subject"]').fill("chemistry");
     await paperForm.locator('input[name="gradeAwarded"]').fill("c");
     await paperForm.locator('input[name="gradeTarget"]').fill("a");
     await paperForm.locator('input[name="marksScored"]').fill("32");
@@ -728,6 +733,8 @@ test.describe.serial("full app walkthrough", () => {
     // Straight into the paper, because adding a question is the next thing.
     await page.waitForURL(/\/school\/grades\/[a-z0-9]+/);
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    // It found the real subject, so it shows that subject's own name.
+    await expect(page.getByText("Chemistry", { exact: false }).first()).toBeVisible();
     // Grades are stored as the marker wrote them, only uppercased.
     const gap = page.getByTestId("grade-gap");
     await expect(gap).toContainText("C");
@@ -790,6 +797,17 @@ test.describe.serial("full app walkthrough", () => {
     await page.getByTestId("analyse-paper").click();
     await expect(page.getByRole("status")).toContainText(/needs a real AI/i);
     await expect(page.getByTestId("paper-analysis")).toHaveCount(0);
+
+    // A subject that is not one of yours is kept as typed rather than refused:
+    // a paper can be for a class that was never set up here.
+    await page.goto("/school/grades");
+    const other = `General Paper mock ${Date.now()}`;
+    const form2 = page.getByTestId("add-paper");
+    await form2.locator('input[name="title"]').fill(other);
+    await form2.locator('input[name="subject"]').fill("General Paper");
+    await form2.getByRole("button", { name: /Add paper/ }).click();
+    await page.waitForURL(/\/school\/grades\/[a-z0-9]+/);
+    await expect(page.getByText("General Paper", { exact: false }).first()).toBeVisible();
 
     // It is on the School page too, where you would go looking for it.
     await page.goto("/school");
