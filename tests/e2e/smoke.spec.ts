@@ -41,6 +41,13 @@ test.describe.serial("full app walkthrough", () => {
     p.getByTestId("subject-cards").locator('a[href^="/school/subjects/"]', { hasText: name });
   const chemistryCard = (p: Page) => subjectLink(p, "Chemistry");
 
+  /** `yyyy-mm-dd` n days from today, which is what a date field takes. */
+  const inDays = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
   let page: Page;
   const email = `e2e_${Date.now()}@example.com`;
   const password = "password123";
@@ -629,7 +636,7 @@ test.describe.serial("full app walkthrough", () => {
 
     const todo = `Economics Aufsatz fertig ${Date.now()}`;
     await form.locator('input[name="title"]').fill(todo);
-    await form.locator('select[name="date"]').selectOption({ index: 2 });
+    await form.locator('input[name="date"]').fill(inDays(2));
     // Time and minutes deliberately left alone — they start empty now.
     await expect(form.locator('input[name="time"]')).toHaveValue("");
     await form.getByRole("button", { name: /Add my block/ }).click();
@@ -658,6 +665,49 @@ test.describe.serial("full app walkthrough", () => {
     await expect(form2.getByRole("alert")).toContainText(/start time/i);
     await page.reload();
     await expect(page.getByTestId("own-blocks").locator("li", { hasText: "Half an answer" })).toHaveCount(0);
+  });
+
+  test("school: a day three weeks out can be planned for, and gets its own card", async () => {
+    // Asked for: the planner only reached a week ahead, so an exam three weeks
+    // away could not be prepared for in the one place meant for preparing.
+    await page.goto("/school/planner");
+    const form = page.getByTestId("add-study-block");
+
+    // The field takes any day up to a year out, not a menu of this week.
+    const dateField = form.locator('input[name="date"]');
+    await expect(dateField).toHaveAttribute("type", "date");
+    await expect(dateField).toHaveAttribute("min", inDays(0));
+    await expect(dateField).toHaveAttribute("max", inDays(365));
+
+    const far = `Mock exam revision ${Date.now()}`;
+    await dateField.fill(inDays(21));
+    await form.locator('input[name="title"]').fill(far);
+    await form.getByRole("button", { name: /Add my block/ }).click();
+
+    // The page grew a card for that day — writing it somewhere nothing shows
+    // would be worse than refusing it.
+    const block = page.getByTestId("own-blocks").locator("li", { hasText: far });
+    await expect(block).toBeVisible();
+
+    await page.reload();
+    // On the card for that day, and on no other — a block that silently landed
+    // on today would look like it saved and be in the wrong place.
+    await expect(page.getByTestId(`planner-day-${inDays(21)}`).getByText(far)).toBeVisible();
+    await expect(page.getByTestId(`planner-day-${inDays(0)}`).getByText(far)).toHaveCount(0);
+
+    // The week itself is still there whether or not anything is in it.
+    await expect(page.getByText(/Nothing written down for this day yet/).first()).toBeVisible();
+
+    // A date that has gone is refused on the server, where it counts: min is
+    // markup, and markup is one line in a console.
+    await form.locator('input[name="title"]').fill("Yesterday's plan");
+    await dateField.evaluate((el) => el.removeAttribute("min"));
+    await dateField.fill(inDays(-1));
+    await form.getByRole("button", { name: /Add my block/ }).click();
+    await expect(form.getByRole("alert")).toContainText(/already gone/i);
+
+    await page.reload();
+    await expect(page.getByTestId("own-blocks").locator("li", { hasText: "Yesterday's plan" })).toHaveCount(0);
   });
 
   test("school: insights report what is measured, and say so when nothing is", async () => {

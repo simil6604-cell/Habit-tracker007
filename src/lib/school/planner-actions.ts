@@ -33,6 +33,9 @@ export async function addStudyBlock(_prev: PlannerFormState, formData: FormData)
     time: formData.get("time"),
     minutes: formData.get("minutes"),
     subjectId: formData.get("subjectId"),
+    // The horizon is checked on the server as well as in the field: min and
+    // max on a date input are markup, and markup is one line in a console.
+    today: new Date(),
   });
   if (!parsed.ok) return { error: parsed.error };
 

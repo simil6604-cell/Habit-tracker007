@@ -4,6 +4,9 @@ import {
   MAX_TITLE_LENGTH,
   MIN_BLOCK_MINUTES,
   isAnytime,
+  plannerDays,
+  dayKey,
+  PLANNER_DAYS,
   parseBlockInput,
   parseClockTime,
   parseLocalDate,
@@ -213,5 +216,93 @@ describe("isAnytime", () => {
   it("cannot collide with a real timed block, which is never that short", () => {
     const timed = parseBlockInput({ title: "x", date: "2026-10-05", time: "17:00", minutes: String(MIN_BLOCK_MINUTES) });
     expect(timed.ok && isAnytime(timed.value)).toBe(false);
+  });
+});
+
+describe("plannerDays", () => {
+  const today = new Date(2026, 9, 6); // Tuesday 6 October 2026
+
+  it("always shows the week starting today, even with nothing written", () => {
+    const days = plannerDays(today, []);
+    expect(days).toHaveLength(PLANNER_DAYS);
+    expect(dayKey(days[0])).toBe("2026-10-06");
+    expect(dayKey(days[PLANNER_DAYS - 1])).toBe("2026-10-12");
+  });
+
+  it("grows a card for a day further out that something was written on", () => {
+    // The whole point: an exam three weeks away can be prepared for in the
+    // place meant for preparing, instead of the block vanishing into a row
+    // the page never looks at.
+    const days = plannerDays(today, ["2026-10-27"]);
+    expect(days).toHaveLength(PLANNER_DAYS + 1);
+    expect(dayKey(days[days.length - 1])).toBe("2026-10-27");
+  });
+
+  it("keeps the days in order, however they arrived", () => {
+    const days = plannerDays(today, ["2026-11-20", "2026-10-27", "2026-10-30"]);
+    expect(days.map(dayKey).slice(-3)).toEqual(["2026-10-27", "2026-10-30", "2026-11-20"]);
+  });
+
+  it("does not repeat a day that is already in the week", () => {
+    const days = plannerDays(today, ["2026-10-08", "2026-10-08", "2026-10-06"]);
+    expect(days).toHaveLength(PLANNER_DAYS);
+  });
+
+  it("collapses two blocks written for the same later day into one card", () => {
+    const days = plannerDays(today, ["2026-10-27", "2026-10-27"]);
+    expect(days).toHaveLength(PLANNER_DAYS + 1);
+  });
+
+  it("drops a day that has already gone, rather than drawing a card above today", () => {
+    const days = plannerDays(today, ["2026-09-30"]);
+    expect(days).toHaveLength(PLANNER_DAYS);
+    expect(dayKey(days[0])).toBe("2026-10-06");
+  });
+
+  it("ignores anything that is not a date it wrote", () => {
+    const days = plannerDays(today, ["", "not-a-date", "2026-13-40", "2026-10-27"]);
+    expect(days.map(dayKey)).toContain("2026-10-27");
+    expect(days).toHaveLength(PLANNER_DAYS + 1);
+  });
+});
+
+describe("dayKey", () => {
+  it("pads the month and the day, so the keys sort and match the database", () => {
+    expect(dayKey(new Date(2026, 0, 5))).toBe("2026-01-05");
+    expect(dayKey(new Date(2026, 11, 31))).toBe("2026-12-31");
+  });
+
+  it("is the local day, not the UTC one", () => {
+    // 1 January at 00:30 local is still 1 January. Formatting through an ISO
+    // string would make it 31 December anywhere east of UTC.
+    expect(dayKey(new Date(2026, 0, 1, 0, 30))).toBe("2026-01-01");
+    expect(dayKey(new Date(2026, 0, 1, 23, 30))).toBe("2026-01-01");
+  });
+});
+
+describe("the horizon on a written block", () => {
+  const today = new Date(2026, 9, 6);
+  const base = { title: "Revise for the mock", time: "", minutes: "", subjectId: "" };
+
+  it("takes today and any day inside the year ahead", () => {
+    expect(parseBlockInput({ ...base, date: "2026-10-06", today }).ok).toBe(true);
+    expect(parseBlockInput({ ...base, date: "2026-10-27", today }).ok).toBe(true);
+    expect(parseBlockInput({ ...base, date: "2027-10-06", today }).ok).toBe(true);
+  });
+
+  it("refuses a day that has gone, which nothing would ever show", () => {
+    const result = parseBlockInput({ ...base, date: "2026-10-05", today });
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toMatch(/already gone/i);
+  });
+
+  it("refuses a date a year out, which is a mistyped year far more often", () => {
+    const result = parseBlockInput({ ...base, date: "2029-10-06", today });
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toMatch(/year/i);
+  });
+
+  it("leaves the date alone when no today is given, so pure parsing stays pure", () => {
+    expect(parseBlockInput({ ...base, date: "2020-01-01" }).ok).toBe(true);
   });
 });
