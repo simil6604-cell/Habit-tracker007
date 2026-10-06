@@ -710,6 +710,99 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("own-blocks").locator("li", { hasText: "Yesterday's plan" })).toHaveCount(0);
   });
 
+  test("school: a marked paper, its questions, and what the AI makes of them", async () => {
+    // Asked for: a page that takes the grade you got and the grade you want,
+    // reads the questions against what you wrote, and says what to change.
+    await page.goto("/school/grades");
+    const paperForm = page.getByTestId("add-paper");
+    await expect(paperForm).toBeVisible();
+
+    const title = `Economics Paper 1 mock ${Date.now()}`;
+    await paperForm.locator('input[name="title"]').fill(title);
+    await paperForm.locator('input[name="gradeAwarded"]').fill("c");
+    await paperForm.locator('input[name="gradeTarget"]').fill("a");
+    await paperForm.locator('input[name="marksScored"]').fill("32");
+    await paperForm.locator('input[name="marksTotal"]').fill("60");
+    await paperForm.getByRole("button", { name: /Add paper/ }).click();
+
+    // Straight into the paper, because adding a question is the next thing.
+    await page.waitForURL(/\/school\/grades\/[a-z0-9]+/);
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    // Grades are stored as the marker wrote them, only uppercased.
+    const gap = page.getByTestId("grade-gap");
+    await expect(gap).toContainText("C");
+    await expect(gap).toContainText("A");
+    await expect(page.getByText("32/60")).toBeVisible();
+    await expect(page.getByText("53%")).toBeVisible();
+
+    // With no questions there is nothing to read, and the button says so by
+    // being unavailable rather than by failing when pressed.
+    await expect(page.getByTestId("analyse-paper")).toBeDisabled();
+
+    const qForm = page.getByTestId("add-question");
+    await qForm.locator('textarea[name="prompt"]').fill("Evaluate the likely impact of a minimum wage on unemployment. [12]");
+    await qForm.locator('textarea[name="answer"]').fill("A minimum wage means firms pay more, so they hire fewer people.");
+    await qForm.locator('textarea[name="examinerNote"]').fill("One side only.");
+    await qForm.locator('input[name="marksScored"]').fill("3");
+    await qForm.locator('input[name="marksTotal"]').fill("12");
+    await qForm.getByRole("button", { name: /Add question/ }).click();
+
+    const questions = page.getByTestId("paper-questions");
+    await expect(questions).toContainText("minimum wage");
+    // The command word is pulled out, because that is what the marks turn on.
+    await expect(questions.getByText("evaluate", { exact: true })).toBeVisible();
+    await expect(questions).toContainText("3/12");
+
+    // A second, well-answered question, so "where the marks went" has to rank.
+    await qForm.locator('textarea[name="prompt"]').fill("Define opportunity cost. [2]");
+    await qForm.locator('textarea[name="answer"]').fill("The next best alternative given up.");
+    await qForm.locator('input[name="marksScored"]').fill("2");
+    await qForm.locator('input[name="marksTotal"]').fill("2");
+    await qForm.getByRole("button", { name: /Add question/ }).click();
+
+    // The worst question first — not the first one typed — and the one that
+    // scored full marks is not in a list about where the marks went at all.
+    await expect(page.getByTestId("paper-questions").locator("li")).toHaveCount(2);
+    const weakest = page.getByTestId("weakest-questions");
+    await expect(weakest.locator("li")).toHaveCount(1);
+    await expect(weakest.locator("li").first()).toContainText("minimum wage");
+    await expect(weakest.locator("li").first()).toContainText("lost 9 of 12");
+    await expect(weakest).not.toContainText("opportunity cost");
+
+    // More marks than the question was worth is a typo, and refused.
+    //
+    // Waited for first: the form clears itself once the save lands, so typing
+    // the next question straight away races that reset — the fields are wiped
+    // under you, the browser blocks the submit as incomplete, and the server
+    // check this is here to reach never runs.
+    await expect(page.getByTestId("paper-questions").locator("li")).toHaveCount(2);
+    await qForm.locator('textarea[name="prompt"]').fill("A third question");
+    await qForm.locator('textarea[name="answer"]').fill("An answer");
+    await qForm.locator('input[name="marksScored"]').fill("8");
+    await qForm.locator('input[name="marksTotal"]').fill("5");
+    await qForm.getByRole("button", { name: /Add question/ }).click();
+    await expect(qForm.getByRole("alert")).toContainText(/round the right way/);
+    await expect(page.getByTestId("paper-questions").locator("li")).toHaveCount(2);
+
+    // This server runs with no AI key, so asking says that plainly instead of
+    // pretending to read the paper and saving nothing. Silence here would look
+    // exactly like a paper it had nothing to say about.
+    await page.getByTestId("analyse-paper").click();
+    await expect(page.getByRole("status")).toContainText(/needs a real AI/i);
+    await expect(page.getByTestId("paper-analysis")).toHaveCount(0);
+
+    // It is on the School page too, where you would go looking for it.
+    await page.goto("/school");
+    await expect(page.getByTestId("school-marked-papers")).toContainText(title);
+
+    // And it can be taken back out, questions and all.
+    await page.getByTestId("school-marked-papers").getByText(title).click();
+    await page.waitForURL(/\/school\/grades\/[a-z0-9]+/);
+    await page.getByRole("button", { name: `Delete ${title}` }).click();
+    await page.waitForURL("**/school/grades");
+    await expect(page.getByText(title)).toHaveCount(0);
+  });
+
   test("school: insights report what is measured, and say so when nothing is", async () => {
     // With no cards at all the panel correctly says there is nothing to
     // measure and draws no meter — so a card is created first, otherwise the
