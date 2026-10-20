@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider } from "./provider";
 import { recordAIFailure, recordAISuccess } from "./health";
+import { inspectApiKey } from "./api-key";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 
@@ -67,6 +68,21 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async generate(prompt: string, context: Record<string, unknown> = {}): Promise<string> {
+    /*
+     * Checked before the request, not after it fails. A key with a lookalike
+     * character in it never reaches the API at all: the SDK puts it in an HTTP
+     * header, headers are Latin-1 only, and what surfaces in the chat is
+     * "Cannot convert argument to a ByteString because the character at index
+     * 7 has a value of 1072" — which names no key and reads like a bug in this
+     * app. Saying it plainly here is the difference between a fixable problem
+     * and an evening lost.
+     */
+    const keyProblem = inspectApiKey(process.env.ANTHROPIC_API_KEY);
+    if (keyProblem) {
+      recordAIFailure(keyProblem.problem);
+      throw new Error(`${keyProblem.problem} ${keyProblem.fix}`);
+    }
+
     const system = typeof context.system === "string" ? context.system : undefined;
     const maxTokens = typeof context.maxTokens === "number" ? context.maxTokens : 1024;
     const images = collectImages(context);

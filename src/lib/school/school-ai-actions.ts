@@ -14,6 +14,7 @@ import {
   type SchoolAITurn,
 } from "./school-ai";
 import { MAX_PHOTOS_PER_MESSAGE, ownedUploadPaths, parseImagePaths, visionMediaType } from "./school-ai-photos";
+import { aiFailureMessage } from "@/lib/ai/api-key";
 
 async function requireUserId() {
   const session = await auth();
@@ -241,7 +242,7 @@ export async function sendSchoolAIMessage(
     try {
       reply = await getAIProvider().generate(prompt, { system, maxTokens: 2000, images });
     } catch (err) {
-      reply = `Couldn't reach the AI service right now (${err instanceof Error ? err.message : "unknown error"}) — try again in a moment.`;
+      reply = aiFailureMessage(err);
     }
 
     // Never let a photo go unanswered-for in silence: if one couldn't be read

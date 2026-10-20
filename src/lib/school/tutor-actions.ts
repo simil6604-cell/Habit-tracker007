@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
+import { aiFailureMessage } from "@/lib/ai/api-key";
 
 async function requireUserId() {
   const session = await auth();
@@ -115,7 +116,7 @@ export async function sendTutorMessage(topicId: string, message: string): Promis
     try {
       reply = await getAIProvider().generate(prompt, { system, maxTokens: 1500 });
     } catch (err) {
-      reply = `Couldn't reach the AI service right now (${err instanceof Error ? err.message : "unknown error"}) — try again in a moment.`;
+      reply = aiFailureMessage(err);
     }
   }
 

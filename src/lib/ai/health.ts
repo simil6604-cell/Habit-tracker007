@@ -1,4 +1,5 @@
 import { isRealAIConfigured } from "./provider";
+import { inspectApiKey } from "./api-key";
 
 /**
  * What the AI is actually doing, learned from the calls the app already makes.
@@ -71,14 +72,16 @@ export function getAIHealth(): AIHealth {
     };
   }
 
-  // A key pasted with a stray space or newline is configured but always
-  // rejected — worth calling out by name, because the error it causes ("401")
-  // points at the key rather than at the whitespace around it.
-  if (raw !== raw.trim()) {
+  // A key that cannot work before any request is made — whitespace around it,
+  // quotes kept as part of the value, a lookalike character that no header can
+  // carry. Each is configured-but-always-rejected, and each produces an error
+  // that points anywhere except at the key.
+  const keyProblem = inspectApiKey(raw);
+  if (keyProblem) {
     return {
       ok: false,
-      problem: "The AI key has a space or line break around it, so it is rejected on every call.",
-      fix: "Re-paste ANTHROPIC_API_KEY with no spaces, quotes or newlines around the value, then redeploy.",
+      problem: keyProblem.problem,
+      fix: keyProblem.fix,
       lastSuccessAt: lastSuccess,
       lastFailureAt: lastFailure?.at ?? null,
       failuresSinceSuccess,
