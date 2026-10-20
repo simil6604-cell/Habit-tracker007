@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /** Fresh module each time — the health state is per running server. */
 async function load() {
   vi.resetModules();
-  vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test-key");
+  // A realistic length: the key checks refuse anything far shorter than a
+  // real key, so a short stub would make every case below report that
+  // instead of the state it is testing.
+  vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-api03-" + "testkey".repeat(14));
   return import("@/lib/ai/health");
 }
 
@@ -67,7 +70,7 @@ describe("getAIHealth", () => {
 
     it("spots a key pasted with whitespace, which fails as a 401 pointing elsewhere", async () => {
       vi.resetModules();
-      vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test-key\n");
+      vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-api03-" + "testkey".repeat(14) + "\n");
       const { getAIHealth } = await import("@/lib/ai/health");
       expect(getAIHealth().problem).toContain("space or line break");
     });
