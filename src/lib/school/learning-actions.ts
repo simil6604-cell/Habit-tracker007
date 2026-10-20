@@ -7,6 +7,7 @@ import { daysUntil } from "@/lib/planner/days-until";
 import { explainApproach, examChecklist, respondToMistake, type TopicContext } from "./learning-assistant";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
+import { aiFailureMessage } from "@/lib/ai/api-key";
 
 async function requireUserId() {
   const session = await auth();
@@ -102,7 +103,7 @@ export async function askTopicQuestion(topicId: string, question: string): Promi
   try {
     return await getAIProvider().generate(prompt, { system });
   } catch (err) {
-    return `Couldn't reach the AI service right now (${err instanceof Error ? err.message : "unknown error"}) — try again in a moment.`;
+    return aiFailureMessage(err);
   }
 }
 
