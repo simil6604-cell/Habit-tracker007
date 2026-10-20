@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider } from "./provider";
 import { recordAIFailure, recordAISuccess } from "./health";
-import { inspectApiKey } from "./api-key";
+import { describeKeyShape, inspectApiKey } from "./api-key";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 
@@ -9,7 +9,11 @@ function friendlyAnthropicError(err: unknown): string {
   if (err instanceof Anthropic.APIError) {
     // Wording stays host-agnostic: this message is shown to someone whose app
     // may be running on Render, not next to a .env file they can open.
-    if (err.status === 401) return "the API key was rejected as invalid — re-paste ANTHROPIC_API_KEY where your app's environment variables are set";
+    if (err.status === 401) {
+      // The shape goes with it: a 401 is most often a key that arrived in
+      // pieces, and "re-paste it" is advice someone has usually just followed.
+      return `the API key was rejected as invalid (${describeKeyShape(process.env.ANTHROPIC_API_KEY)}). Re-paste ANTHROPIC_API_KEY where your app's environment variables are set, or make a new key if it is complete and still refused`;
+    }
     if (err.status === 403) return "the API key was refused (403) — it may be disabled, or restricted to a different workspace";
     if (err.status === 429) return "the AI service is rate-limited or out of credit right now — check your Anthropic account's usage and billing";
     if (err.status && err.status >= 500) return "the AI service is temporarily unavailable — this one is at their end, try again shortly";

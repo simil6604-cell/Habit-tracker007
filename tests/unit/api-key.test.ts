@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inspectApiKey, aiFailureMessage } from "@/lib/ai/api-key";
+import { inspectApiKey, aiFailureMessage, describeKeyShape } from "@/lib/ai/api-key";
 
 const GOOD = "sk-ant-api03-AbCdEf0123456789_-xyz";
 
@@ -102,5 +102,63 @@ describe("aiFailureMessage", () => {
     // problem is the thing the person can act on.
     const message = aiFailureMessage(new Error("index 7 has a value of 1072"), CYRILLIC);
     expect(message).not.toContain("1072");
+  });
+});
+
+describe("a space inside the key", () => {
+  it("is caught, because it survives trimming and reads as a flat 401", () => {
+    const result = inspectApiKey("sk-ant-api03 restofthekey");
+    expect(result).not.toBeNull();
+    expect(result!.problem).toMatch(/space inside it/);
+    expect(result!.fix).toMatch(/in one go/);
+  });
+
+  it("is caught wherever it is", () => {
+    expect(inspectApiKey("sk-ant-api03-abc def")).not.toBeNull();
+    expect(inspectApiKey("sk ant-api03-abc")).not.toBeNull();
+  });
+
+  it("still reports surrounding whitespace as surrounding whitespace", () => {
+    // Different cause, different fix — "copy it in one go" is wrong advice
+    // for a value that is simply padded.
+    expect(inspectApiKey(" sk-ant-api03-abc ")!.problem).toMatch(/space or line break/);
+  });
+});
+
+describe("describeKeyShape", () => {
+  it("gives the length and the public prefix, and nothing more", () => {
+    const key = "sk-ant-api03-" + "x".repeat(90);
+    const shape = describeKeyShape(key);
+    expect(shape).toContain("103 characters");
+    expect(shape).toContain('starts "sk-ant-"');
+    // The secret part never appears.
+    expect(shape).not.toContain("x".repeat(20));
+  });
+
+  it("says what a complete key looks like, so a truncated one is obvious", () => {
+    expect(describeKeyShape("sk-ant-api03-short")).toMatch(/about 100 characters/);
+  });
+
+  it("copes with no key at all", () => {
+    expect(describeKeyShape("")).toBe("no key is set");
+    expect(describeKeyShape(undefined)).toBe("no key is set");
+    expect(describeKeyShape("   ")).toBe("no key is set");
+  });
+});
+
+describe("naming the exact whitespace", () => {
+  it("calls a non-breaking space invisible rather than just a space", () => {
+    // It matters: told "there is a space in it", you look at the value, see
+    // no space, and conclude the app is wrong.
+    expect(inspectApiKey("sk-ant api03")!.problem).toMatch(/invisible space/);
+  });
+
+  it("calls a line break a line break", () => {
+    expect(inspectApiKey("sk-ant-\napi03")!.problem).toMatch(/line break/);
+    expect(inspectApiKey("sk-ant-\tapi03")!.problem).toMatch(/tab/);
+  });
+
+  it("calls an ordinary space a space", () => {
+    expect(inspectApiKey("sk-ant-api03 rest")!.problem).toMatch(/space inside it/);
   });
 });

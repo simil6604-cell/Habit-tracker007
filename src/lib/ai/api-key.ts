@@ -50,6 +50,8 @@ function describeChar(code: number): string {
   if (code === 0x2013 || code === 0x2014) return "a long dash";
   if (code === 0x2018 || code === 0x2019 || code === 0x201c || code === 0x201d) return "a curly quote";
   if (code === 0x00a0 || code === 0x200b || code === 0x202f) return "an invisible space";
+  if (code === 0x0a || code === 0x0d) return "a line break";
+  if (code === 0x09) return "a tab";
   return "a character that is not a plain letter";
 }
 
@@ -91,6 +93,21 @@ export function inspectApiKey(raw: string | undefined | null): KeyProblem | null
     };
   }
 
+  /*
+   * An ordinary space in the middle. Last, because every stranger character
+   * above has a more precise name than "a space" — a non-breaking space is
+   * worth calling invisible, and a line break is worth calling a line break.
+   * This one survives trim(), is invisible in a masked field, and comes back
+   * as a flat 401, which sends you to look at the key in the console where it
+   * is perfectly fine.
+   */
+  if (key.includes(" ")) {
+    return {
+      problem: "The AI key has a space inside it, so the API rejects it as a key it has never issued.",
+      fix: "Copy ANTHROPIC_API_KEY again from console.anthropic.com in one go and paste it over the old value — a space in the middle usually means it was copied in two pieces.",
+    };
+  }
+
   return null;
 }
 
@@ -108,4 +125,23 @@ export function aiFailureMessage(err: unknown, apiKey = process.env.ANTHROPIC_AP
   if (keyProblem) return `${keyProblem.problem} ${keyProblem.fix}`;
   const detail = err instanceof Error ? err.message : "unknown error";
   return `Couldn't reach the AI service right now (${detail}) — try again in a moment.`;
+}
+
+/**
+ * Enough of the key to tell whether the right thing arrived, and nothing that
+ * could be used.
+ *
+ * A key rejected as invalid is most often a key that arrived in pieces: a
+ * partial copy, or a paste into a field that was not empty. Neither is visible
+ * in a masked value, and the API's answer for all of them is the same flat
+ * 401 — which sends you to look at the key in the console, where it is
+ * perfectly fine. Its length says in one glance which of those happened.
+ *
+ * The first seven characters are the public prefix every Anthropic key shares,
+ * and a length is not a secret.
+ */
+export function describeKeyShape(raw: string | undefined | null): string {
+  const key = (raw ?? "").trim();
+  if (!key) return "no key is set";
+  return `the key here is ${key.length} characters and starts "${key.slice(0, 7)}" — a complete Anthropic key is about 100 characters`;
 }
