@@ -24,6 +24,18 @@ export type KeyProblem = { problem: string; fix: string };
 const MAX_HEADER_CHAR = 255;
 
 /**
+ * Below this, it is not a whole key and no round trip is needed to know.
+ *
+ * A real Anthropic key runs to about 100 characters. The number that keeps
+ * turning up instead is around twenty, because that is the length of the
+ * abbreviated form the console shows in its *list* of keys —
+ * "sk-ant-ap…HgAA". It looks like a key, it copies like a key, and it is a
+ * label. Set well under any real key so a format change cannot make this
+ * refuse something valid.
+ */
+const SHORTEST_PLAUSIBLE_KEY = 50;
+
+/**
  * The first character an API key has no business containing, with where it is.
  *
  * Printable ASCII, not Latin-1. A non-breaking space is 160 — inside what a
@@ -77,6 +89,21 @@ export function inspectApiKey(raw: string | undefined | null): KeyProblem | null
     return {
       problem: "The AI key is wrapped in quotation marks, which are part of the value here and make it wrong.",
       fix: "Re-paste ANTHROPIC_API_KEY without the quotes around it, then redeploy.",
+    };
+  }
+
+  /*
+   * Far too short to be a key. Checked before the characters, because a
+   * twenty-character string has a much more specific explanation than
+   * whatever is at position 9 of it.
+   */
+  if (key.length < SHORTEST_PLAUSIBLE_KEY) {
+    return {
+      problem:
+        `The AI key is only ${key.length} characters, and a real one is about 100. This is the shortened form the ` +
+        "Anthropic console shows in its list of keys, not the key itself — it looks like one and copies like one, but it is a label.",
+      fix:
+        "The full key is shown once, when you create it. Go to console.anthropic.com → API keys → Create key, and use the copy button on the screen that appears straight away — not the value in the list afterwards. Paste that into ANTHROPIC_API_KEY and redeploy.",
     };
   }
 
