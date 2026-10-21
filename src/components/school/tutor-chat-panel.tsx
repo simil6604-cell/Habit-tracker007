@@ -15,6 +15,7 @@ import {
   type TutorMessageEntry,
 } from "@/lib/school/tutor-actions";
 import { AIMessageContent } from "@/components/shared/ai-message";
+import { SafeRender } from "@/components/shared/safe-render";
 
 export function TutorChatPanel({ topicId }: { topicId: string }) {
   const [messages, setMessages] = useState<TutorMessageEntry[] | null>(null);
@@ -137,7 +138,9 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
                   m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
                 }`}
               >
-                <AIMessageContent content={m.content} />
+                <SafeRender>
+                  <AIMessageContent content={m.content} />
+                </SafeRender>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
