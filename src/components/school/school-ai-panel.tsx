@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { AudioLines, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
+import { SafeRender } from "@/components/shared/safe-render";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
@@ -329,7 +330,9 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
                   m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
                 }`}
               >
-                <AIMessageContent content={m.content} />
+                <SafeRender>
+                  <AIMessageContent content={m.content} />
+                </SafeRender>
               </div>
               <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
             </div>

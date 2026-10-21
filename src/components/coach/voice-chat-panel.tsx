@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { AudioLines, Mic, MicOff, Send, Trash2, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
+import { SafeRender } from "@/components/shared/safe-render";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import {
@@ -251,7 +252,9 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
                   m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
                 }`}
               >
-                <AIMessageContent content={m.content} />
+                <SafeRender>
+                  <AIMessageContent content={m.content} />
+                </SafeRender>
               </div>
               <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
             </div>
