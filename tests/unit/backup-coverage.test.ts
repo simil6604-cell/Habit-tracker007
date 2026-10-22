@@ -36,6 +36,11 @@ const EXCLUDED: Record<string, { reason: string; skip: Skip[] }> = {
     reason: "live sign-in sessions — stripped from every backup, and wiping them would sign you out mid-restore",
     skip: ["backup", "wipe", "restore"],
   },
+  GoogleAccount: {
+    reason:
+      "live Google access and refresh tokens — a backup is a file that gets downloaded, emailed to yourself and left in a folder, and a refresh token in one is a working key to a school Google account, so it is stripped exactly like the sign-in credentials above. Not wiped either: a restore writes none of this back, so wiping would silently disconnect Google with nothing in the restored file to explain why, and the connection is one button to make again.",
+    skip: ["backup", "wipe", "restore"],
+  },
   TimetableSlot: {
     reason:
       "has a userId but no relation on User, so it cannot be included through the user query — loaded and restored by its own query instead",
@@ -139,6 +144,14 @@ describe("every table this account owns is in the backup", () => {
     );
   });
 
+  it("never puts a Google token in a backup", () => {
+    // The exclusion above is a claim about intent; this is the fact. If the
+    // table is ever added to the backup query, a refresh token for a school
+    // Google account starts travelling in a file people email to themselves.
+    expect(backupSrc).not.toContain("googleAccount");
+    expect(backupSrc).not.toContain("refreshToken");
+  });
+
   it("spells out the reasoning for the tables that opt out of everything", () => {
     const total = Object.entries(EXCLUDED).filter(([, e]) => e.skip.length === 3);
     for (const [model, { reason }] of total) {
@@ -146,6 +159,10 @@ describe("every table this account owns is in the backup", () => {
       // reason has to account for all three, not wave at one of them.
       expect(reason.length, `${model} opts out of everything on a one-liner`).toBeGreaterThan(80);
     }
-    expect(total.map(([m]) => m).sort()).toEqual(["Account", "SchoolAIUpload", "Session"]);
+    // Pinned on purpose: a new table that opts out of all three has to be
+    // added here by hand, which is the moment someone has to justify it.
+    // GoogleAccount joined the list when Classroom was connected — it holds
+    // live tokens, which belong with the sign-in credentials, not the data.
+    expect(total.map(([m]) => m).sort()).toEqual(["Account", "GoogleAccount", "SchoolAIUpload", "Session"]);
   });
 });

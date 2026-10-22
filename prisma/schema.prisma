@@ -49,8 +49,10 @@ model User {
   scannedProducts ScannedProduct[]
   waterLogs       WaterLog[]
 
-  accounts Account[]
-  sessions Session[]
+  accounts      Account[]
+  sessions      Session[]
+  // The school's Google account, if this person connected one.
+  googleAccount GoogleAccount?
 
   school             School?
   subjects           Subject[]
@@ -108,6 +110,29 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A connected Google account, used to read this student's own Google
+// Classroom. Read-only scopes only: the app never writes to Classroom.
+//
+// The two tokens are stored encrypted (see lib/google/token-crypto.ts) because
+// a refresh token is a live key to a school account, not a one-way hash. This
+// table is deliberately outside the backup for the same reason.
+model GoogleAccount {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Which Google account this is, so the app can say whose Classroom it reads.
+  googleEmail   String?
+  accessToken   String // encrypted
+  refreshToken  String? // encrypted; absent when Google declined to issue one
+  expiresAt     DateTime
+  scope         String
+  connectedAt   DateTime  @default(now())
+  lastSyncAt    DateTime?
+  // Why the last sync failed, in the app's own words, so the card can say
+  // "your school blocked this" rather than showing a silent empty list.
+  lastSyncError String?
 }
 
 // ---------- School ----------
@@ -295,6 +320,17 @@ model Homework {
   status      String   @default("PENDING") // PENDING | DONE | MISSED
   createdAt   DateTime @default(now())
 
+  // Where this came from. Anything but MANUAL is kept in step with the place
+  // it was imported from, so a re-sync updates the row instead of adding a
+  // second copy of the same piece of work.
+  source     String  @default("MANUAL") // MANUAL | GOOGLE_CLASSROOM
+  externalId String? // the id it has over there — unique per account
+  link       String? // straight back to the original, e.g. the Classroom page
+  // Filled in when the work has been marked over there.
+  grade      Float?
+  maxPoints  Float?
+
+  @@unique([userId, externalId])
   @@index([userId, dueDate])
 }
 
