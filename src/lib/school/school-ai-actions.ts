@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
-import { SPOKEN_STYLE } from "@/lib/ai/spoken-mode";
+import { SPOKEN_BOARD_STYLE } from "@/lib/ai/spoken-mode";
 import type { ProviderImage } from "@/lib/ai/anthropic-provider";
 import { deleteUploadedImage, readUploadedImage, saveUploadedImage } from "@/lib/uploads/save-image";
 import {
@@ -236,11 +236,19 @@ export async function sendSchoolAIMessage(
     // Appended rather than replacing: which syllabus they are on and what is
     // coming up still apply out loud. Only the shape of the answer changes.
     const base = await buildSchoolAISystemPrompt(userId);
-    const system = spoken ? `${base}\n${SPOKEN_STYLE}` : base;
+    const system = spoken ? `${base}\n${SPOKEN_BOARD_STYLE}` : base;
     const prompt = buildSchoolAIPrompt(turns, trimmed || "Have a look at these and tell me what you see.", images.length);
 
     try {
-      reply = await getAIProvider().generate(prompt, { system, maxTokens: 2000, images });
+      // A spoken reply now carries the board with it — two to four drawings
+      // as well as the words. Cut off mid-SVG there is no picture at all,
+      // only an unclosed block, so voice gets the same headroom the coach's
+      // diagram replies already get.
+      reply = await getAIProvider().generate(prompt, {
+        system,
+        maxTokens: spoken ? 4000 : 2000,
+        images,
+      });
     } catch (err) {
       reply = aiFailureMessage(err);
     }

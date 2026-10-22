@@ -7,6 +7,13 @@ import { AudioLines, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X }
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
+import { ExplainerBoard } from "@/components/school/explainer-board";
+import {
+  hasBoard,
+  parseExplainerSteps,
+  stepSpeech,
+  type ExplainerStep,
+} from "@/lib/ai/explainer-board";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
@@ -35,6 +42,14 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [speakReplies, setSpeakReplies] = useState(false);
+  /*
+   * The pictures from the reply being spoken, and which piece of it the voice
+   * is on. Only ever set for a spoken reply: a typed answer already shows its
+   * drawing inside the bubble, and lifting it out of there would show the same
+   * picture twice.
+   */
+  const [boardSteps, setBoardSteps] = useState<ExplainerStep[]>([]);
+  const [boardIndex, setBoardIndex] = useState(0);
   const [canSpeak, setCanSpeak] = useState(false);
   const [pending, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -65,10 +80,19 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
     if (mic.listening && mic.transcript) setInput(mic.transcript);
   }, [mic.transcript, mic.listening]);
 
+  function clearBoard() {
+    setBoardSteps([]);
+    setBoardIndex(0);
+  }
+
   function send(text: string, spoken = false) {
     const trimmed = text.trim();
     if ((!trimmed && staged.length === 0) || pending || uploading) return;
     const photos = staged;
+    // A typed question is answered in writing, with any drawing inside the
+    // bubble — so the board from the last spoken answer has to go, or it sits
+    // above an unrelated reply looking like part of it.
+    if (!spoken) clearBoard();
     setInput("");
     setStaged([]);
     setNotice(null);
@@ -159,7 +183,19 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
     // would talk over itself and leave the mic shut.
     if (voice.active) {
       spokenRef.current = lastReply.id;
-      voice.speak(lastReply.content);
+      const steps = parseExplainerSteps(lastReply.content);
+      if (hasBoard(steps)) {
+        setBoardSteps(steps);
+        setBoardIndex(0);
+        // One utterance per piece, so each picture goes up as its own sentence
+        // starts rather than all of them appearing at once.
+        voice.speakSteps(steps.map(stepSpeech), setBoardIndex);
+      } else {
+        // Nothing drawn this time: clear the last board rather than leaving a
+        // picture from two answers ago up while it talks about something else.
+        setBoardSteps([]);
+        voice.speak(lastReply.content);
+      }
       return;
     }
 
@@ -274,7 +310,12 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
       {voice.error && <p className="mb-2 text-xs text-danger" role="alert">{voice.error}</p>}
         {messages.length > 0 && (
           <button
-            onClick={() => startTransition(async () => setMessages(await clearSchoolAIChat()))}
+            onClick={() =>
+              startTransition(async () => {
+                clearBoard();
+                setMessages(await clearSchoolAIChat());
+              })
+            }
             disabled={pending}
             className="text-muted hover:text-danger"
             title="Clear conversation"
@@ -297,6 +338,15 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
         </p>
       )}
 
+      {hasBoard(boardSteps) && (
+        <ExplainerBoard
+          steps={boardSteps}
+          spokenIndex={boardIndex}
+          onPick={setBoardIndex}
+          speaking={voice.speaking}
+        />
+      )}
+
       {messages.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center text-muted">
           <span className="text-3xl">🎓</span>
@@ -306,7 +356,10 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
           </p>
         </div>
       ) : (
-        <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto py-2">
+        // A floor on the transcript: with the board up, flex-1 alone squeezed
+        // this to a 16px strip showing the top edge of a diagram, which reads
+        // as a rendering fault rather than as a conversation underneath.
+        <div ref={scrollRef} className="flex min-h-24 flex-1 flex-col gap-3 overflow-y-auto py-2">
           {messages.map((m) => (
             <div key={m.id} className={`flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
               {m.imagePaths.length > 0 && (

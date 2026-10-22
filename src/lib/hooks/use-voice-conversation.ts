@@ -26,6 +26,14 @@ export const SPEECH_WATCHDOG_FLOOR_MS = 6_000;
 export const SPEECH_WATCHDOG_PER_WORD_MS = 900;
 export const SPEECH_WATCHDOG_CEILING_MS = 90_000;
 
+/**
+ * How long a piece with no words stays up before moving on.
+ *
+ * A picture whose sentence came back empty would otherwise flash past between
+ * two utterances, which looks like a glitch rather than a step.
+ */
+export const SILENT_STEP_DWELL_MS = 1_600;
+
 export function speechWatchdogMs(text: string): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return Math.min(SPEECH_WATCHDOG_CEILING_MS, Math.max(SPEECH_WATCHDOG_FLOOR_MS, words * SPEECH_WATCHDOG_PER_WORD_MS));
@@ -44,6 +52,15 @@ export type VoiceConversation = {
   stop: () => void;
   /** Say a reply out loud, then go back to listening. */
   speak: (text: string) => void;
+  /**
+   * Say a reply one piece at a time, telling the caller as each piece starts.
+   *
+   * What makes the board work: the picture for a sentence goes up as that
+   * sentence begins, rather than the whole answer appearing at once. One
+   * utterance per piece is what gives a place to hang that on — the synthesiser
+   * offers no reliable "which sentence are you on" event of its own.
+   */
+  speakSteps: (pieces: string[], onPieceStart?: (index: number) => void) => void;
 };
 
 function synthSupported(): boolean {
@@ -129,41 +146,90 @@ export function useVoiceConversation({
   const micRef = useRef(mic);
   micRef.current = mic;
 
-  const speak = useCallback(
-    (text: string) => {
-      const spokenText = toSpokenText(text);
-      if (!synthSupported() || !spokenText) {
-        // Nothing to say, but the turn still belongs to them next.
-        if (activeRef.current) micRef.current.start();
-        return;
-      }
+  /**
+   * Which sequence is currently being spoken.
+   *
+   * Cancelling the synthesiser fires `onend` for the utterance it cut off in
+   * some browsers, and that handler would otherwise walk on to the next piece
+   * of a sequence that has just been abandoned — the browser talking over the
+   * person who pressed stop. Every handler carries the generation it belongs
+   * to and does nothing once that number has moved on.
+   */
+  const generationRef = useRef(0);
 
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(spokenText);
-      utterance.lang = lang ?? (typeof navigator !== "undefined" ? navigator.language : "en-GB");
+  const speakSteps = useCallback(
+    (pieces: string[], onPieceStart?: (index: number) => void) => {
+      const generation = ++generationRef.current;
+      const current = () => generationRef.current === generation;
 
-      let handedOver = false;
-      const handOver = () => {
-        // onend and the watchdog can both arrive; the second must do nothing,
-        // or the microphone is started twice and the first one is orphaned.
-        if (handedOver) return;
-        handedOver = true;
-        clearWatchdog();
+      clearWatchdog();
+      if (synthSupported()) window.speechSynthesis.cancel();
+
+      const finish = () => {
+        if (!current()) return;
         setSpeaking(false);
+        // The turn goes back to them whether or not anything was said.
         if (activeRef.current) micRef.current.start();
       };
-      utterance.onend = handOver;
-      // A synthesiser that fails silently would leave the microphone shut and
-      // voice mode looking hung, so an error hands the turn over as well.
-      utterance.onerror = handOver;
+
+      let index = 0;
+      const sayNext = () => {
+        if (!current()) return;
+        if (index >= pieces.length) {
+          finish();
+          return;
+        }
+        const at = index++;
+        onPieceStart?.(at);
+
+        const spokenText = toSpokenText(pieces[at] ?? "");
+        if (!synthSupported()) {
+          finish();
+          return;
+        }
+        if (!spokenText) {
+          // Nothing to say for this one. Where it is one step of a board its
+          // picture is on screen, so hold it long enough to be seen; where it
+          // is the whole reply there is nothing to look at and nothing to
+          // wait for, and the turn goes straight back.
+          clearWatchdog();
+          if (pieces.length > 1) {
+            watchdogRef.current = setTimeout(sayNext, SILENT_STEP_DWELL_MS);
+          } else {
+            finish();
+          }
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(spokenText);
+        utterance.lang = lang ?? (typeof navigator !== "undefined" ? navigator.language : "en-GB");
+
+        let handedOver = false;
+        const handOver = () => {
+          // onend and the watchdog can both arrive; the second must do
+          // nothing, or two sequences run at once from here.
+          if (handedOver) return;
+          handedOver = true;
+          clearWatchdog();
+          sayNext();
+        };
+        utterance.onend = handOver;
+        // A synthesiser that fails silently would leave the microphone shut
+        // and voice mode looking hung, so an error moves on as well.
+        utterance.onerror = handOver;
+
+        clearWatchdog();
+        watchdogRef.current = setTimeout(handOver, speechWatchdogMs(spokenText));
+        window.speechSynthesis.speak(utterance);
+      };
 
       setSpeaking(true);
-      clearWatchdog();
-      watchdogRef.current = setTimeout(handOver, speechWatchdogMs(spokenText));
-      window.speechSynthesis.speak(utterance);
+      sayNext();
     },
     [lang]
   );
+
+  const speak = useCallback((text: string) => speakSteps([text]), [speakSteps]);
 
   const start = useCallback(() => {
     activeRef.current = true;
@@ -174,6 +240,9 @@ export function useVoiceConversation({
   }, [speak, who]);
 
   const stop = useCallback(() => {
+    // Moves the generation on, so an onend from the utterance being cancelled
+    // below cannot start the next piece of the sequence.
+    generationRef.current++;
     activeRef.current = false;
     setActive(false);
     setSpeaking(false);
@@ -188,6 +257,7 @@ export function useVoiceConversation({
   // microphone open on a page nobody is looking at.
   useEffect(
     () => () => {
+      generationRef.current++;
       activeRef.current = false;
       clearSilence();
       clearWatchdog();
@@ -216,5 +286,6 @@ export function useVoiceConversation({
     start,
     stop,
     speak,
+    speakSteps,
   };
 }
