@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysUntil, daysUntilLabel } from "@/lib/planner/days-until";
+import { daysUntil, daysUntilLabel, dueLabel } from "@/lib/planner/days-until";
 
 /**
  * The bug this replaces: dividing the millisecond gap and rounding it. At
@@ -38,5 +38,27 @@ describe("daysUntilLabel", () => {
     expect(daysUntilLabel(at("2026-09-22T22:00:00"), evening)).toBe("today");
     expect(daysUntilLabel(at("2026-09-23T08:00:00"), evening)).toBe("tomorrow");
     expect(daysUntilLabel(at("2026-09-25T08:00:00"), evening)).toBe("in 3 days");
+  });
+});
+
+describe("dueLabel", () => {
+  const now = new Date("2026-10-22T09:00:00Z");
+
+  it("phrases work that is still ahead", () => {
+    expect(dueLabel(new Date("2026-10-22T18:00:00Z"), now)).toBe("due today");
+    expect(dueLabel(new Date("2026-10-23T08:00:00Z"), now)).toBe("due tomorrow");
+    expect(dueLabel(new Date("2026-10-25T08:00:00Z"), now)).toBe("due in 3 days");
+  });
+
+  it("says how long overdue, instead of calling it today", () => {
+    // What this fixes: through the floored countdown, work three days late
+    // reached the tutor as "due today, overdue" — contradictory, and wrong
+    // by three days.
+    expect(dueLabel(new Date("2026-10-21T23:59:00Z"), now)).toBe("was due yesterday");
+    expect(dueLabel(new Date("2026-10-19T23:59:00Z"), now)).toBe("was due 3 days ago");
+  });
+
+  it("leaves the exam countdown alone, which floors on purpose", () => {
+    expect(daysUntilLabel(new Date("2026-10-19T23:59:00Z"), now)).toBe("today");
   });
 });

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { MAX_REVISION_LINKS, revisionLinksPrompt } from "./revision-links";
 import { linksForPrompt, setupPrompt, subjectSetup } from "./revision-setup";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
-import { daysUntilLabel } from "@/lib/planner/days-until";
+import { daysUntilLabel, dueLabel } from "@/lib/planner/days-until";
 
 /**
  * The school-only assistant.
@@ -142,7 +142,9 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
         const subject = h.subject ? ` (${h.subject.name})` : "";
         const marked =
           h.grade !== null && h.maxPoints !== null ? ` — marked ${h.grade} out of ${h.maxPoints}` : "";
-        return `- ${h.title}${subject} — ${daysUntilLabel(h.dueDate, now)}${h.status === "MISSED" ? ", overdue" : ""}${marked}`;
+        // dueLabel rather than the countdown: this list deliberately includes
+        // work whose deadline has passed, and the countdown floors at today.
+        return `- ${h.title}${subject} — ${dueLabel(h.dueDate, now)}${marked}`;
       }),
       "You may refer to any of these directly. They are this student's real assignments, not examples."
     );
