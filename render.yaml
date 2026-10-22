@@ -68,6 +68,21 @@ services:
       - key: AUTH_SECRET
         generateValue: true
 
+      # Google Classroom, if it is connected. Created in a Google Cloud
+      # project and prompted for in the dashboard — never in the repo.
+      #
+      # Leave both unset and the app simply says Classroom is not set up; it
+      # does not break. The redirect URI registered in Google must be exactly
+      # <AUTH_URL>/api/google/callback, or Google refuses the sign-in with a
+      # message that does not say why.
+      #
+      # Note that AUTH_SECRET above also encrypts the stored Google tokens, so
+      # regenerating it disconnects Classroom and it has to be connected again.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
       # Auth redirects are built from these — they must match the service's own
       # public URL, so they are filled in at creation time.
       - key: NEXTAUTH_URL

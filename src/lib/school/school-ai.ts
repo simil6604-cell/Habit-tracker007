@@ -62,8 +62,23 @@ const MAX_EXAMS = 8;
  */
 const MAX_REVISION_LINKS_IN_PROMPT = 16;
 
+/**
+ * How much homework the model is told about.
+ *
+ * Homework was missing from this block entirely, which only became visible
+ * when Google Classroom started filling the table: the student could ask "what
+ * should I do about this week's work?" and the tutor, which could see their
+ * exams and their weak topics, had no idea any work had been set.
+ *
+ * Capped and near-term only, for the same reason as the links above — a term's
+ * worth of assignments would crowd out the actual question.
+ */
+const MAX_HOMEWORK_IN_PROMPT = 12;
+const HOMEWORK_LOOKAHEAD_DAYS = 21;
+
 export async function buildSchoolContextBlock(userId: string, now: Date = new Date()): Promise<string> {
-  const [subjects, exams, weakTopics, confusions, revisionLinks] = await Promise.all([
+  const horizon = new Date(now.getTime() + HOMEWORK_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000);
+  const [subjects, exams, weakTopics, confusions, revisionLinks, homework] = await Promise.all([
     prisma.subject.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     prisma.exam.findMany({
       where: { userId, date: { gte: now } },
@@ -100,6 +115,14 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
         topic: { select: { name: true } },
       },
     }),
+    // Still open, and either due soon or already overdue. Work that is done
+    // is not what the tutor needs to reason about.
+    prisma.homework.findMany({
+      where: { userId, status: { not: "DONE" }, dueDate: { lte: horizon } },
+      include: { subject: { select: { name: true } } },
+      orderBy: { dueDate: "asc" },
+      take: MAX_HOMEWORK_IN_PROMPT,
+    }),
   ]);
 
   const lines: string[] = [];
@@ -108,6 +131,20 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
     lines.push(
       "Subjects this student takes (with the level each is sat at):",
       ...subjects.map((s) => `- ${s.name}${s.level ? ` — ${s.level.replace(/_/g, " ").toLowerCase()}` : ""}`)
+    );
+  }
+
+  if (homework.length > 0) {
+    lines.push(
+      "",
+      "Work that is set and not done yet:",
+      ...homework.map((h) => {
+        const subject = h.subject ? ` (${h.subject.name})` : "";
+        const marked =
+          h.grade !== null && h.maxPoints !== null ? ` — marked ${h.grade} out of ${h.maxPoints}` : "";
+        return `- ${h.title}${subject} — ${daysUntilLabel(h.dueDate, now)}${h.status === "MISSED" ? ", overdue" : ""}${marked}`;
+      }),
+      "You may refer to any of these directly. They are this student's real assignments, not examples."
     );
   }
 

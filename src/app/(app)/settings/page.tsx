@@ -29,15 +29,25 @@ import { SetupChecksCard } from "@/components/settings/setup-checks-card";
 import { schemaCheck } from "@/lib/config/schema-check";
 import { findDeployedSchemaGaps } from "@/lib/config/schema-probe";
 import { getSignupState } from "@/lib/auth/signup-state";
+import { GoogleClassroomCard } from "@/components/settings/google-classroom-card";
+import { getGoogleConnection } from "@/lib/google/connection";
+import { googleConfigProblem, isGoogleConfigured } from "@/lib/google/config";
 import { Badge } from "@/components/ui/badge";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  // The Google callback comes back here with a short code saying how it went.
+  searchParams: Promise<{ google?: string }>;
+}) {
+  const { google: googleCode } = await searchParams;
   const session = await auth();
   const userId = session!.user.id;
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   const school = await prisma.school.findUnique({ where: { userId } });
   const selectedSystems = parseEducationSystems(school?.educationSystem);
   const backup = backupStatus(user.lastBackupAt);
+  const googleConnection = await getGoogleConnection(userId);
 
   /**
    * The photo paths this account has, checked against the disk.
@@ -126,6 +136,18 @@ export default async function SettingsPage() {
             <Button type="submit" size="sm" variant="secondary">Save</Button>
           </form>
           <p className="mt-2 text-xs text-muted">{user.email}</p>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Google Classroom</CardTitle></CardHeader>
+        <CardContent>
+          <GoogleClassroomCard
+            connection={googleConnection}
+            configured={isGoogleConfigured()}
+            configProblem={googleConfigProblem()}
+            callbackCode={googleCode ?? null}
+          />
         </CardContent>
       </Card>
 
