@@ -25,3 +25,22 @@ export function daysUntilLabel(date: Date, now: Date = new Date()): string {
   if (days === 1) return "tomorrow";
   return `in ${days} days`;
 }
+
+/**
+ * The same count for something that was *due*, which can be in the past.
+ *
+ * `daysUntilLabel` floors at zero on purpose: a countdown to an exam reads
+ * better as "today" than as a negative number, and exams are only ever
+ * queried forwards. Homework is not — overdue work is exactly what a student
+ * needs reminding of — and through the floor it reached the tutor as "due
+ * today, overdue", which is both contradictory and wrong by however many days
+ * it had been sitting there.
+ */
+export function dueLabel(date: Date, now: Date = new Date()): string {
+  const days = differenceInCalendarDays(date, now);
+  if (days === 0) return "due today";
+  if (days === 1) return "due tomorrow";
+  if (days === -1) return "was due yesterday";
+  if (days < 0) return `was due ${Math.abs(days)} days ago`;
+  return `due in ${days} days`;
+}
