@@ -1,26 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { sanitizeSvg } from "@/lib/utils/sanitize-svg";
+import { SafeSvg } from "@/components/shared/safe-svg";
 
-/**
- * Renders an SVG the AI wrote. It's model output, so it goes through the
- * sanitizer before it ever reaches the DOM, and after mount rather than
- * during render so the server never emits unsanitized markup.
- */
+/** A diagram inside a chat bubble. */
 function SvgDiagram({ code }: { code: string }) {
-  const [safeHtml, setSafeHtml] = useState<string | null>(null);
-  useEffect(() => {
-    setSafeHtml(sanitizeSvg(code));
-  }, [code]);
-  if (!safeHtml) return null;
   return (
     // The sanitizer drops width/height so the drawing scales to its viewBox.
     // Capping the height keeps a sparsely-drawn diagram from claiming a huge
     // block of empty white inside the message.
-    <div
+    <SafeSvg
+      code={code}
       className="mt-2 rounded-lg border border-border bg-white p-2 [&>svg]:mx-auto [&>svg]:block [&>svg]:max-h-72 [&>svg]:w-full"
-      dangerouslySetInnerHTML={{ __html: safeHtml }}
     />
   );
 }
