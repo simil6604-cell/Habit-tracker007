@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysUntil, daysUntilLabel, dueLabel } from "@/lib/planner/days-until";
+import { daysAgoLabel, daysUntil, daysUntilLabel, dueLabel } from "@/lib/planner/days-until";
 
 /**
  * The bug this replaces: dividing the millisecond gap and rounding it. At
@@ -60,5 +60,21 @@ describe("dueLabel", () => {
 
   it("leaves the exam countdown alone, which floors on purpose", () => {
     expect(daysUntilLabel(new Date("2026-10-19T23:59:00Z"), now)).toBe("today");
+  });
+});
+
+describe("daysAgoLabel", () => {
+  const now = new Date("2026-10-23T12:00:00Z");
+
+  it("phrases something that already happened", () => {
+    expect(daysAgoLabel(new Date("2026-10-23T08:00:00Z"), now)).toBe("today");
+    expect(daysAgoLabel(new Date("2026-10-22T08:00:00Z"), now)).toBe("yesterday");
+    expect(daysAgoLabel(new Date("2026-10-20T08:00:00Z"), now)).toBe("3 days ago");
+  });
+
+  it("does not count forwards", () => {
+    // A clock skew, or a row written a moment ago, must not read as
+    // "-1 days ago".
+    expect(daysAgoLabel(new Date("2026-10-24T08:00:00Z"), now)).toBe("today");
   });
 });

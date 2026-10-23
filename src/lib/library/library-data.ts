@@ -27,7 +27,17 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
     }),
     prisma.classRecording.findMany({
       where: { userId },
-      select: { id: true, summary: true, transcript: true, createdAt: true, folderId: true, topic: { select: { id: true, name: true, subjectId: true } } },
+      select: {
+        id: true,
+        summary: true,
+        transcript: true,
+        createdAt: true,
+        folderId: true,
+        topic: { select: { id: true, name: true, subjectId: true } },
+        // A lesson recorded from the school AI has a subject at most, and
+        // often not even that.
+        subject: { select: { id: true, name: true } },
+      },
     }),
     prisma.learningLogEntry.findMany({
       where: { userId },
@@ -75,11 +85,13 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
       id: `recording-${rec.id}`,
       type: "RECORDING",
       kind: "Class recording",
-      title: preview(rec.summary) || `Recording from ${rec.topic.name}`,
+      title: preview(rec.summary) || `Recording from ${rec.topic?.name ?? rec.subject?.name ?? "a lesson"}`,
       detail: preview(rec.transcript),
-      context: rec.topic.name,
+      // A lesson recorded from the school AI has no topic, and may have no
+      // subject either — it is still a recording and still belongs in here.
+      context: rec.topic?.name ?? rec.subject?.name ?? "Lesson",
       createdAt: rec.createdAt,
-      href: `/school/subjects/${rec.topic.subjectId}`,
+      href: rec.topic ? `/school/subjects/${rec.topic.subjectId}` : "/school#school-ai",
       folderId: rec.folderId,
     })),
   ];
