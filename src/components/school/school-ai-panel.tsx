@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
 import { ExplainerBoard } from "@/components/school/explainer-board";
+import { LessonRecorder } from "@/components/school/lesson-recorder";
 import {
   hasBoard,
   parseExplainerSteps,
@@ -34,7 +35,13 @@ function speechSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMessageEntry[] }) {
+export function SchoolAIPanel({
+  initialMessages,
+  subjects,
+}: {
+  initialMessages: SchoolAIMessageEntry[];
+  subjects: { id: string; name: string }[];
+}) {
   const [messages, setMessages] = useState<SchoolAIMessageEntry[]>(initialMessages);
   const [input, setInput] = useState("");
   // Photos already on the server but not yet attached to a message.
@@ -337,6 +344,10 @@ export function SchoolAIPanel({ initialMessages }: { initialMessages: SchoolAIMe
           Voice input needs Chrome, Edge or Safari — this browser doesn&apos;t offer it, so type instead.
         </p>
       )}
+
+      <div className="mb-2">
+        <LessonRecorder subjects={subjects} />
+      </div>
 
       {hasBoard(boardSteps) && (
         <ExplainerBoard

@@ -44,3 +44,18 @@ export function dueLabel(date: Date, now: Date = new Date()): string {
   if (days < 0) return `was due ${Math.abs(days)} days ago`;
   return `due in ${days} days`;
 }
+
+/**
+ * When something happened, looking backwards: "today", "yesterday",
+ * "3 days ago".
+ *
+ * The third of these. `daysUntilLabel` counts down to a date and floors at
+ * today; `dueLabel` phrases a deadline that may have passed; this one is for
+ * things that are only ever in the past, like a lesson that was recorded.
+ */
+export function daysAgoLabel(date: Date, now: Date = new Date()): string {
+  const days = differenceInCalendarDays(now, date);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days} days ago`;
+}

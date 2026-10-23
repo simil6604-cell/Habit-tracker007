@@ -170,14 +170,15 @@ model Subject {
   revisionUrl        String?
   createdAt          DateTime @default(now())
 
-  topics         Topic[]
-  timetableSlots TimetableSlot[]
-  homework       Homework[]
-  exams          Exam[]
-  studySessions  StudySession[]
-  flashcards     Flashcard[]
-  revisionLinks  RevisionLink[]
-  markedPapers   MarkedPaper[]
+  topics          Topic[]
+  timetableSlots  TimetableSlot[]
+  homework        Homework[]
+  classRecordings ClassRecording[]
+  exams           Exam[]
+  studySessions   StudySession[]
+  flashcards      Flashcard[]
+  revisionLinks   RevisionLink[]
+  markedPapers    MarkedPaper[]
 
   @@index([userId])
 }
@@ -270,19 +271,34 @@ model NotePhoto {
 // once one's generated. The transcript itself is exactly what was
 // recognized/typed — never invented.
 model ClassRecording {
-  id         String         @id @default(cuid())
-  userId     String
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topicId    String
-  topic      Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  transcript String
-  summary    String?
-  createdAt  DateTime       @default(now())
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Optional, because a lesson is recorded while it is happening. Filing it
+  // under a topic means having already created that topic, and nobody is
+  // going to build a subject-and-topic tree in the first minute of a lesson.
+  // Recorded from the school AI it has no topic; recorded from a topic's own
+  // panel it does, and both end up in the same list.
+  topicId         String?
+  topic           Topic?         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  // Which subject the lesson was, when it was recorded without a topic.
+  subjectId       String?
+  subject         Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  // What the student called it, e.g. "Titration practical". Optional.
+  title           String?
+  transcript      String
+  // The AI's notes on the lesson. Named `summary` since before they were
+  // notes; the field is the same one.
+  summary         String?
+  // How long was actually recorded, so the list can say "42 min" rather than
+  // leaving a wall of text with no sense of what it is.
+  recordedSeconds Int?
+  createdAt       DateTime       @default(now())
   // Optional shelf in My Library. SetNull rather than Cascade: deleting a
   // folder is a tidying-up action, and it must never take the material inside
   // it with it — the items simply become unfiled again.
-  folderId   String?
-  folder     LibraryFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId        String?
+  folder          LibraryFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([topicId])
 }

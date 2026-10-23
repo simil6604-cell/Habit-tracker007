@@ -390,14 +390,31 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
 
     // The topic-level lists are restored from the top-level copies, which the
     // export includes precisely so an entry whose topic is gone still survives.
-    for (const [key, write] of [
-      ["learningLogEntries", (row: Record<string, unknown>) => tx.learningLogEntry.create({ data: row as never })],
-      ["classRecordings", (row: Record<string, unknown>) => tx.classRecording.create({ data: row as never })],
-      ["tutorMessages", (row: Record<string, unknown>) => tx.tutorMessage.create({ data: row as never })],
+    //
+    // The flag is which of them can exist without a topic at all. A lesson
+    // recorded from the school AI has none — it is recorded while the lesson
+    // is happening, long before anyone files it — and requiring one here
+    // would drop every such recording on restore, silently, which is the
+    // worst thing a restore can do.
+    for (const [key, write, topicOptional] of [
+      ["learningLogEntries", (row: Record<string, unknown>) => tx.learningLogEntry.create({ data: row as never }), false],
+      ["classRecordings", (row: Record<string, unknown>) => tx.classRecording.create({ data: row as never }), true],
+      ["tutorMessages", (row: Record<string, unknown>) => tx.tutorMessage.create({ data: row as never }), false],
     ] as const) {
       for (const entry of rows(data[key])) {
         const row = scalars(entry, owned);
-        if (!row || !link(row, "topicId")) continue;
+        if (!row) continue;
+        if (topicOptional) {
+          // Unfiled rather than lost, either way round: no topic to begin
+          // with, or a topic that did not survive.
+          if (row.topicId != null && !link(row, "topicId")) row.topicId = null;
+          // The subject was restored with a fresh id, so the old one in the
+          // backup points at nothing. Without this the row is written against
+          // a subject that no longer exists.
+          if (row.subjectId != null && !link(row, "subjectId")) row.subjectId = null;
+        } else if (!link(row, "topicId")) {
+          continue;
+        }
         // A folder that did not survive leaves the item unfiled rather than
         // taking the item down with it.
         if (row.folderId != null && !link(row, "folderId")) row.folderId = null;

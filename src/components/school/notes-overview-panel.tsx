@@ -21,7 +21,7 @@ export function NotesOverviewPanel({ entries }: { entries: NoteOverviewEntry[] }
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.subjectColor }} />
             <span className="text-xs font-medium">{e.kind === "PHOTO" ? "📷 Note photo" : "🎙️ Class recording"}</span>
             <span className="text-xs text-muted">
-              {e.subjectName} · {e.topicName}
+              {[e.subjectName, e.topicName].filter(Boolean).join(" · ") || "Not filed under a subject yet"}
             </span>
             <span className="ml-auto text-[11px] text-muted">{format(e.createdAt, "MMM d, HH:mm")}</span>
           </div>
@@ -35,7 +35,9 @@ export function NotesOverviewPanel({ entries }: { entries: NoteOverviewEntry[] }
           </p>
 
           <Link
-            href={`/school/subjects/${e.subjectId}`}
+            // A lesson recorded from the school AI may have no subject to
+            // open; the school page is where its notes are listed.
+            href={e.subjectId ? `/school/subjects/${e.subjectId}` : "/school#school-ai"}
             className="mt-2 inline-block text-xs font-medium text-accent hover:underline"
           >
             Open topic to revise or be quizzed →

@@ -53,7 +53,7 @@ export function SchoolAISection({ data }: { data: SchoolAISectionData }) {
           </div>
 
           <div className="flex h-[60vh] min-h-[440px] flex-col overflow-hidden">
-            <SchoolAIPanel initialMessages={data.messages} />
+            <SchoolAIPanel initialMessages={data.messages} subjects={data.subjects} />
           </div>
 
           {/*

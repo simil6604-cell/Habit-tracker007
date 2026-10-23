@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { MAX_REVISION_LINKS, revisionLinksPrompt } from "./revision-links";
 import { linksForPrompt, setupPrompt, subjectSetup } from "./revision-setup";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
-import { daysUntilLabel, dueLabel } from "@/lib/planner/days-until";
+import { daysAgoLabel, daysUntilLabel, dueLabel } from "@/lib/planner/days-until";
 
 /**
  * The school-only assistant.
@@ -74,11 +74,23 @@ const MAX_REVISION_LINKS_IN_PROMPT = 16;
  * worth of assignments would crowd out the actual question.
  */
 const MAX_HOMEWORK_IN_PROMPT = 12;
+
+/**
+ * How many recorded lessons the tutor is told about, and how much of each.
+ *
+ * The notes, never the transcript. An hour of speech-to-text is tens of
+ * thousands of characters of half-sentences; three of them would fill the
+ * whole prompt and crowd out the question being asked. The notes are the part
+ * that was already distilled, and they are what someone means when they ask
+ * "what did we do in chemistry on Tuesday".
+ */
+const MAX_LESSONS_IN_PROMPT = 4;
+const MAX_LESSON_NOTE_CHARS = 1_200;
 const HOMEWORK_LOOKAHEAD_DAYS = 21;
 
 export async function buildSchoolContextBlock(userId: string, now: Date = new Date()): Promise<string> {
   const horizon = new Date(now.getTime() + HOMEWORK_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000);
-  const [subjects, exams, weakTopics, confusions, revisionLinks, homework] = await Promise.all([
+  const [subjects, exams, weakTopics, confusions, revisionLinks, homework, lessons] = await Promise.all([
     prisma.subject.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     prisma.exam.findMany({
       where: { userId, date: { gte: now } },
@@ -123,6 +135,15 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
       orderBy: { dueDate: "asc" },
       take: MAX_HOMEWORK_IN_PROMPT,
     }),
+    // Lessons the student recorded. Only the ones that have notes: a bare
+    // transcript is not something to reason from, and an unsummarised one
+    // means the AI was unreachable when it was saved.
+    prisma.classRecording.findMany({
+      where: { userId, summary: { not: null } },
+      include: { subject: { select: { name: true } }, topic: { select: { subject: { select: { name: true } } } } },
+      orderBy: { createdAt: "desc" },
+      take: MAX_LESSONS_IN_PROMPT,
+    }),
   ]);
 
   const lines: string[] = [];
@@ -131,6 +152,25 @@ export async function buildSchoolContextBlock(userId: string, now: Date = new Da
     lines.push(
       "Subjects this student takes (with the level each is sat at):",
       ...subjects.map((s) => `- ${s.name}${s.level ? ` — ${s.level.replace(/_/g, " ").toLowerCase()}` : ""}`)
+    );
+  }
+
+  if (lessons.length > 0) {
+    lines.push("", "Lessons this student recorded, newest first — your notes on each:");
+    for (const lesson of lessons) {
+      const subject = lesson.subject?.name ?? lesson.topic?.subject.name ?? null;
+      const when = daysAgoLabel(lesson.createdAt, now);
+      const heading = [lesson.title?.trim(), subject].filter(Boolean).join(" · ") || "Lesson";
+      const notes = (lesson.summary ?? "").trim();
+      lines.push(
+        `- ${heading} (${when}):`,
+        notes.length > MAX_LESSON_NOTE_CHARS
+          ? `${notes.slice(0, MAX_LESSON_NOTE_CHARS)}… (notes continue; the full recording is saved in the app)`
+          : notes
+      );
+    }
+    lines.push(
+      "These are notes you wrote from a live recording of the lesson, so they may contain mishearings. Answer from them when asked what was covered, and say when something is not in them rather than filling it in."
     );
   }
 
