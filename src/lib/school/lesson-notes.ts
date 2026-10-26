@@ -119,3 +119,31 @@ Lay it out as: one line saying what the lesson was about, then the key points, t
 TRANSCRIPT:
 ${transcript}`;
 }
+
+/**
+ * Picking the recording back up when the browser drops it mid-lesson.
+ *
+ * Speech recognition ends its own session constantly — every pause in
+ * speech — and the hook reopens it. But a browser that ends sessions in a
+ * burst trips the hook's spin guard, and then recording stops for good. In a
+ * lesson that is the worst possible moment for a silent stop: the student is
+ * watching the teacher, not the screen, and finds out at the end that half
+ * the lesson was never heard.
+ *
+ * So the recorder resumes by itself — but a bounded number of times inside a
+ * window, because a browser that genuinely cannot do this (iOS Safari does
+ * not really support continuous recognition) must be allowed to fail and say
+ * so, rather than being retried forever.
+ */
+export const AUTO_RESUME_LIMIT = 3;
+export const AUTO_RESUME_WINDOW_MS = 120_000;
+export const AUTO_RESUME_DELAY_MS = 5_000;
+
+/** The resume attempts still inside the window. */
+export function recentResumes(stamps: number[], now: number): number[] {
+  return stamps.filter((t) => now - t < AUTO_RESUME_WINDOW_MS);
+}
+
+export function shouldAutoResume(stamps: number[], now: number): boolean {
+  return recentResumes(stamps, now).length < AUTO_RESUME_LIMIT;
+}

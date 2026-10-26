@@ -144,7 +144,10 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
         recognitionRef.current = null;
         setListening(false);
         setError(
-          "This browser keeps ending the recording immediately, so dictation can't stay open here. Type instead, or try Chrome."
+          // Worded for both the places this hook is used: dictating a question
+          // into a box, and recording a whole lesson. "Type instead" is right
+          // for the first and nonsense for the second, so it says neither.
+          "This browser keeps ending the recording immediately, so the microphone can't stay open here. Chrome handles this best."
         );
         return;
       }

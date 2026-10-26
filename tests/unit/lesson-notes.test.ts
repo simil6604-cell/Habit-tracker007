@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   appendChunk,
+  AUTO_RESUME_DELAY_MS,
+  AUTO_RESUME_WINDOW_MS,
+  recentResumes,
+  shouldAutoResume,
   buildNotesPrompt,
   formatClock,
   formatLength,
@@ -129,5 +133,32 @@ describe("buildNotesPrompt", () => {
     expect(bare).toContain("Only this.");
     expect(bare).not.toContain("Subject:");
     expect(bare.startsWith("Below is a transcript")).toBe(true);
+  });
+});
+
+describe("picking a dropped recording back up", () => {
+  const now = 1_000_000;
+
+  it("resumes a lesson the browser dropped", () => {
+    expect(shouldAutoResume([], now)).toBe(true);
+    expect(shouldAutoResume([now - 1000], now)).toBe(true);
+    expect(shouldAutoResume([now - 1000, now - 2000], now)).toBe(true);
+  });
+
+  it("stops trying when the browser plainly cannot do it", () => {
+    // Three failures inside two minutes is not a hiccup. Retrying for the
+    // rest of the lesson would spin and still record nothing.
+    expect(shouldAutoResume([now - 1000, now - 2000, now - 3000], now)).toBe(false);
+  });
+
+  it("forgets attempts once the lesson has been running fine again", () => {
+    // A hiccup at the start must not use up the budget for one an hour later.
+    const old = now - (AUTO_RESUME_WINDOW_MS + 1000);
+    expect(shouldAutoResume([old, old, old], now)).toBe(true);
+    expect(recentResumes([old, now - 500], now)).toEqual([now - 500]);
+  });
+
+  it("waits before trying, rather than hammering", () => {
+    expect(AUTO_RESUME_DELAY_MS).toBeGreaterThanOrEqual(2000);
   });
 });

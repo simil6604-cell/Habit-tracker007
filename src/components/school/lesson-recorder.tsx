@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
 import { ChevronDown, Mic, Square, Trash2 } from "lucide-react";
 import { AIProse } from "@/components/shared/ai-message";
@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import {
   appendChunk,
+  AUTO_RESUME_DELAY_MS,
   DRAFT_KEY,
   formatClock,
   formatLength,
   lessonLabel,
   MAX_TRANSCRIPT_CHARS,
+  shouldAutoResume,
   wordCount,
 } from "@/lib/school/lesson-notes";
 import {
@@ -57,6 +59,53 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
   });
 
   const listening = mic.listening;
+
+  /*
+   * Whether a lesson is meant to be running.
+   *
+   * Not the same as whether the recogniser is listening: the browser ends its
+   * own session on every pause, and ends it for good if those come in a
+   * burst. This is the difference between "stopped because you pressed stop"
+   * and "stopped on its own halfway through a lesson", and the second one has
+   * to be visible and recoverable — a silent stop is found out at the end,
+   * with half the lesson missing.
+   */
+  const recordingRef = useRef(false);
+  const [dropped, setDropped] = useState(false);
+  const resumesRef = useRef<number[]>([]);
+
+  function beginRecording() {
+    recordingRef.current = true;
+    setDropped(false);
+    mic.start();
+  }
+
+  function endRecording() {
+    recordingRef.current = false;
+    setDropped(false);
+    resumesRef.current = [];
+    mic.stop();
+  }
+
+  useEffect(() => {
+    if (!recordingRef.current) return;
+    if (listening) {
+      setDropped(false);
+      return;
+    }
+    // Wanted, but not listening: the browser dropped it.
+    setDropped(true);
+    const now = Date.now();
+    if (!shouldAutoResume(resumesRef.current, now)) return;
+    const timer = setTimeout(() => {
+      resumesRef.current = [...resumesRef.current, Date.now()];
+      mic.start();
+    }, AUTO_RESUME_DELAY_MS);
+    return () => clearTimeout(timer);
+    // mic.start is stable; re-running on every mic object would restart the
+    // timer on each render and never fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening]);
 
   // The clock only runs while it is actually listening, so a pause to answer
   // the door does not inflate how long the lesson is recorded as.
@@ -112,7 +161,7 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
   }, [open, lessons, loadLessons]);
 
   function stopAndSave() {
-    mic.stop();
+    endRecording();
     const text = transcript.trim();
     if (!text) return;
     setProblem(null);
@@ -209,8 +258,12 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
                   <Square className="mr-1 h-3.5 w-3.5" />
                   {pending ? "Saving…" : "Stop and save"}
                 </Button>
+              ) : dropped ? (
+                // The banner below carries the same action with the reason
+                // attached; two identical buttons is one too many.
+                null
               ) : (
-                <Button size="sm" onClick={mic.start} disabled={pending} data-testid="lesson-start">
+                <Button size="sm" onClick={beginRecording} disabled={pending} data-testid="lesson-start">
                   <Mic className="mr-1 h-3.5 w-3.5" />
                   {transcript ? "Carry on recording" : "Start recording"}
                 </Button>
@@ -226,7 +279,20 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
             </div>
           )}
 
-          {mic.error && <p className="text-xs text-danger">{mic.error}</p>}
+          {dropped && (
+            <div className="rounded-lg border border-danger/50 bg-danger/10 p-3 text-xs" data-testid="lesson-dropped">
+              <p className="font-medium">The recording stopped on its own.</p>
+              <p className="mt-1">
+                Everything up to this point is safe in the box below and backed up on this device. Press carry on to
+                keep recording the rest of the lesson.
+              </p>
+              {mic.error && <p className="mt-1 text-muted">{mic.error}</p>}
+              <Button size="sm" className="mt-2" onClick={beginRecording} data-testid="lesson-resume">
+                Carry on recording
+              </Button>
+            </div>
+          )}
+          {mic.error && !dropped && <p className="text-xs text-danger">{mic.error}</p>}
 
           <div className="flex flex-wrap gap-2">
             <input
