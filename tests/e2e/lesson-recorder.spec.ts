@@ -181,3 +181,41 @@ test("a lesson filed under nothing still survives a backup and restore", async (
 
   await fresh.close();
 });
+
+test("a lesson the browser drops is noticed, kept, and can be carried on", async ({ page }) => {
+  await stubMicrophone(page);
+  await register(page, "lesson6");
+  await page.goto("/school");
+
+  await recordALesson(page);
+
+  // What a browser does when it cannot keep the microphone open: it ends its
+  // own session over and over. The guard inside the hook then stops trying,
+  // and before this was handled, recording simply died — silently, while the
+  // student was watching the teacher rather than the screen.
+  for (let i = 0; i < 16; i++) {
+    await page.evaluate(() => {
+      const rec = (window as unknown as { __rec: { onend: (() => void) | null } }).__rec;
+      rec.onend?.();
+    });
+    await page.waitForTimeout(30);
+  }
+
+  const banner = page.getByTestId("lesson-dropped");
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText(/stopped on its own/i);
+  // The promise that must hold even here.
+  await expect(banner).toContainText(/safe/i);
+  await expect(page.getByTestId("lesson-transcript")).toHaveValue(/six point zero two/);
+
+  // One tap back into the lesson.
+  await page.getByTestId("lesson-resume").click();
+  await expect(page.getByTestId("lesson-stop")).toBeVisible();
+  await expect(banner).toHaveCount(0);
+
+  await page.evaluate(() => (window as unknown as { __hear: (s: string) => void }).__hear("And the rest of the lesson."));
+  await expect(page.getByTestId("lesson-transcript")).toHaveValue(/And the rest of the lesson/);
+
+  // Nothing from before the interruption was lost along the way.
+  await expect(page.getByTestId("lesson-transcript")).toHaveValue(/six point zero two/);
+});
