@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { aiFailureMessage } from "@/lib/ai/api-key";
-import { buildNotesPrompt, MAX_TRANSCRIPT_CHARS } from "./lesson-notes";
+import { buildNotesPrompt, lessonLabel, MAX_TRANSCRIPT_CHARS } from "./lesson-notes";
+import { getSchoolAIMessages, type SchoolAIMessageEntry } from "./school-ai-actions";
 
 async function requireUserId() {
   const session = await auth();
@@ -173,7 +174,13 @@ export async function getLessons(): Promise<LessonEntry[]> {
   });
 }
 
-export type SaveLessonResult = { lessons: LessonEntry[]; noted: boolean; problem: string | null };
+export type SaveLessonResult = {
+  lessons: LessonEntry[];
+  noted: boolean;
+  problem: string | null;
+  /** Present when the notes were put into the school AI conversation. */
+  messages?: SchoolAIMessageEntry[];
+};
 
 /**
  * Saves what was heard, then makes notes from it.
@@ -251,7 +258,11 @@ export async function makeNotesForLesson(recordingId: string): Promise<SaveLesso
     );
     await prisma.classRecording.update({ where: { id: recording.id }, data: { summary: notes } });
     revalidatePath("/school");
-    return { lessons: await getLessons(), noted: true, problem: null };
+    const lessons = await getLessons();
+    const updated = lessons.find((l) => l.id === recording.id);
+    // Same as the fresh route: notes are only useful if the tutor has them.
+    const messages = updated?.notes ? await postNotesToChat(updated) : undefined;
+    return { lessons, noted: true, problem: null, messages };
   } catch (err) {
     return { lessons: await getLessons(), noted: false, problem: aiFailureMessage(err) };
   }
@@ -263,4 +274,62 @@ export async function deleteLesson(recordingId: string): Promise<LessonEntry[]> 
   await prisma.classRecording.deleteMany({ where: { id: recordingId, userId } });
   revalidatePath("/school");
   return getLessons();
+}
+
+/**
+ * The one button asked for: turn what was just recorded into study notes, and
+ * hand them to the school AI.
+ *
+ * Saving a lesson already made notes, but they lived in the recorder's own
+ * list, and asking the tutor about them meant typing a request into the chat
+ * and hoping. "So that the school AI understands it" is the actual
+ * requirement, so the notes are written into the conversation itself: the
+ * command that was given, then the notes as the reply. From there, follow-up
+ * questions work the way every other question in that chat does, because the
+ * notes are simply part of the history.
+ */
+export async function makeStudyNotes(input: {
+  transcript: string;
+  subjectId?: string | null;
+  title?: string | null;
+  recordedSeconds?: number | null;
+}): Promise<SaveLessonResult | { error: string }> {
+  const saved = await saveLesson(input);
+  if ("error" in saved) return saved;
+
+  const newest = saved.lessons[0];
+  if (!newest?.notes) {
+    // Nothing worth putting in the conversation. The transcript is saved
+    // either way, and the problem explains why there are no notes.
+    return saved;
+  }
+
+  return { ...saved, messages: await postNotesToChat(newest) };
+}
+
+/**
+ * Puts a lesson's notes into the school AI conversation.
+ *
+ * Two messages rather than one: the command that was given, then the notes as
+ * the reply. A lone reply reads as the tutor speaking unprompted, and the
+ * history is what every later question is answered against — so it has to say
+ * what was asked for as well as what came back.
+ */
+async function postNotesToChat(lesson: LessonEntry): Promise<SchoolAIMessageEntry[]> {
+  const userId = await requireUserId();
+  const label = lessonLabel({
+    title: lesson.title,
+    subjectName: lesson.subjectName,
+    createdAt: lesson.createdAt,
+  });
+
+  await prisma.schoolAIMessage.create({
+    data: { userId, role: "USER", content: `Make study notes from the lesson I recorded: ${label}.` },
+  });
+  await prisma.schoolAIMessage.create({
+    data: { userId, role: "ASSISTANT", content: `**Study notes — ${label}**\n\n${lesson.notes}` },
+  });
+
+  revalidatePath("/school");
+  return getSchoolAIMessages();
 }

@@ -219,3 +219,31 @@ test("a lesson the browser drops is noticed, kept, and can be carried on", async
   // Nothing from before the interruption was lost along the way.
   await expect(page.getByTestId("lesson-transcript")).toHaveValue(/six point zero two/);
 });
+
+test("only one thing may hold the microphone at a time", async ({ page }) => {
+  await stubMicrophone(page);
+  await register(page, "lesson7");
+  await page.goto("/school");
+  await page.getByTestId("lesson-recorder-toggle").click();
+
+  // Reported with a screenshot: dictation was listening ("Stop & send") while
+  // a lesson recording ran for 34 seconds and captured nothing. Two
+  // recognisers asking for one microphone is how that happens.
+  await page.getByTestId("dictate").click();
+  await page.getByTestId("lesson-start").click();
+
+  await expect(page.getByTestId("lesson-stop")).toBeVisible();
+  await expect(page.getByTestId("dictate")).toBeDisabled();
+  await expect(page.getByTestId("voice-mode")).toBeDisabled();
+  // Two dead buttons with no explanation is its own kind of broken.
+  await expect(page.getByTestId("mic-busy")).toBeVisible();
+
+  // The lesson really is the one listening now.
+  await page.evaluate(() => (window as unknown as { __hear: (s: string) => void }).__hear("Heard by the lesson."));
+  await expect(page.getByTestId("lesson-transcript")).toHaveValue(/Heard by the lesson/);
+
+  // And they come back once it stops.
+  await page.getByTestId("lesson-stop").click();
+  await expect(page.getByTestId("dictate")).toBeEnabled();
+  await expect(page.getByTestId("mic-busy")).toHaveCount(0);
+});

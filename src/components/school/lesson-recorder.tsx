@@ -22,9 +22,10 @@ import {
   deleteLesson,
   getLessons,
   makeNotesForLesson,
-  saveLesson,
+  makeStudyNotes,
   type LessonEntry,
 } from "@/lib/school/class-recording-actions";
+import type { SchoolAIMessageEntry } from "@/lib/school/school-ai-actions";
 
 type Draft = { transcript: string; startedAt: number; seconds: number; subjectId: string; title: string };
 
@@ -42,7 +43,20 @@ type Draft = { transcript: string; startedAt: number; seconds: number; subjectId
  * is discarded, or a stray reload would otherwise take a whole lesson with
  * it. It is written as the lesson runs and offered back on the next visit.
  */
-export function LessonRecorder({ subjects }: { subjects: { id: string; name: string }[] }) {
+export function LessonRecorder({
+  subjects,
+  onNotes,
+  onRecordingChange,
+  onBeforeStart,
+}: {
+  subjects: { id: string; name: string }[];
+  /** The notes went into the conversation; the panel shows them. */
+  onNotes?: (messages: SchoolAIMessageEntry[]) => void;
+  /** So the panel can keep the other microphones out of the way. */
+  onRecordingChange?: (recording: boolean) => void;
+  /** Called before the microphone is opened, to stop anything else using it. */
+  onBeforeStart?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -75,13 +89,19 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
   const resumesRef = useRef<number[]>([]);
 
   function beginRecording() {
+    // Only one thing may hold the microphone. Dictation and voice chat live
+    // in the panel above, and a lesson started while one of them is listening
+    // records nothing at all — a clock ticking next to "0 words".
+    onBeforeStart?.();
     recordingRef.current = true;
+    onRecordingChange?.(true);
     setDropped(false);
     mic.start();
   }
 
   function endRecording() {
     recordingRef.current = false;
+    onRecordingChange?.(false);
     setDropped(false);
     resumesRef.current = [];
     mic.stop();
@@ -166,7 +186,7 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
     if (!text) return;
     setProblem(null);
     startTransition(async () => {
-      const result = await saveLesson({
+      const result = await makeStudyNotes({
         transcript: text,
         subjectId: subjectId || null,
         title: title || null,
@@ -180,6 +200,7 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
       // lose the lesson if the save failed.
       clearDraft();
       setLessons(result.lessons);
+      if (result.messages) onNotes?.(result.messages);
       setTranscript("");
       setTitle("");
       setSeconds(0);
@@ -256,21 +277,27 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
               {listening ? (
                 <Button size="sm" variant="danger" onClick={stopAndSave} disabled={pending} data-testid="lesson-stop">
                   <Square className="mr-1 h-3.5 w-3.5" />
-                  {pending ? "Saving…" : "Stop and save"}
+                  {pending ? "Making notes…" : "Stop and make notes"}
                 </Button>
               ) : dropped ? (
                 // The banner below carries the same action with the reason
                 // attached; two identical buttons is one too many.
                 null
               ) : (
-                <Button size="sm" onClick={beginRecording} disabled={pending} data-testid="lesson-start">
+                <Button
+                  size="sm"
+                  variant={transcript ? "outline" : "primary"}
+                  onClick={beginRecording}
+                  disabled={pending}
+                  data-testid="lesson-start"
+                >
                   <Mic className="mr-1 h-3.5 w-3.5" />
                   {transcript ? "Carry on recording" : "Start recording"}
                 </Button>
               )}
               {transcript && !listening && (
-                <Button size="sm" variant="outline" onClick={stopAndSave} disabled={pending} data-testid="lesson-save">
-                  {pending ? "Saving…" : "Save and make notes"}
+                <Button size="sm" onClick={stopAndSave} disabled={pending} data-testid="lesson-notes">
+                  {pending ? "Making notes…" : "Make study notes"}
                 </Button>
               )}
               <span className="text-xs text-muted" data-testid="lesson-meter">
@@ -377,11 +404,12 @@ export function LessonRecorder({ subjects }: { subjects: { id: string; name: str
                               else {
                                 setLessons(result.lessons);
                                 setProblem(result.problem);
+                                if (result.messages) onNotes?.(result.messages);
                               }
                             })
                           }
                         >
-                          Make notes now
+                          Make study notes
                         </Button>
                       </div>
                     )}
