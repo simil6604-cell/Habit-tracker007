@@ -55,6 +55,14 @@ export function SchoolAIPanel({
    * drawing inside the bubble, and lifting it out of there would show the same
    * picture twice.
    */
+  /*
+   * A lesson recording holds the microphone. Dictation and voice chat want
+   * the same one, and the browser gives it to whichever asked first — which
+   * is how a lesson runs for half a minute and records nothing. They are
+   * shut out of the way while a lesson is being recorded, rather than being
+   * left available and silently useless.
+   */
+  const [lessonRecording, setLessonRecording] = useState(false);
   const [boardSteps, setBoardSteps] = useState<ExplainerStep[]>([]);
   const [boardIndex, setBoardIndex] = useState(0);
   const [canSpeak, setCanSpeak] = useState(false);
@@ -242,12 +250,14 @@ export function SchoolAIPanel({
             size="sm"
             variant={voice.active ? "secondary" : "outline"}
             onClick={() => (voice.active ? voice.stop() : voice.start())}
-            disabled={!voice.supported || pending}
+            disabled={!voice.supported || pending || lessonRecording}
             data-testid="voice-mode"
             title={
-              voice.supported
-                ? "Talk it through out loud"
-                : "This browser can't do both speech recognition and speech"
+              lessonRecording
+                ? "A lesson is being recorded — stop that first, or it will record nothing"
+                : voice.supported
+                  ? "Talk it through out loud"
+                  : "This browser can't do both speech recognition and speech"
             }
           >
             <AudioLines size={14} />
@@ -258,8 +268,15 @@ export function SchoolAIPanel({
             size="sm"
             variant={mic.listening ? "secondary" : "outline"}
             onClick={toggleMic}
-            disabled={!mic.supported || pending}
-            title={mic.supported ? "Dictate a question" : "This browser has no speech recognition"}
+            disabled={!mic.supported || pending || lessonRecording}
+            data-testid="dictate"
+            title={
+              lessonRecording
+                ? "A lesson is being recorded — stop that first, or it will record nothing"
+                : mic.supported
+                  ? "Dictate a question"
+                  : "This browser has no speech recognition"
+            }
           >
             {mic.listening ? <MicOff size={14} /> : <Mic size={14} />}
             {mic.listening ? "Stop & send" : "Dictate"}
@@ -345,8 +362,25 @@ export function SchoolAIPanel({
         </p>
       )}
 
+      {lessonRecording && (
+        <p className="mb-2 text-xs text-muted" data-testid="mic-busy">
+          Recording a lesson — dictation and voice chat are off until it stops, because only one of them can use the
+          microphone at a time.
+        </p>
+      )}
+
       <div className="mb-2">
-        <LessonRecorder subjects={subjects} />
+        <LessonRecorder
+          subjects={subjects}
+          onNotes={setMessages}
+          onRecordingChange={setLessonRecording}
+          onBeforeStart={() => {
+            // Whatever else is holding the microphone, let go of it first.
+            if (voice.active) voice.stop();
+            if (mic.listening) mic.stop();
+            if (canSpeak) window.speechSynthesis.cancel();
+          }}
+        />
       </div>
 
       {hasBoard(boardSteps) && (
