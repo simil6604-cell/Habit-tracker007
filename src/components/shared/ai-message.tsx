@@ -10,7 +10,7 @@ function SvgDiagram({ code }: { code: string }) {
     // block of empty white inside the message.
     <SafeSvg
       code={code}
-      className="mt-2 rounded-lg border border-border bg-white p-2 [&>svg]:mx-auto [&>svg]:block [&>svg]:max-h-72 [&>svg]:w-full"
+      className="svg-focus mt-2 rounded-lg border border-border bg-white p-2 [&>svg]:mx-auto [&>svg]:block [&>svg]:max-h-72 [&>svg]:w-full"
     />
   );
 }

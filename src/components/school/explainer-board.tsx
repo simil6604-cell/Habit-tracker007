@@ -114,7 +114,7 @@ export function ExplainerBoard({
       <SafeSvg
         key={shown}
         code={step.svg ?? ""}
-        className="animate-fade-in-up rounded-xl bg-white p-2 [&>svg]:mx-auto [&>svg]:block [&>svg]:max-h-[24vh] [&>svg]:w-full"
+        className="explainer-board svg-focus animate-fade-in-up rounded-xl bg-white p-2 [&>svg]:mx-auto [&>svg]:block [&>svg]:max-h-[24vh] [&>svg]:w-full"
       />
 
       {step.caption && (

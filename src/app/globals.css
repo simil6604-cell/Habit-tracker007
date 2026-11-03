@@ -157,3 +157,46 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/*
+ * The one thing to look at in a drawing.
+ *
+ * The AI marks it by putting id="focus" on a shape — a rect round a cell
+ * part, a circle on a point of a graph, a rect over the line of working it
+ * is explaining. The highlight itself is drawn here rather than by the
+ * model, so it looks the same every time and cannot be given a fill that
+ * covers the drawing underneath: these rules beat the attributes in the
+ * markup, whatever the model wrote.
+ *
+ * Matched by attribute rather than by #focus, because the same drawing also
+ * appears in the transcript and ids are then no longer unique on the page.
+ */
+.svg-focus [id="focus"] {
+  fill: none;
+  stroke: #f59e0b;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+/* It pulses only on the board, where something is being said about it right
+   now. In the transcript the same mark is static — a highlighter line
+   through an old answer, not a thing demanding attention. */
+@keyframes focus-pulse {
+  0%, 100% {
+    opacity: 1;
+    stroke-width: 3;
+  }
+  50% {
+    opacity: 0.55;
+    stroke-width: 5;
+  }
+}
+.explainer-board [id="focus"] {
+  animation: focus-pulse 1.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .explainer-board [id="focus"] {
+    animation: none;
+  }
+}

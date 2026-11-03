@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { firstNameFor, SPOKEN_STYLE, spokenGreeting, toSpokenText } from "@/lib/ai/spoken-mode";
+import { firstNameFor, SPOKEN_BOARD_STYLE, SPOKEN_STYLE, spokenGreeting, toSpokenText } from "@/lib/ai/spoken-mode";
 import {
   speechWatchdogMs,
   SPEECH_WATCHDOG_FLOOR_MS,
@@ -166,5 +166,31 @@ describe("speechWatchdogMs", () => {
     // the allowance is about three times slower than natural speech.
     const words = 20;
     expect(speechWatchdogMs("word ".repeat(words))).toBeGreaterThan(words * 300);
+  });
+});
+
+describe("drawing that marks what to look at", () => {
+  it("asks for one marker with the id the app highlights", () => {
+    // The highlight itself is drawn by CSS against id="focus" — the model
+    // supplying its own stroke would be inconsistent, and a fill would
+    // cover the drawing underneath.
+    expect(SPOKEN_BOARD_STYLE).toContain('id="focus"');
+    expect(SPOKEN_BOARD_STYLE).toMatch(/exactly one marker/i);
+    expect(SPOKEN_BOARD_STYLE).toMatch(/no fill and no stroke of your own/i);
+  });
+
+  it("says how to draw the subjects that were asked about", () => {
+    // Asked for by name: a nucleus in biology, a diagram in economics, the
+    // working in maths — each needs different things to be right.
+    expect(SPOKEN_BOARD_STYLE).toMatch(/nucleus is drawn inside its cell/i);
+    expect(SPOKEN_BOARD_STYLE).toMatch(/label both axes and every curve/i);
+    expect(SPOKEN_BOARD_STYLE).toMatch(/one step per line/i);
+  });
+
+  it("forbids the two things that make a worked answer useless", () => {
+    // A shift redrawn in place loses what changed; a skipped line loses the
+    // only reason to show the working at all.
+    expect(SPOKEN_BOARD_STYLE).toMatch(/never by redrawing/i);
+    expect(SPOKEN_BOARD_STYLE).toMatch(/never jump a step/i);
   });
 });
