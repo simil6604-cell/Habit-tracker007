@@ -4,6 +4,7 @@ import { filterLibrary, parseSort, parseType, parseView } from "@/lib/library/li
 import { LibraryToolbar } from "@/components/library/library-toolbar";
 import { LibraryItems } from "@/components/library/library-items";
 import { LibraryFolders } from "@/components/library/library-folders";
+import { LibrarySections } from "@/components/library/library-sections";
 
 export const metadata = { title: "My Library" };
 
@@ -38,6 +39,7 @@ export default async function LibraryPage({
   const sort = parseSort(first("sort"));
   const view = parseView(first("view"));
   const rawFolder = first("folder");
+  const rawSection = first("section");
 
   const { items, folders } = await getLibrary(userId);
 
@@ -51,9 +53,30 @@ export default async function LibraryPage({
         ? rawFolder
         : null;
 
-  const result = filterLibrary(items, { query, type, sort, folderId });
+  // Sections only exist inside one open folder, so a section in the URL is
+  // read against that folder's own list — not against every section this
+  // account has. Another folder's id would otherwise filter a folder by a
+  // divider that is not in it and show nothing at all.
+  const activeFolder = folders.find((folder) => folder.id === folderId);
+  const sectionId =
+    activeFolder === undefined
+      ? null
+      : rawSection === "UNSORTED"
+        ? "UNSORTED"
+        : rawSection && activeFolder.sections.some((section) => section.id === rawSection)
+          ? rawSection
+          : null;
+
+  const result = filterLibrary(items, { query, type, sort, folderId, sectionId });
   const unfiledCount = items.filter((item) => item.folderId === null).length;
-  const activeFolderName = folders.find((folder) => folder.id === folderId)?.name;
+  const activeFolderName = activeFolder?.name;
+  const activeSectionName = activeFolder?.sections.find((section) => section.id === sectionId)?.name;
+  // Counted over the whole folder, not over the current results: this number
+  // is on the chip that takes you there, so it has to say what you will find
+  // once you arrive.
+  const unsortedInFolder = activeFolder
+    ? items.filter((item) => item.folderId === activeFolder.id && item.sectionId === null).length
+    : 0;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -69,10 +92,28 @@ export default async function LibraryPage({
 
       <LibraryFolders folders={folders} activeFolderId={folderId} unfiledCount={unfiledCount} />
 
+      {activeFolder && (
+        <LibrarySections
+          folderId={activeFolder.id}
+          folderName={activeFolder.name}
+          sections={activeFolder.sections}
+          activeSectionId={sectionId}
+          unsortedCount={unsortedInFolder}
+        />
+      )}
+
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl font-semibold tracking-tight">
-            {folderId === "UNFILED" ? "Not in a folder" : (activeFolderName ?? "Everything you have made")}
+            {folderId === "UNFILED"
+              ? "Not in a folder"
+              : activeFolderName
+                ? sectionId === "UNSORTED"
+                  ? `${activeFolderName} — not in a section`
+                  : activeSectionName
+                    ? `${activeFolderName} — ${activeSectionName}`
+                    : activeFolderName
+                : "Everything you have made"}
           </h2>
           <p className="text-sm text-muted" data-testid="library-result-count">
             {result.items.length === result.total

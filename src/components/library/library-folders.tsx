@@ -1,18 +1,20 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Folder, FolderOpen, Plus, X } from "lucide-react";
+import { Folder, FolderOpen, Plus, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   createLibraryFolder,
   deleteLibraryFolder,
+  setUpSubjectFolders,
   type FolderFormState,
 } from "@/lib/library/library-actions";
 import { MAX_FOLDER_NAME } from "@/lib/library/library";
+import { STARTER_FOLDERS, STARTER_SECTIONS } from "@/lib/library/starter-structure";
 
-export type FolderRow = { id: string; name: string; count: number };
+export type FolderRow = { id: string; name: string; count: number; sections: { id: string }[] };
 
 /**
  * The shelves, and the box that makes one.
@@ -39,17 +41,24 @@ export function LibraryFolders({
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-semibold tracking-tight">Folders</h2>
-        {folders.length > 0 && !open && (
-          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-            <Plus size={14} /> New folder
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <SetUpSubjects />
+          {folders.length > 0 && !open && (
+            <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+              <Plus size={14} /> New folder
+            </Button>
+          )}
+        </div>
       </div>
 
       {folders.length === 0 && !open && (
         <div className="rounded-2xl border border-dashed border-border px-5 py-6">
           <p className="text-sm font-medium">No folders yet</p>
-          <p className="mt-1 text-sm text-muted">Keep related material together.</p>
+          <p className="mt-1 text-sm text-muted">
+            One folder per subject, with sections inside it — {STARTER_FOLDERS.join(", ")}, each split into{" "}
+            {STARTER_SECTIONS.join(", ").toLowerCase()}. &ldquo;Set up my subjects&rdquo; builds all of it in one
+            tap, and you can rename or delete any of it afterwards.
+          </p>
           <Button size="sm" variant="outline" className="mt-3" onClick={() => setOpen(true)}>
             <Plus size={14} /> Create folder
           </Button>
@@ -114,6 +123,11 @@ export function LibraryFolders({
               <Link href={`/library?folder=${folder.id}`} className="flex min-w-0 flex-1 items-center gap-2">
                 {activeFolderId === folder.id ? <FolderOpen size={16} className="shrink-0 text-accent" /> : <Folder size={16} className="shrink-0 text-muted" />}
                 <span className="truncate text-sm font-medium">{folder.name}</span>
+                {folder.sections.length > 0 && (
+                  <span className="shrink-0 text-[11px] text-muted">
+                    {folder.sections.length} section{folder.sections.length === 1 ? "" : "s"}
+                  </span>
+                )}
                 <span className="ml-auto shrink-0 text-xs tabular-nums text-muted">{folder.count}</span>
               </Link>
               <form
@@ -142,6 +156,48 @@ export function LibraryFolders({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Builds the five subject folders and their sections in one tap.
+ *
+ * Safe to press twice: the action only adds what is missing, so the button
+ * does not need to hide itself once the folders exist — and it stays useful
+ * for a folder that was made by hand and has no sections yet.
+ */
+function SetUpSubjects() {
+  const [pending, startTransition] = useTransition();
+  const [done, setDone] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={pending}
+        data-testid="set-up-subjects"
+        onClick={() =>
+          startTransition(async () => {
+            const result = await setUpSubjectFolders();
+            setDone(
+              result.created === 0 && result.sections === 0
+                ? "Already set up — nothing to add."
+                : `Added ${result.created} folder${result.created === 1 ? "" : "s"} and ${result.sections} section${
+                    result.sections === 1 ? "" : "s"
+                  }.`
+            );
+          })
+        }
+      >
+        <Sparkles size={14} /> {pending ? "Setting up…" : "Set up my subjects"}
+      </Button>
+      {done && (
+        <p className="text-xs text-muted" role="status" data-testid="set-up-subjects-result">
+          {done}
+        </p>
+      )}
+    </div>
   );
 }
 

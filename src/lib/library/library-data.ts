@@ -13,17 +13,18 @@ import { preview, type LibraryItem } from "./library";
  * lines is a page that takes a second to load for no visible reason.
  */
 
-export type LibraryFolderRow = { id: string; name: string; count: number };
+export type LibrarySectionRow = { id: string; name: string; count: number };
+export type LibraryFolderRow = { id: string; name: string; count: number; sections: LibrarySectionRow[] };
 
 export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]; folders: LibraryFolderRow[] }> {
   const [flashcards, notePhotos, recordings, written, folders] = await Promise.all([
     prisma.flashcard.findMany({
       where: { userId },
-      select: { id: true, front: true, back: true, topic: true, createdAt: true, folderId: true, subject: { select: { name: true } } },
+      select: { id: true, front: true, back: true, topic: true, createdAt: true, folderId: true, sectionId: true, subject: { select: { name: true } } },
     }),
     prisma.notePhoto.findMany({
       where: { userId },
-      select: { id: true, summary: true, createdAt: true, folderId: true, topic: { select: { id: true, name: true, subjectId: true } } },
+      select: { id: true, summary: true, createdAt: true, folderId: true, sectionId: true, topic: { select: { id: true, name: true, subjectId: true } } },
     }),
     prisma.classRecording.findMany({
       where: { userId },
@@ -33,6 +34,7 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
         transcript: true,
         createdAt: true,
         folderId: true,
+        sectionId: true,
         topic: { select: { id: true, name: true, subjectId: true } },
         // A lesson recorded from the school AI has a subject at most, and
         // often not even that.
@@ -41,9 +43,18 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
     }),
     prisma.learningLogEntry.findMany({
       where: { userId },
-      select: { id: true, type: true, content: true, createdAt: true, folderId: true, topic: { select: { id: true, name: true, subjectId: true } } },
+      select: { id: true, type: true, content: true, createdAt: true, folderId: true, sectionId: true, topic: { select: { id: true, name: true, subjectId: true } } },
     }),
-    prisma.libraryFolder.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.libraryFolder.findMany({
+      where: { userId },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        // The dividers inside the folder, in the order they were made.
+        sections: { orderBy: [{ order: "asc" }, { name: "asc" }], select: { id: true, name: true } },
+      },
+    }),
   ]);
 
   const items: LibraryItem[] = [
@@ -57,6 +68,7 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
       createdAt: card.createdAt,
       href: "/school/flashcards",
       folderId: card.folderId,
+      sectionId: card.sectionId,
     })),
     ...notePhotos.map((note): LibraryItem => ({
       id: `note-${note.id}`,
@@ -68,6 +80,7 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
       createdAt: note.createdAt,
       href: `/school/subjects/${note.topic.subjectId}`,
       folderId: note.folderId,
+      sectionId: note.sectionId,
     })),
     ...written.map((entry): LibraryItem => ({
       id: `log-${entry.id}`,
@@ -80,6 +93,7 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
       createdAt: entry.createdAt,
       href: `/school/subjects/${entry.topic.subjectId}`,
       folderId: entry.folderId,
+      sectionId: entry.sectionId,
     })),
     ...recordings.map((rec): LibraryItem => ({
       id: `recording-${rec.id}`,
@@ -93,17 +107,24 @@ export async function getLibrary(userId: string): Promise<{ items: LibraryItem[]
       createdAt: rec.createdAt,
       href: rec.topic ? `/school/subjects/${rec.topic.subjectId}` : "/school#school-ai",
       folderId: rec.folderId,
+      sectionId: rec.sectionId,
     })),
   ];
 
   const counts = new Map<string, number>();
+  const sectionCounts = new Map<string, number>();
   for (const item of items) {
     if (item.folderId) counts.set(item.folderId, (counts.get(item.folderId) ?? 0) + 1);
+    if (item.sectionId) sectionCounts.set(item.sectionId, (sectionCounts.get(item.sectionId) ?? 0) + 1);
   }
 
   return {
     items,
-    folders: folders.map((folder) => ({ ...folder, count: counts.get(folder.id) ?? 0 })),
+    folders: folders.map((folder) => ({
+      ...folder,
+      count: counts.get(folder.id) ?? 0,
+      sections: folder.sections.map((section) => ({ ...section, count: sectionCounts.get(section.id) ?? 0 })),
+    })),
   };
 }
 

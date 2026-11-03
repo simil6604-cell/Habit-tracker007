@@ -70,6 +70,7 @@ export function LibraryItems({
                 itemId={item.id}
                 itemTitle={item.title}
                 folderId={item.folderId}
+                sectionId={item.sectionId}
                 folders={folders}
               />
             </div>

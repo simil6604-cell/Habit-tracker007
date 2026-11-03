@@ -82,6 +82,7 @@ model User {
   schoolAIUploads    SchoolAIUpload[]
   examPlans          ExamPlan[]
   libraryFolders     LibraryFolder[]
+  librarySections    LibrarySection[]
   revisionLinks      RevisionLink[]
   footballLinks      FootballLink[]
   markedPapers       MarkedPaper[]
@@ -247,19 +248,21 @@ model TutorMessage {
 // as uploaded, stored as-is; summary is a real AI transcription/summary of
 // it when a real AI is connected — null (not invented) otherwise.
 model NotePhoto {
-  id        String         @id @default(cuid())
+  id        String          @id @default(cuid())
   userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   topicId   String
-  topic     Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topic     Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
   imagePath String
   summary   String?
-  createdAt DateTime       @default(now())
+  createdAt DateTime        @default(now())
   // Optional shelf in My Library. SetNull rather than Cascade: deleting a
   // folder is a tidying-up action, and it must never take the material inside
   // it with it — the items simply become unfiled again.
   folderId  String?
-  folder    LibraryFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folder    LibraryFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  sectionId String?
+  section   LibrarySection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([topicId])
   // The setup card reads every photo this user owns; without this that is a
@@ -272,19 +275,19 @@ model NotePhoto {
 // once one's generated. The transcript itself is exactly what was
 // recognized/typed — never invented.
 model ClassRecording {
-  id              String         @id @default(cuid())
+  id              String          @id @default(cuid())
   userId          String
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Optional, because a lesson is recorded while it is happening. Filing it
   // under a topic means having already created that topic, and nobody is
   // going to build a subject-and-topic tree in the first minute of a lesson.
   // Recorded from the school AI it has no topic; recorded from a topic's own
   // panel it does, and both end up in the same list.
   topicId         String?
-  topic           Topic?         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topic           Topic?          @relation(fields: [topicId], references: [id], onDelete: Cascade)
   // Which subject the lesson was, when it was recorded without a topic.
   subjectId       String?
-  subject         Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  subject         Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   // What the student called it, e.g. "Titration practical". Optional.
   title           String?
   transcript      String
@@ -294,12 +297,14 @@ model ClassRecording {
   // How long was actually recorded, so the list can say "42 min" rather than
   // leaving a wall of text with no sense of what it is.
   recordedSeconds Int?
-  createdAt       DateTime       @default(now())
+  createdAt       DateTime        @default(now())
   // Optional shelf in My Library. SetNull rather than Cascade: deleting a
   // folder is a tidying-up action, and it must never take the material inside
   // it with it — the items simply become unfiled again.
   folderId        String?
-  folder          LibraryFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folder          LibraryFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  sectionId       String?
+  section         LibrarySection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([topicId])
 }
@@ -308,19 +313,21 @@ model ClassRecording {
 // they understand, what they don't, and what they're still asking about.
 // Feeds the end-of-session quiz so it targets the actual gaps.
 model LearningLogEntry {
-  id        String         @id @default(cuid())
+  id        String          @id @default(cuid())
   userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   topicId   String
-  topic     Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topic     Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
   type      String // UNDERSTOOD | CONFUSED | QUESTION
   content   String
-  createdAt DateTime       @default(now())
+  createdAt DateTime        @default(now())
   // Optional shelf in My Library. SetNull rather than Cascade: deleting a
   // folder is a tidying-up action, and it must never take the material inside
   // it with it — the items simply become unfiled again.
   folderId  String?
-  folder    LibraryFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folder    LibraryFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  sectionId String?
+  section   LibrarySection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([topicId, type])
 }
@@ -408,21 +415,21 @@ model SchoolHabitLog {
 }
 
 model Flashcard {
-  id               String         @id @default(cuid())
+  id               String          @id @default(cuid())
   userId           String
-  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   subjectId        String?
-  subject          Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  subject          Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   topic            String?
   front            String
   back             String
   // Simple SM-2-style spaced repetition state
-  interval         Int            @default(1) // days
-  easeFactor       Float          @default(2.5)
-  repetitions      Int            @default(0)
-  dueDate          DateTime       @default(now())
+  interval         Int             @default(1) // days
+  easeFactor       Float           @default(2.5)
+  repetitions      Int             @default(0)
+  dueDate          DateTime        @default(now())
   lastResult       String? // AGAIN | HARD | GOOD | EASY
-  createdAt        DateTime       @default(now())
+  createdAt        DateTime        @default(now())
   // The learning-log entry this card was generated from, when it came from
   // something you marked as not understood. Kept so a second "generate" pass
   // doesn't make a duplicate card for the same confusion, and so the card can
@@ -432,7 +439,9 @@ model Flashcard {
   // folder is a tidying-up action, and it must never take the material inside
   // it with it — the items simply become unfiled again.
   folderId         String?
-  folder           LibraryFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folder           LibraryFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  sectionId        String?
+  section          LibrarySection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([userId, dueDate])
   @@index([userId, sourceLogEntryId])
@@ -909,12 +918,41 @@ model LibraryFolder {
   name      String
   createdAt DateTime @default(now())
 
+  sections        LibrarySection[]
   flashcards      Flashcard[]
   notePhotos      NotePhoto[]
   classRecordings ClassRecording[]
   learningLog     LearningLogEntry[]
 
   @@unique([userId, name])
+  @@index([userId])
+}
+
+// A division inside a folder, the way a school notebook has dividers: the
+// folder is the subject, the section is "Formative assessment" or
+// "Corrections", and the things filed in it are the pages.
+//
+// A second level rather than more folders, because "Economics — corrections"
+// and "Biology — corrections" as two top-level folders stops being a
+// structure the moment there are five subjects.
+model LibrarySection {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folderId  String
+  folder    LibraryFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  name      String
+  // Set when created so the order is the one they were made in, and can be
+  // changed later without renaming anything.
+  order     Int           @default(0)
+  createdAt DateTime      @default(now())
+
+  flashcards      Flashcard[]
+  notePhotos      NotePhoto[]
+  classRecordings ClassRecording[]
+  learningLog     LearningLogEntry[]
+
+  @@unique([folderId, name])
   @@index([userId])
 }
 

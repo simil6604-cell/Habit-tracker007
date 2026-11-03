@@ -959,6 +959,131 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("library-sort")).toHaveValue("NEWEST");
   });
 
+  test("library: a notebook per subject, sections inside it, and nothing lost when one goes", async () => {
+    // Asked for with a picture of OneNote: notebook → section → page. The
+    // folders are the notebooks, the sections are the dividers, and the
+    // material already in the app is the pages.
+    const cardFront = `Mitose Phasen ${Date.now()}`;
+    await page.goto("/school/flashcards");
+    await page.fill('input[name="front"]', cardFront);
+    await page.fill('input[name="back"]', "Prophase, Metaphase, Anaphase, Telophase");
+    await page.getByRole("button", { name: "Add card" }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: cardFront })).toBeVisible();
+
+    await page.goto("/library");
+    await page.getByTestId("set-up-subjects").click();
+    await expect(page.getByTestId("set-up-subjects-result")).toContainText(/Added 5 folders and 15 sections/);
+
+    const shelves = page.getByTestId("library-folders");
+    for (const subject of ["Economics", "Biology", "Mathematics", "English", "German"]) {
+      await expect(shelves, `${subject} has a folder`).toContainText(subject);
+    }
+
+    // Pressing it again must not give anyone two of everything.
+    await page.getByTestId("set-up-subjects").click();
+    await expect(page.getByTestId("set-up-subjects-result")).toContainText(/Already set up/);
+    expect(await shelves.getByRole("link", { name: /^Biology/ }).count(), "one Biology, not two").toBe(1);
+
+    // File the card into Biology → Corrections. Selected by the option's own
+    // value, not its label: five subjects each have a "Corrections", and
+    // picking by label would quietly file it under Economics.
+    const card = page.locator('[data-testid^="library-item-flashcard-"]').filter({ hasText: cardFront });
+    const corrections = await card
+      .locator("option", { hasText: "Biology › Corrections" })
+      .getAttribute("value");
+    expect(corrections, "the picker offers a section inside Biology").toContain(":");
+    await card.locator("select").selectOption(corrections!);
+
+    // Open the notebook: its dividers appear, with the card under one of them.
+    const biologyHref = await shelves.getByRole("link", { name: /^Biology/ }).getAttribute("href");
+    await page.goto(biologyHref!);
+    const sections = page.getByTestId("library-sections");
+    await expect(sections).toContainText("Sections in Biology");
+    for (const divider of ["Lesson notes", "Formative assessment", "Corrections"]) {
+      await expect(sections, `${divider} is a section of Biology`).toContainText(divider);
+    }
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // One divider at a time.
+    await sections.getByRole("link", { name: /^Corrections/ }).click();
+    await expect(page.getByRole("heading", { name: "Biology — Corrections" })).toBeVisible();
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // "Not in a section" has to exist, or filing one thing into a divider
+    // would hide everything else in the folder.
+    await sections.getByRole("link", { name: /^Not in a section/ }).click();
+    await expect(page.getByRole("heading", { name: "Biology — not in a section" })).toBeVisible();
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toHaveCount(0);
+
+    // A divider is renameable — this is a starting point, not a structure the
+    // app insists on.
+    await page.getByRole("button", { name: "Rename section Lesson notes" }).click();
+    await page.getByRole("textbox", { name: "Rename section Lesson notes" }).fill("Unterricht");
+    await page.getByRole("button", { name: "Save section name" }).click();
+    await expect(sections).toContainText("Unterricht");
+    await expect(sections).not.toContainText("Lesson notes");
+
+    // A section id from a DIFFERENT folder must not filter this one by a
+    // divider it does not have — that would show an empty Biology.
+    const economicsHref = await shelves.getByRole("link", { name: /^Economics/ }).getAttribute("href");
+    await page.goto(economicsHref!);
+    const economicsSection = await page
+      .getByTestId("library-sections")
+      .getByRole("link", { name: /^Corrections/ })
+      .getAttribute("href");
+    const strayId = new URL(economicsSection!, "http://localhost").searchParams.get("section");
+    await page.goto(`${biologyHref}&section=${strayId}`);
+    await expect(page.getByRole("heading", { name: "Biology", exact: true })).toBeVisible();
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // Junk falls back the same way the folder id does.
+    await page.goto(`${biologyHref}&section=not-a-real-section-id`);
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // Deleting a divider keeps what was in it: it stays in the folder and
+    // becomes unsorted, the same promise a folder makes.
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Delete section Corrections" }).click();
+    await expect(page.getByTestId("library-sections")).not.toContainText("Corrections");
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+    await page.getByTestId("library-sections").getByRole("link", { name: /^Not in a section/ }).click();
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+
+    // Deleting a whole folder while something is filed inside one of its
+    // sections. Two SetNulls have to fire, one of them through the section
+    // the folder takes with it, and a foreign key that refuses here would
+    // lose the card rather than unfile it.
+    const spare = `Nebensatz Komma ${Date.now()}`;
+    await page.goto("/school/flashcards");
+    await page.fill('input[name="front"]', spare);
+    await page.fill('input[name="back"]', "Vor dem Nebensatz steht ein Komma");
+    await page.getByRole("button", { name: "Add card" }).click();
+    await page.goto("/library");
+    const spareCard = page.locator('[data-testid^="library-item-flashcard-"]').filter({ hasText: spare });
+    const germanSection = await spareCard
+      .locator("option", { hasText: "German › Corrections" })
+      .getAttribute("value");
+    await spareCard.locator("select").selectOption(germanSection!);
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Delete folder German" }).click();
+    await expect(shelves).not.toContainText("German");
+    await page.goto("/library?folder=UNFILED");
+    await expect(page.getByTestId("library-items").getByText(spare)).toBeVisible();
+
+    await page.goto(biologyHref!);
+    // File it under the renamed divider and leave it there. The backup and
+    // restore further down this file carry this account, and an item actually
+    // sitting in a section is the only thing that proves the section link
+    // survives being written out and read back under new ids.
+    const unterricht = await card
+      .locator("option", { hasText: "Biology › Unterricht" })
+      .getAttribute("value");
+    await card.locator("select").selectOption(unterricht!);
+    await page.goto(biologyHref!);
+    await page.getByTestId("library-sections").getByRole("link", { name: /^Unterricht/ }).click();
+    await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
+  });
+
   test("progress: School, Gym and Football each get their own plan, never a shared one", async () => {
     // The whole requirement in one test: three plans, three pages, and no
     // number that mixes them. A single combined score would hide exactly what
@@ -2288,6 +2413,21 @@ test.describe.serial("full app walkthrough", () => {
       expect(restoredSrc, restoredSrc).toContain("/uploads/");
       expect((await freshPage.request.get(restoredSrc)).status(), restoredSrc).toBe(200);
     }
+
+    // The library's structure came back as structure: the subject folder, the
+    // divider inside it, and the card still filed under that divider. All
+    // three ids are rewritten during a restore, so a card whose section link
+    // was dropped would land back in the folder looking unsorted — tidy
+    // enough to miss, and wrong.
+    await freshPage.goto("/library");
+    const restoredBiology = await freshPage
+      .getByTestId("library-folders")
+      .getByRole("link", { name: /^Biology/ })
+      .getAttribute("href");
+    await freshPage.goto(restoredBiology!);
+    await expect(freshPage.getByTestId("library-sections")).toContainText("Unterricht");
+    await freshPage.getByTestId("library-sections").getByRole("link", { name: /^Unterricht/ }).click();
+    await expect(freshPage.getByTestId("library-items").getByText(/Mitose Phasen/)).toBeVisible();
 
     // And the drill video saved for Agility is back on the skill it belongs to.
     await freshPage.goto("/football");

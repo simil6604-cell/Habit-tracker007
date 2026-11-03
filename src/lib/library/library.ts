@@ -49,6 +49,8 @@ export type LibraryItem = {
   /** Where clicking it goes — the page that owns the thing. */
   href: string;
   folderId: string | null;
+  /** Which section inside that folder, when it has been filed that far. */
+  sectionId: string | null;
 };
 
 export const LIBRARY_TABS: { value: "ALL" | LibraryType; label: string }[] = [
@@ -143,6 +145,12 @@ export type LibraryFilter = {
   sort: LibrarySort;
   /** null means "everything", a string means one folder, "UNFILED" means no folder. */
   folderId: string | null | "UNFILED";
+  /**
+   * Narrows to one section inside the folder. "UNSORTED" is the material that
+   * is in the folder but not in any of its sections — which has to be
+   * reachable, or filing one thing into a section would hide everything else.
+   */
+  sectionId?: string | null | "UNSORTED";
 };
 
 export type LibraryResult = {
@@ -156,6 +164,14 @@ export function filterLibrary(all: LibraryItem[], filter: LibraryFilter): Librar
   const inScope = all.filter((item) => {
     if (filter.folderId === "UNFILED" && item.folderId !== null) return false;
     if (typeof filter.folderId === "string" && filter.folderId !== "UNFILED" && item.folderId !== filter.folderId) {
+      return false;
+    }
+    if (filter.sectionId === "UNSORTED" && item.sectionId !== null) return false;
+    if (
+      typeof filter.sectionId === "string" &&
+      filter.sectionId !== "UNSORTED" &&
+      item.sectionId !== filter.sectionId
+    ) {
       return false;
     }
     return matchesQuery(item, filter.query);

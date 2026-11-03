@@ -208,6 +208,7 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   // After the things that sit in folders: those rows carry folderId, and this
   // relation is SetNull, so deleting folders first means SQLite rewrites every
   // one of them to null on the way to deleting them anyway.
+  await tx.librarySection.deleteMany({ where: { userId } });
   await tx.libraryFolder.deleteMany({ where: { userId } });
   await tx.revisionLink.deleteMany({ where: { userId } });
   await tx.schoolHabit.deleteMany({ where: { userId } });
@@ -326,6 +327,15 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       await create((r) => tx.libraryFolder.create({ data: r as never }), withNewId(row));
     }
 
+    // Sections after their folders, so each has something to belong to. One
+    // whose folder did not survive is skipped: a divider with no notebook is
+    // not something to put back.
+    for (const section of rows(data.librarySections)) {
+      const row = scalars(section, owned);
+      if (!row || !link(row, "folderId")) continue;
+      await create((r) => tx.librarySection.create({ data: r as never }), withNewId(row));
+    }
+
     // Parents before children, and a child whose parent didn't make it is
     // skipped rather than re-parented to something arbitrary.
     for (const subject of rows(data.subjects)) {
@@ -419,6 +429,8 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
         // A folder that did not survive leaves the item unfiled rather than
         // taking the item down with it.
         if (row.folderId != null && !link(row, "folderId")) row.folderId = null;
+        // Same for the section: the id in the file is the old one.
+        if (row.sectionId != null && !link(row, "sectionId")) row.sectionId = null;
         await create(write, withNewId(row));
       }
     }
@@ -481,6 +493,8 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       if (!link(row, "subjectId")) row.subjectId = null;
       if (row.sourceLogEntryId != null && !link(row, "sourceLogEntryId")) row.sourceLogEntryId = null;
       if (row.folderId != null && !link(row, "folderId")) row.folderId = null;
+      // Same for the section: the id in the file is the old one.
+      if (row.sectionId != null && !link(row, "sectionId")) row.sectionId = null;
       await create((r) => tx.flashcard.create({ data: r as never }), withNewId(row));
     }
 
@@ -491,6 +505,8 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
       // A note photo is its picture — without the file there is nothing to show.
       if (!rewritten) continue;
       if (row.folderId != null && !link(row, "folderId")) row.folderId = null;
+      // Same for the section: the id in the file is the old one.
+      if (row.sectionId != null && !link(row, "sectionId")) row.sectionId = null;
       await create((r) => tx.notePhoto.create({ data: r as never }), withNewId({ ...row, imagePath: rewritten }));
     }
 
