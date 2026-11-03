@@ -72,29 +72,54 @@ instruction to include at most one diagram: on the board a short series is the p
  * seed instead of at random so a test can say which one it got.
  */
 const COACH_GREETINGS = [
-  "Hey — what's up?",
-  "I'm listening. What do you need?",
-  "Go on, what's on your mind?",
-  "Right, what are we doing?",
-  "Hey. What do you want to sort out?",
+  "Hi{name} — how can I help?",
+  "Hey{name}. What do you need?",
+  "Hi{name} — what are we sorting out?",
+  "Hey{name}, what's on your mind?",
+  "Hi{name}. What do you want to look at?",
 ];
 
 const TUTOR_GREETINGS = [
-  "Hey — what are we working on?",
-  "I'm listening. What's the topic?",
-  "Go on, what are you stuck on?",
-  "Right, what shall we look at?",
-  "Hey. What do you want to go through?",
+  "Hi{name} — what are we working on?",
+  "Hey{name}. What can I help with?",
+  "Hi{name} — what are you stuck on?",
+  "Hey{name}, what shall we go through?",
+  "Hi{name}. What do you want to work through?",
 ];
 
 export type VoiceWho = "coach" | "tutor";
 
-export function spokenGreeting(who: VoiceWho, seed: number = Date.now()): string {
+/**
+ * The first name, if there is one worth saying.
+ *
+ * First name only: being greeted with your full name sounds like a doctor's
+ * waiting room rather than someone you are about to talk to. An account
+ * whose name was never filled in, or is an email address, gets no name at
+ * all rather than "Hi svnfvytbzj".
+ */
+export function firstNameFor(name: string | null | undefined): string | null {
+  const trimmed = (name ?? "").trim();
+  if (!trimmed || trimmed.includes("@")) return null;
+  const first = trimmed.split(/\s+/)[0];
+  return first.length >= 2 && first.length <= 20 ? first : null;
+}
+
+/**
+ * How it opens when voice is switched on.
+ *
+ * It says the name of whoever is signed in and offers to help, which is what
+ * was asked for: a greeting that sounds like being spoken to rather than a
+ * machine coming online. Varied rather than one fixed line, because the same
+ * sentence every time is exactly what makes an assistant feel like a machine.
+ * Picked from a seed instead of at random so a test can say which one it got.
+ */
+export function spokenGreeting(who: VoiceWho, seed: number = Date.now(), name?: string | null): string {
   const list = who === "tutor" ? TUTOR_GREETINGS : COACH_GREETINGS;
   // Floor and modulo on a non-negative index: a negative seed would land
   // outside the list and hand the speech synthesiser `undefined`.
   const index = Math.abs(Math.floor(seed)) % list.length;
-  return list[index];
+  const first = firstNameFor(name);
+  return list[index].replace("{name}", first ? ` ${first}` : "");
 }
 
 /**

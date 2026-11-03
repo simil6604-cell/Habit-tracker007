@@ -22,12 +22,14 @@ import {
   photoStorageCheck,
   signupCheck,
   summarize,
+  humanVoiceCheck
 } from "@/lib/config/setup-checks";
 import { getAIHealth } from "@/lib/ai/health";
 import { UPLOAD_ROOT, uploadedImageExists } from "@/lib/uploads/save-image";
 import { SetupChecksCard } from "@/components/settings/setup-checks-card";
 import { schemaCheck } from "@/lib/config/schema-check";
 import { findDeployedSchemaGaps } from "@/lib/config/schema-probe";
+import { humanVoiceId, isHumanVoiceConfigured } from "@/lib/ai/voice/human-voice";
 import { getSignupState } from "@/lib/auth/signup-state";
 import { GoogleClassroomCard } from "@/components/settings/google-classroom-card";
 import { getGoogleConnection } from "@/lib/google/connection";
@@ -106,6 +108,7 @@ export default async function SettingsPage({
     // some other way, and what matters is the one dates are actually built in.
     timezoneCheck(Intl.DateTimeFormat().resolvedOptions().timeZone),
     aiCheck(getAIHealth()),
+    humanVoiceCheck(isHumanVoiceConfigured(), humanVoiceId()),
     backupCheck(user.lastBackupAt),
   ];
   const summary = summarize(checks);

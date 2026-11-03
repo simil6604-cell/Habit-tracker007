@@ -83,6 +83,19 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
 
+      # A human-sounding voice for voice chat, through ElevenLabs. Optional:
+      # without a key the app speaks with the browser's own voice, which
+      # works everywhere and sounds synthetic. Charged by the character, so
+      # only the spoken replies go through it, capped per request.
+      #
+      # ELEVENLABS_VOICE_ID picks which voice; left unset it uses ElevenLabs'
+      # own default. ELEVENLABS_MODEL_ID defaults to a low-latency model,
+      # because a reply that arrives late is not a conversation.
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+
       # Auth redirects are built from these — they must match the service's own
       # public URL, so they are filled in at creation time.
       - key: NEXTAUTH_URL

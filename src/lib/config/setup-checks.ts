@@ -327,3 +327,28 @@ export function summarize(checks: SetupCheck[]): { status: CheckStatus; label: s
   }
   return { status: "ok", label: "Everything checks out" };
 }
+
+/**
+ * Whether replies are spoken by a person-sounding voice or by the browser's.
+ *
+ * Deliberately never a failure. The app talks either way; this only says
+ * which voice it is using, so "it still sounds robotic" has an answer on the
+ * page rather than being a mystery.
+ */
+export function humanVoiceCheck(configured: boolean, voiceId: string): SetupCheck {
+  if (configured) {
+    return {
+      id: "human-voice",
+      label: "Voice",
+      status: "ok",
+      detail: `Replies in voice chat are spoken by ElevenLabs (voice ${voiceId}). If it ever can't be reached, the browser's own voice takes over.`,
+    };
+  }
+  return {
+    id: "human-voice",
+    label: "Voice",
+    status: "ok",
+    detail: "Voice chat uses the browser's own voice, which sounds synthetic.",
+    fix: "For a human-sounding voice, set ELEVENLABS_API_KEY (and optionally ELEVENLABS_VOICE_ID) where the app's environment variables are set.",
+  };
+}

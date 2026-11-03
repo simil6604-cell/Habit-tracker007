@@ -38,9 +38,12 @@ function speechSupported(): boolean {
 export function SchoolAIPanel({
   initialMessages,
   subjects,
+  name,
 }: {
   initialMessages: SchoolAIMessageEntry[];
   subjects: { id: string; name: string }[];
+  /** Who is signed in, so voice mode can greet them by name. */
+  name?: string | null;
 }) {
   const [messages, setMessages] = useState<SchoolAIMessageEntry[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -80,6 +83,7 @@ export function SchoolAIPanel({
    */
   const voice = useVoiceConversation({
     who: "tutor",
+    name,
     onSend: (heard) => send(heard, true),
   });
 
