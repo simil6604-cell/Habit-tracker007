@@ -128,6 +128,9 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
       drillVideos: true,
       examPlans: { include: { days: true, checkIns: true } },
       libraryFolders: true,
+      // The dividers inside them. Separate rather than nested, like every
+      // other pair here: nested means each one twice in the file.
+      librarySections: true,
       revisionLinks: true,
       footballLinks: true,
       markedPapers: { include: { questions: true } },

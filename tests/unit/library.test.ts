@@ -24,6 +24,7 @@ function item(over: Partial<LibraryItem> = {}): LibraryItem {
     detail: "water moves to the higher solute concentration",
     context: "Biology",
     createdAt: new Date(2026, 8, 20),
+    sectionId: null,
     href: "/school/flashcards",
     folderId: null,
     ...over,
@@ -232,5 +233,37 @@ describe("preview", () => {
     expect(preview(null)).toBe("");
     expect(preview(undefined)).toBe("");
     expect(preview("   ")).toBe("");
+  });
+});
+
+describe("filtering down to a section", () => {
+  const items = [
+    item({ id: "a", folderId: "econ", sectionId: "corrections", title: "Marked paper" }),
+    item({ id: "b", folderId: "econ", sectionId: "notes", title: "Inequality notes" }),
+    item({ id: "c", folderId: "econ", sectionId: null, title: "Filed in the folder only" }),
+    item({ id: "d", folderId: "bio", sectionId: "corrections", title: "Biology correction" }),
+  ];
+  const titles = (filter: Partial<Parameters<typeof filterLibrary>[1]>) =>
+    filterLibrary(items, { query: "", type: "ALL", sort: "NEWEST", folderId: "econ", ...filter }).items.map(
+      (i) => i.title
+    );
+
+  it("shows the whole folder when no section is chosen", () => {
+    expect(titles({}).sort()).toEqual(["Filed in the folder only", "Inequality notes", "Marked paper"]);
+  });
+
+  it("shows one section of it", () => {
+    expect(titles({ sectionId: "corrections" })).toEqual(["Marked paper"]);
+  });
+
+  it("does not reach into another folder's section of the same name", () => {
+    // Two subjects both have "Corrections"; picking one must not show both.
+    expect(titles({ sectionId: "corrections" })).not.toContain("Biology correction");
+  });
+
+  it("can show what is in the folder but in no section", () => {
+    // Without this, filing one thing into a section hides everything that is
+    // not in one — which looks like the folder lost it.
+    expect(titles({ sectionId: "UNSORTED" })).toEqual(["Filed in the folder only"]);
   });
 });
