@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SPOKEN_STYLE, spokenGreeting, toSpokenText } from "@/lib/ai/spoken-mode";
+import { firstNameFor, SPOKEN_STYLE, spokenGreeting, toSpokenText } from "@/lib/ai/spoken-mode";
 import {
   speechWatchdogMs,
   SPEECH_WATCHDOG_FLOOR_MS,
@@ -24,27 +24,50 @@ describe("SPOKEN_STYLE", () => {
 });
 
 describe("spokenGreeting", () => {
-  it("opens like a person, not like a form", () => {
-    expect(spokenGreeting("coach", 0)).toBe("Hey — what's up?");
-    expect(spokenGreeting("tutor", 0)).toBe("Hey — what are we working on?");
+  it("says the name of whoever is signed in, and offers to help", () => {
+    // What was asked for: "hallo <name>, wie kann ich dir behilflich sein".
+    expect(spokenGreeting("coach", 0, "Marco")).toBe("Hi Marco — how can I help?");
+    expect(spokenGreeting("tutor", 0, "Marco")).toBe("Hi Marco — what are we working on?");
   });
 
-  it("says something different next time, which is what stops it feeling like a machine", () => {
-    const heard = new Set([0, 1, 2, 3, 4].map((seed) => spokenGreeting("coach", seed)));
-    expect(heard.size).toBeGreaterThan(3);
+  it("uses the first name only", () => {
+    // The full name read out loud sounds like a waiting room.
+    expect(spokenGreeting("coach", 0, "Marco Rossi")).toBe("Hi Marco — how can I help?");
   });
 
-  it("asks the tutor about work and the coach about you", () => {
-    const tutor = [0, 1, 2, 3, 4].map((s) => spokenGreeting("tutor", s)).join(" ");
-    expect(tutor).toMatch(/topic|working on|stuck|go through|look at/i);
-  });
-
-  it("always has something to say, whatever the seed is", () => {
-    for (const seed of [0, 1, 7, 12345, -3, -1, 1.9, Number.MAX_SAFE_INTEGER]) {
-      const greeting = spokenGreeting("coach", seed);
-      expect(typeof greeting, String(seed)).toBe("string");
-      expect(greeting.length, String(seed)).toBeGreaterThan(0);
+  it("still opens properly when there is no name to use", () => {
+    for (const name of [null, undefined, "", "   ", "someone@example.com"]) {
+      const greeting = spokenGreeting("coach", 0, name);
+      // No stray gap where the name would have gone.
+      expect(greeting, String(name)).toBe("Hi — how can I help?");
     }
+  });
+
+  it("varies, so it does not sound like a machine coming online", () => {
+    const seen = new Set([0, 1, 2, 3, 4].map((seed) => spokenGreeting("coach", seed, "Marco")));
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it("never hands the synthesiser nothing", () => {
+    for (const seed of [-5, -1, 0, 7, 1e9]) {
+      expect(spokenGreeting("tutor", seed, "Marco"), String(seed)).toMatch(/\S/);
+    }
+  });
+});
+
+describe("firstNameFor", () => {
+  it("takes the first name when there is a usable one", () => {
+    expect(firstNameFor("Marco Rossi")).toBe("Marco");
+    expect(firstNameFor("  Anna  ")).toBe("Anna");
+  });
+
+  it("refuses what should not be read out loud", () => {
+    expect(firstNameFor(null)).toBeNull();
+    expect(firstNameFor("")).toBeNull();
+    // An account named after its login would be greeted as "Hi svnfvytbzj".
+    expect(firstNameFor("svnfvytbzj@privaterelay.appleid.com")).toBeNull();
+    expect(firstNameFor("X")).toBeNull();
+    expect(firstNameFor("a".repeat(40))).toBeNull();
   });
 });
 

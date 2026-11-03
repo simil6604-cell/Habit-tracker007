@@ -94,10 +94,13 @@ export function useVoiceConversation({
   who,
   onSend,
   lang,
+  name,
 }: {
   who: VoiceWho;
   onSend: (text: string) => void;
   lang?: string;
+  /** Who is signed in, so it can greet them by name. */
+  name?: string | null;
 }): VoiceConversation {
   const [active, setActive] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -157,12 +160,57 @@ export function useVoiceConversation({
    */
   const generationRef = useRef(0);
 
+  /*
+   * One audio element, created and started on the press that turns voice on.
+   *
+   * Mobile browsers only allow sound that a tap asked for, and the tap is
+   * long over by the time the first sentence comes back from the server. An
+   * element that was played once inside the gesture stays allowed, so this is
+   * started on silence there and simply given new audio later.
+   */
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  /** False once the server says no human voice is configured. */
+  const humanVoiceRef = useRef(true);
+
+  const releaseAudio = () => {
+    const element = audioRef.current;
+    if (element) {
+      element.onended = null;
+      element.onerror = null;
+      element.pause();
+    }
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  };
+
+  const unlockAudio = () => {
+    if (typeof window === "undefined" || audioRef.current) return;
+    try {
+      const element = new Audio();
+      element.preload = "auto";
+      // A single silent frame: enough to count as "this element has played".
+      element.src =
+        "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA//////////////////////////////////////////////////////////////////8AAAA8TEFNRTMuMTAwBK8AAAAAAAAAABUgJAUHQQAB9AAAAnGMHkkIAAAAAAAAAAAAAAAAAAAA";
+      element.volume = 0;
+      void element.play().catch(() => {
+        // Blocked anyway — the browser voice still works.
+      });
+      audioRef.current = element;
+    } catch {
+      // No Audio in this environment; the browser voice is used instead.
+    }
+  };
+
   const speakSteps = useCallback(
     (pieces: string[], onPieceStart?: (index: number) => void) => {
       const generation = ++generationRef.current;
       const current = () => generationRef.current === generation;
 
       clearWatchdog();
+      releaseAudio();
       if (synthSupported()) window.speechSynthesis.cancel();
 
       const finish = () => {
@@ -201,26 +249,74 @@ export function useVoiceConversation({
           return;
         }
 
-        const utterance = new SpeechSynthesisUtterance(spokenText);
-        utterance.lang = lang ?? (typeof navigator !== "undefined" ? navigator.language : "en-GB");
-
         let handedOver = false;
         const handOver = () => {
-          // onend and the watchdog can both arrive; the second must do
-          // nothing, or two sequences run at once from here.
+          // Whichever of the voice, the audio element and the watchdog
+          // arrives first wins; the rest must do nothing, or two sequences
+          // run at once from here.
           if (handedOver) return;
           handedOver = true;
           clearWatchdog();
           sayNext();
         };
-        utterance.onend = handOver;
-        // A synthesiser that fails silently would leave the microphone shut
-        // and voice mode looking hung, so an error moves on as well.
-        utterance.onerror = handOver;
+
+        const browserVoice = () => {
+          if (!current() || handedOver) return;
+          const utterance = new SpeechSynthesisUtterance(spokenText);
+          utterance.lang = lang ?? (typeof navigator !== "undefined" ? navigator.language : "en-GB");
+          utterance.onend = handOver;
+          // A synthesiser that fails silently would leave the microphone shut
+          // and voice mode looking hung, so an error moves on as well.
+          utterance.onerror = handOver;
+          window.speechSynthesis.speak(utterance);
+        };
 
         clearWatchdog();
         watchdogRef.current = setTimeout(handOver, speechWatchdogMs(spokenText));
-        window.speechSynthesis.speak(utterance);
+
+        /*
+         * The human voice first, the browser's own as the fallback.
+         *
+         * Every failure here falls through rather than stopping: no key, no
+         * credit, no network, a browser that refuses to play. A voice
+         * assistant that goes quiet because a third party is down is worse
+         * than one that sounds robotic.
+         */
+        void (async () => {
+          const element = audioRef.current;
+          if (element && humanVoiceRef.current) {
+            try {
+              const response = await fetch("/api/voice", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: spokenText }),
+              });
+              if (response.status === 503) {
+                // Not configured. Stop asking for the rest of this session.
+                humanVoiceRef.current = false;
+              } else if (response.ok && (response.headers.get("Content-Type") ?? "").startsWith("audio/")) {
+                // Content-type checked, not just the status: a session that
+                // expired mid-conversation is redirected to the login page,
+                // which arrives as a perfectly successful lump of HTML. Fed
+                // to an audio element that is a decode error and a silence.
+                const blob = await response.blob();
+                if (!current() || handedOver) return;
+                releaseAudio();
+                const url = URL.createObjectURL(blob);
+                objectUrlRef.current = url;
+                element.volume = 1;
+                element.onended = handOver;
+                element.onerror = () => browserVoice();
+                element.src = url;
+                await element.play();
+                return;
+              }
+            } catch {
+              // Fall through to the browser's voice.
+            }
+          }
+          browserVoice();
+        })();
       };
 
       setSpeaking(true);
@@ -232,12 +328,14 @@ export function useVoiceConversation({
   const speak = useCallback((text: string) => speakSteps([text]), [speakSteps]);
 
   const start = useCallback(() => {
+    // Inside the user gesture, which is the only moment mobile allows it.
+    unlockAudio();
     activeRef.current = true;
     setActive(true);
     heardRef.current = "";
     micRef.current.reset();
-    speak(spokenGreeting(who));
-  }, [speak, who]);
+    speak(spokenGreeting(who, Date.now(), name));
+  }, [speak, who, name]);
 
   const stop = useCallback(() => {
     // Moves the generation on, so an onend from the utterance being cancelled
@@ -246,6 +344,7 @@ export function useVoiceConversation({
     activeRef.current = false;
     setActive(false);
     setSpeaking(false);
+    releaseAudio();
     clearSilence();
     clearWatchdog();
     heardRef.current = "";
@@ -259,6 +358,7 @@ export function useVoiceConversation({
     () => () => {
       generationRef.current++;
       activeRef.current = false;
+      releaseAudio();
       clearSilence();
       clearWatchdog();
       if (synthSupported()) window.speechSynthesis.cancel();

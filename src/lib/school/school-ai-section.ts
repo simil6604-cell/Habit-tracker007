@@ -11,6 +11,8 @@ export type SchoolAISectionData = {
   links: StoredLink[];
   /** For filing a recorded lesson under a subject. */
   subjects: { id: string; name: string }[];
+  /** Who is signed in, so voice mode can greet them by name. */
+  userName: string | null;
 };
 
 /**
@@ -20,7 +22,7 @@ export type SchoolAISectionData = {
  * assembles nine other queries and this is the part most likely to grow.
  */
 export async function getSchoolAISectionData(userId: string): Promise<SchoolAISectionData> {
-  const [messages, exams, livePlans, links, subjects] = await Promise.all([
+  const [messages, exams, livePlans, links, subjects, user] = await Promise.all([
     getSchoolAIMessages(),
     getPlannableExams(),
     prisma.examPlan.findMany({
@@ -46,6 +48,7 @@ export async function getSchoolAISectionData(userId: string): Promise<SchoolAISe
       },
     }),
     prisma.subject.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
   ]);
   return {
     messages,
@@ -53,5 +56,6 @@ export async function getSchoolAISectionData(userId: string): Promise<SchoolAISe
     livePlans,
     links: links.map(({ subject, ...link }) => ({ ...link, subjectName: subject?.name ?? null })),
     subjects,
+    userName: user?.name ?? null,
   };
 }

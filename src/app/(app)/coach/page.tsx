@@ -17,6 +17,7 @@ export default async function CoachPage({
   const session = await auth();
   const userId = session!.user.id;
 
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
   const [messages, recommendations] = await Promise.all([
     getCoachMessages(),
     prisma.aIRecommendation.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 10 }),
@@ -44,7 +45,7 @@ export default async function CoachPage({
             <CardTitle>Talk to your coach</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col overflow-hidden">
-            <VoiceChatPanel initialMessages={messages} />
+            <VoiceChatPanel initialMessages={messages} name={user?.name} />
           </CardContent>
         </Card>
 

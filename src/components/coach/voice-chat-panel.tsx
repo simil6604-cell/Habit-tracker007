@@ -23,7 +23,14 @@ function speechSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMessage[] }) {
+export function VoiceChatPanel({
+  initialMessages,
+  name,
+}: {
+  initialMessages: CoachMessage[];
+  /** Who is signed in, so voice mode can greet them by name. */
+  name?: string | null;
+}) {
   const [messages, setMessages] = useState<CoachMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [speakReplies, setSpeakReplies] = useState(false);
@@ -43,6 +50,7 @@ export function VoiceChatPanel({ initialMessages }: { initialMessages: CoachMess
    */
   const voice = useVoiceConversation({
     who: "coach",
+    name,
     onSend: (heard) => send(heard, true),
   });
 
