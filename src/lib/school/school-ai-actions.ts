@@ -15,6 +15,7 @@ import {
 } from "./school-ai";
 import { MAX_PHOTOS_PER_MESSAGE, ownedUploadPaths, parseImagePaths, visionMediaType } from "./school-ai-photos";
 import { aiFailureMessage } from "@/lib/ai/api-key";
+import { ADOPTED_CHAT_TITLE, chatLabel, cleanChatTitle } from "./chat-titles";
 
 async function requireUserId() {
   const session = await auth();
@@ -64,10 +65,13 @@ function toEntry(m: { id: string; role: string; content: string; imagePaths: str
  * The id breaks a tie on createdAt — two rows written in the same millisecond
  * could otherwise come back with the answer above the question.
  */
-export async function getSchoolAIMessages(): Promise<SchoolAIMessageEntry[]> {
+export async function getSchoolAIMessages(chatId?: string): Promise<SchoolAIMessageEntry[]> {
   const userId = await requireUserId();
   const messages = await prisma.schoolAIMessage.findMany({
-    where: { userId },
+    // The account scope is written here rather than built into a variable:
+    // it has to be readable at the call site, by a person and by the test
+    // that walks these queries looking for exactly this.
+    where: { userId, ...(chatId ? { chatId } : {}) },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: HISTORY_LIMIT,
   });
@@ -188,21 +192,29 @@ async function loadImages(paths: string[]): Promise<{ images: ProviderImage[]; s
 export async function sendSchoolAIMessage(
   content: string,
   imagePaths: string[] = [],
-  spoken = false
+  spoken = false,
+  chatId?: string
 ): Promise<SchoolAIMessageEntry[]> {
   const userId = await requireUserId();
+  // Which conversation this belongs to, checked against the account.
+  const chat = chatId
+    ? await prisma.schoolAIChat.findFirst({ where: { id: chatId, userId }, select: { id: true } })
+    : null;
+  const activeChatId = chat?.id ?? (await currentSchoolAIChatId());
   const trimmed = content.trim();
   const photos = ownedUploadPaths(imagePaths, userId).slice(0, MAX_PHOTOS_PER_MESSAGE);
   // A photo on its own is a real question ("what's wrong with this?"), so an
   // empty box is only empty when nothing is attached either.
-  if (!trimmed && photos.length === 0) return getSchoolAIMessages();
+  if (!trimmed && photos.length === 0) return getSchoolAIMessages(activeChatId);
 
   // Newest first then reversed, for the same reason as getSchoolAIMessages:
   // taken ascending, the tutor's "recent context" freezes at the first 200
   // messages ever sent and never moves again.
   const history = (
     await prisma.schoolAIMessage.findMany({
-      where: { userId },
+      // This conversation only. Without the scope, asking about chemistry
+      // here would be answered in the light of last week's maths.
+      where: { userId, chatId: activeChatId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: HISTORY_LIMIT,
     })
@@ -211,6 +223,7 @@ export async function sendSchoolAIMessage(
   await prisma.schoolAIMessage.create({
     data: {
       userId,
+      chatId: activeChatId,
       role: "USER",
       content: trimmed || "(sent photos without a question)",
       imagePaths: photos.length > 0 ? JSON.stringify(photos) : null,
@@ -260,15 +273,24 @@ export async function sendSchoolAIMessage(
     }
   }
 
-  await prisma.schoolAIMessage.create({ data: { userId, role: "ASSISTANT", content: reply } });
+  await prisma.schoolAIMessage.create({ data: { userId, chatId: activeChatId, role: "ASSISTANT", content: reply } });
+  // Moves it to the top of the list, which is what "recent" means there.
+  await prisma.schoolAIChat.updateMany({ where: { id: activeChatId, userId }, data: { updatedAt: new Date() } });
   revalidatePath("/school/ai");
-  return getSchoolAIMessages();
+  return getSchoolAIMessages(activeChatId);
 }
 
-export async function clearSchoolAIChat(): Promise<SchoolAIMessageEntry[]> {
+export async function clearSchoolAIChat(chatId?: string): Promise<SchoolAIMessageEntry[]> {
   const userId = await requireUserId();
-  const messages = await prisma.schoolAIMessage.findMany({ where: { userId } });
-  await prisma.schoolAIMessage.deleteMany({ where: { userId } });
+  // Empties the conversation in front of them, not every conversation they
+  // have ever had — which is what this used to do, back when there was only
+  // one.
+  const messages = await prisma.schoolAIMessage.findMany({
+    where: { userId, ...(chatId ? { chatId } : {}) },
+  });
+  await prisma.schoolAIMessage.deleteMany({
+    where: { userId, ...(chatId ? { chatId } : {}) },
+  });
   // The photos belonged to this conversation and nothing else points at them,
   // so clearing it takes them off the disk too rather than leaving a pile of
   // orphaned files no screen in the app can ever show again.
@@ -279,4 +301,122 @@ export async function clearSchoolAIChat(): Promise<SchoolAIMessageEntry[]> {
   }
   revalidatePath("/school/ai");
   return [];
+}
+
+export type SchoolAIChatSummary = {
+  id: string;
+  /** What the student called it, if they did. */
+  title: string | null;
+  /** What to show: their name, else one made from the first question. */
+  label: string;
+  messageCount: number;
+  updatedAt: Date;
+};
+
+/**
+ * Puts messages that predate conversations into one.
+ *
+ * This app is deployed by pushing the schema, not by running migrations, so
+ * the rows that were already there arrive with no chat attached. Dropping
+ * them is unthinkable and a migration step is one more thing to forget, so
+ * the first read adopts them — once, into a conversation that says what it
+ * is.
+ */
+async function adoptLooseMessages(userId: string): Promise<void> {
+  const loose = await prisma.schoolAIMessage.count({ where: { userId, chatId: null } });
+  if (loose === 0) return;
+
+  const oldest = await prisma.schoolAIMessage.findFirst({
+    where: { userId, chatId: null },
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true },
+  });
+  const chat = await prisma.schoolAIChat.create({
+    data: { userId, title: ADOPTED_CHAT_TITLE, createdAt: oldest?.createdAt ?? new Date() },
+  });
+  await prisma.schoolAIMessage.updateMany({ where: { userId, chatId: null }, data: { chatId: chat.id } });
+}
+
+/** Every conversation this account has, newest activity first. */
+export async function listSchoolAIChats(): Promise<SchoolAIChatSummary[]> {
+  const userId = await requireUserId();
+  await adoptLooseMessages(userId);
+
+  const chats = await prisma.schoolAIChat.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+    include: {
+      _count: { select: { messages: true } },
+      // The first question, for a name when there is no typed one.
+      messages: { where: { role: "USER" }, orderBy: { createdAt: "asc" }, take: 1, select: { content: true } },
+    },
+  });
+
+  return chats.map((chat) => ({
+    id: chat.id,
+    title: chat.title,
+    label: chatLabel({ title: chat.title, firstQuestion: chat.messages[0]?.content ?? null }),
+    messageCount: chat._count.messages,
+    updatedAt: chat.updatedAt,
+  }));
+}
+
+/**
+ * The conversation to open, making one if there is none.
+ *
+ * An empty conversation is reused rather than added to: pressing "new chat"
+ * twice should not leave two blank rows in the list.
+ */
+export async function currentSchoolAIChatId(): Promise<string> {
+  const userId = await requireUserId();
+  await adoptLooseMessages(userId);
+  const newest = await prisma.schoolAIChat.findFirst({ where: { userId }, orderBy: { updatedAt: "desc" } });
+  if (newest) return newest.id;
+  const created = await prisma.schoolAIChat.create({ data: { userId } });
+  return created.id;
+}
+
+export async function createSchoolAIChat(): Promise<{ chats: SchoolAIChatSummary[]; chatId: string }> {
+  const userId = await requireUserId();
+  const empty = await prisma.schoolAIChat.findFirst({
+    where: { userId, messages: { none: {} } },
+    orderBy: { updatedAt: "desc" },
+  });
+  // Already sitting on a blank one — touch it so it is at the top, rather
+  // than stacking up empties.
+  const chat = empty
+    ? await prisma.schoolAIChat.update({ where: { id: empty.id }, data: { updatedAt: new Date() } })
+    : await prisma.schoolAIChat.create({ data: { userId } });
+
+  revalidatePath("/school");
+  // The id is returned rather than left to be guessed from the top of the
+  // list. Both this and the conversation just used are updated "now", and
+  // which of them sorts first is not defined — picking the wrong one puts
+  // the next question into the chat the student thought they had left.
+  return { chats: await listSchoolAIChats(), chatId: chat.id };
+}
+
+export async function renameSchoolAIChat(chatId: string, title: string): Promise<SchoolAIChatSummary[]> {
+  const userId = await requireUserId();
+  // Scoped to the account: an id on its own is never enough to rename a row.
+  await prisma.schoolAIChat.updateMany({ where: { id: chatId, userId }, data: { title: cleanChatTitle(title) } });
+  revalidatePath("/school");
+  return listSchoolAIChats();
+}
+
+export async function deleteSchoolAIChat(chatId: string): Promise<SchoolAIChatSummary[]> {
+  const userId = await requireUserId();
+  const owned = await prisma.schoolAIChat.findFirst({ where: { id: chatId, userId }, select: { id: true } });
+  if (owned) {
+    // The photos belonged to this conversation and nothing else points at
+    // them, so they come off the disk with it.
+    const messages = await prisma.schoolAIMessage.findMany({ where: { chatId, userId } });
+    for (const message of messages) {
+      for (const path of parseImagePaths(message.imagePaths)) await deleteUploadedImage(path);
+    }
+    await prisma.schoolAIChat.delete({ where: { id: owned.id } });
+  }
+  revalidatePath("/school");
+  return listSchoolAIChats();
 }

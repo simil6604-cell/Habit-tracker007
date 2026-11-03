@@ -231,6 +231,7 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   await tx.chatMessage.deleteMany({ where: { userId } });
   await tx.examPlan.deleteMany({ where: { userId } });
   await tx.schoolAIMessage.deleteMany({ where: { userId } });
+  await tx.schoolAIChat.deleteMany({ where: { userId } });
   // SchoolAIUpload is deliberately NOT wiped. A restore never deletes photo
   // files, so wiping the rows would strand their files on disk with nothing
   // left that knows they exist — the exact leak that table was added to close.
@@ -558,6 +559,14 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
     // paths are rewritten as a list rather than one at a time. A photo the
     // archive doesn't carry drops out and the question keeps the rest, the same
     // rule every other photo row follows.
+    // Conversations before their messages, so a message has something to be
+    // linked to.
+    for (const chat of rows(data.schoolAIChats)) {
+      const row = scalars(chat, owned);
+      if (!row) continue;
+      await create((r) => tx.schoolAIChat.create({ data: r as never }), withNewId(row));
+    }
+
     for (const message of rows(data.schoolAIMessages)) {
       const row = scalars(message, owned);
       if (!row) continue;
@@ -567,6 +576,10 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
               .map((path) => rewriteImagePath(path, userId, photos))
               .filter((path): path is string => path !== null)
           : [];
+      // A message whose conversation did not survive is kept without one
+      // rather than dropped: it is still something this student asked, and
+      // the next read adopts it into a conversation of its own.
+      if (row.chatId != null && !link(row, "chatId")) row.chatId = null;
       await create(
         (r) => tx.schoolAIMessage.create({ data: r as never }),
         withNewId({ ...row, imagePaths: kept.length > 0 ? JSON.stringify(kept) : null })

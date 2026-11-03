@@ -120,6 +120,10 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
       recommendations: true,
       progressEntries: true,
       chatMessages: true,
+      // The conversations, and the messages separately. Nested would mean
+      // every message twice in the file, and a restore writing each one of
+      // them twice.
+      schoolAIChats: true,
       schoolAIMessages: true,
       drillVideos: true,
       examPlans: { include: { days: true, checkIns: true } },

@@ -45,11 +45,22 @@ type Draft = { transcript: string; startedAt: number; seconds: number; subjectId
  */
 export function LessonRecorder({
   subjects,
+  lessons,
+  onLessons,
+  focusLessonId,
+  chatId,
   onNotes,
   onRecordingChange,
   onBeforeStart,
 }: {
   subjects: { id: string; name: string }[];
+  /** Owned by the panel, because the history list shows the same lessons. */
+  lessons: LessonEntry[] | null;
+  onLessons: (lessons: LessonEntry[]) => void;
+  /** Opened and scrolled to when picked out of the history. */
+  focusLessonId?: string | null;
+  /** The conversation any notes should be put into. */
+  chatId?: string | null;
   /** The notes went into the conversation; the panel shows them. */
   onNotes?: (messages: SchoolAIMessageEntry[]) => void;
   /** So the panel can keep the other microphones out of the way. */
@@ -62,7 +73,6 @@ export function LessonRecorder({
   const [subjectId, setSubjectId] = useState("");
   const [title, setTitle] = useState("");
   const [seconds, setSeconds] = useState(0);
-  const [lessons, setLessons] = useState<LessonEntry[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [recovered, setRecovered] = useState<Draft | null>(null);
   const [pending, startTransition] = useTransition();
@@ -173,12 +183,26 @@ export function LessonRecorder({
   }, [transcript, seconds, subjectId, title]);
 
   const loadLessons = useCallback(() => {
-    startTransition(async () => setLessons(await getLessons()));
+    startTransition(async () => onLessons(await getLessons()));
+    // onLessons comes from the panel and is stable enough; re-running this on
+    // every render would refetch the list continuously.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (open && lessons === null) loadLessons();
   }, [open, lessons, loadLessons]);
+
+  // Picked out of the history: open, show its notes, and go to it.
+  useEffect(() => {
+    if (!focusLessonId) return;
+    setOpen(true);
+    setExpanded(focusLessonId);
+    const timer = setTimeout(() => {
+      document.getElementById(`lesson-${focusLessonId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [focusLessonId]);
 
   function stopAndSave() {
     endRecording();
@@ -187,6 +211,7 @@ export function LessonRecorder({
     setProblem(null);
     startTransition(async () => {
       const result = await makeStudyNotes({
+        chatId,
         transcript: text,
         subjectId: subjectId || null,
         title: title || null,
@@ -199,7 +224,7 @@ export function LessonRecorder({
       // Only once the server has it. Clearing the draft on the way in would
       // lose the lesson if the save failed.
       clearDraft();
-      setLessons(result.lessons);
+      onLessons(result.lessons);
       if (result.messages) onNotes?.(result.messages);
       setTranscript("");
       setTitle("");
@@ -365,7 +390,7 @@ export function LessonRecorder({
               {lessons.map((lesson) => {
                 const length = formatLength(lesson.recordedSeconds);
                 return (
-                  <div key={lesson.id} className="rounded-lg border border-border bg-surface p-3" data-testid="lesson-row">
+                  <div key={lesson.id} id={`lesson-${lesson.id}`} className="rounded-lg border border-border bg-surface p-3" data-testid="lesson-row">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-sm font-medium">{lessonLabel(lesson)}</p>
@@ -377,7 +402,7 @@ export function LessonRecorder({
                       <button
                         type="button"
                         aria-label="Delete this lesson"
-                        onClick={() => startTransition(async () => setLessons(await deleteLesson(lesson.id)))}
+                        onClick={() => startTransition(async () => onLessons(await deleteLesson(lesson.id)))}
                         className="text-muted hover:text-danger"
                       >
                         <Trash2 size={14} />
@@ -399,10 +424,10 @@ export function LessonRecorder({
                           disabled={pending}
                           onClick={() =>
                             startTransition(async () => {
-                              const result = await makeNotesForLesson(lesson.id);
+                              const result = await makeNotesForLesson(lesson.id, chatId);
                               if ("error" in result) setProblem(result.error);
                               else {
-                                setLessons(result.lessons);
+                                onLessons(result.lessons);
                                 setProblem(result.problem);
                                 if (result.messages) onNotes?.(result.messages);
                               }
