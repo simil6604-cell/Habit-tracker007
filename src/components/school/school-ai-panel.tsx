@@ -7,6 +7,7 @@ import { AudioLines, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X }
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
+import { ChatHistory } from "@/components/school/chat-history";
 import { ExplainerBoard } from "@/components/school/explainer-board";
 import { LessonRecorder } from "@/components/school/lesson-recorder";
 import {
@@ -18,8 +19,16 @@ import {
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
+import { getLessons, renameLesson, type LessonEntry } from "@/lib/school/class-recording-actions";
 import {
   clearSchoolAIChat,
+  createSchoolAIChat,
+  currentSchoolAIChatId,
+  deleteSchoolAIChat,
+  getSchoolAIMessages,
+  listSchoolAIChats,
+  renameSchoolAIChat,
+  type SchoolAIChatSummary,
   discardSchoolAIPhoto,
   sendSchoolAIMessage,
   uploadSchoolAIPhotos,
@@ -69,6 +78,16 @@ export function SchoolAIPanel({
   const [boardSteps, setBoardSteps] = useState<ExplainerStep[]>([]);
   const [boardIndex, setBoardIndex] = useState(0);
   const [canSpeak, setCanSpeak] = useState(false);
+  /*
+   * The history: every conversation and every recording, with the one that
+   * is open. Held here rather than in the two panels that show them, because
+   * both show the same rows and two copies drift the moment one of them
+   * saves something.
+   */
+  const [chats, setChats] = useState<SchoolAIChatSummary[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [lessons, setLessons] = useState<LessonEntry[] | null>(null);
+  const [focusLessonId, setFocusLessonId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -88,6 +107,28 @@ export function SchoolAIPanel({
   });
 
   useEffect(() => setCanSpeak(speechSupported()), []);
+
+  // The list, and which conversation the messages on screen belong to.
+  useEffect(() => {
+    startTransition(async () => {
+      const [list, current, recorded] = await Promise.all([
+        listSchoolAIChats(),
+        currentSchoolAIChatId(),
+        getLessons(),
+      ]);
+      setChats(list);
+      setActiveChatId(current);
+      setLessons(recorded);
+    });
+  }, []);
+
+  function openChat(id: string) {
+    startTransition(async () => {
+      setActiveChatId(id);
+      setMessages(await getSchoolAIMessages(id));
+      setBoardSteps([]);
+    });
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -126,7 +167,21 @@ export function SchoolAIPanel({
         createdAt: new Date(),
       },
     ]);
-    startTransition(async () => setMessages(await sendSchoolAIMessage(trimmed, photos, spoken)));
+    /*
+     * Which conversation this question belongs to, captured now.
+     *
+     * The list is disabled while an answer is coming — every row, the new-chat
+     * button, all of it — so there is no way to be looking at a different
+     * conversation by the time it lands. Capturing the id anyway means the
+     * answer is written where it was asked even if that ever changes.
+     */
+    const sentTo = activeChatId;
+    startTransition(async () => {
+      setMessages(await sendSchoolAIMessage(trimmed, photos, spoken, sentTo ?? undefined));
+      // The list orders by recent activity, and this conversation just had
+      // some — and may have just earned its name from this very question.
+      setChats(await listSchoolAIChats());
+    });
   }
 
   /**
@@ -341,7 +396,8 @@ export function SchoolAIPanel({
             onClick={() =>
               startTransition(async () => {
                 clearBoard();
-                setMessages(await clearSchoolAIChat());
+                setMessages(await clearSchoolAIChat(activeChatId ?? undefined));
+                setChats(await listSchoolAIChats());
               })
             }
             disabled={pending}
@@ -373,9 +429,45 @@ export function SchoolAIPanel({
         </p>
       )}
 
+      <ChatHistory
+        chats={chats}
+        lessons={lessons ?? []}
+        activeChatId={activeChatId}
+        busy={pending}
+        onOpenChat={openChat}
+        onNewChat={() =>
+          startTransition(async () => {
+            const { chats: list, chatId } = await createSchoolAIChat();
+            setChats(list);
+            setActiveChatId(chatId);
+            setMessages([]);
+            setBoardSteps([]);
+          })
+        }
+        onRenameChat={(id, title) => startTransition(async () => setChats(await renameSchoolAIChat(id, title)))}
+        onDeleteChat={(id) =>
+          startTransition(async () => {
+            const list = await deleteSchoolAIChat(id);
+            setChats(list);
+            if (id === activeChatId) {
+              const next = await currentSchoolAIChatId();
+              setActiveChatId(next);
+              setMessages(await getSchoolAIMessages(next));
+              setBoardSteps([]);
+            }
+          })
+        }
+        onRenameLesson={(id, title) => startTransition(async () => setLessons(await renameLesson(id, title)))}
+        onOpenLesson={(id) => setFocusLessonId(id)}
+      />
+
       <div className="mb-2">
         <LessonRecorder
           subjects={subjects}
+          lessons={lessons}
+          onLessons={setLessons}
+          focusLessonId={focusLessonId}
+          chatId={activeChatId}
           onNotes={setMessages}
           onRecordingChange={setLessonRecording}
           onBeforeStart={() => {
@@ -408,7 +500,7 @@ export function SchoolAIPanel({
         // A floor on the transcript: with the board up, flex-1 alone squeezed
         // this to a 16px strip showing the top edge of a diagram, which reads
         // as a rendering fault rather than as a conversation underneath.
-        <div ref={scrollRef} className="flex min-h-24 flex-1 flex-col gap-3 overflow-y-auto py-2">
+        <div ref={scrollRef} data-testid="school-ai-messages" className="flex min-h-24 flex-1 flex-col gap-3 overflow-y-auto py-2">
           {messages.map((m) => (
             <div key={m.id} className={`flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
               {m.imagePaths.length > 0 && (

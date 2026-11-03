@@ -71,6 +71,7 @@ model User {
   progressEntries    Progress[]
   chatMessages       ChatMessage[]
   schoolAIMessages   SchoolAIMessage[]
+  schoolAIChats      SchoolAIChat[]
   assessments        Assessment[]
   schoolHabits       SchoolHabit[]
   learningLogEntries LearningLogEntry[]
@@ -847,18 +848,42 @@ model SchoolAIUpload {
   @@index([userId, createdAt])
 }
 
+// One conversation with the school AI, so asking about yesterday's chemistry
+// does not have to happen in the middle of last week's maths. Named by the
+// student; until they name it, by what they first asked.
+model SchoolAIChat {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Null until it is given one. A name derived from the first question is
+  // shown in the meantime — stored nowhere, so renaming is never a fight
+  // with something the app wrote.
+  title     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  messages  SchoolAIMessage[]
+
+  @@index([userId, updatedAt])
+}
+
 model SchoolAIMessage {
-  id         String   @id @default(cuid())
+  id         String        @id @default(cuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Nullable because every message written before conversations existed has
+  // no chat. They are adopted into one the first time the list is read,
+  // rather than being dropped or needing a migration step of their own.
+  chatId     String?
+  chat       SchoolAIChat? @relation(fields: [chatId], references: [id], onDelete: Cascade)
   role       String // USER | ASSISTANT
   content    String
   // The /uploads paths of any photos sent with this message, as JSON. A
   // question about three pages of a past paper is one message, not three.
   imagePaths String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime      @default(now())
 
   @@index([userId, createdAt])
+  @@index([chatId, createdAt])
 }
 
 model ChatMessage {

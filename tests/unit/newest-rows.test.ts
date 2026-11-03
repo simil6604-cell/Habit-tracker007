@@ -18,8 +18,17 @@ import { describe, expect, it } from "vitest";
 
 const SRC = path.join(__dirname, "..", "..", "src");
 
-/** Queries that really do want the oldest rows, each with the reason. */
-const ALLOWED: Record<string, string> = {};
+/**
+ * Queries that really do want the oldest rows, each with the reason.
+ *
+ * Keyed by file and model rather than by line: a line number moves whenever
+ * anything above it is edited, and a stale key here would read as a brand
+ * new offender in a diff that never touched the query.
+ */
+const ALLOWED: Record<string, string> = {
+  "src/lib/school/school-ai-actions.ts (schoolAIChat)":
+    "the first question a conversation opened with, which is what names it in the list — the oldest message is the whole point, and only one is taken",
+};
 
 function tsFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -58,8 +67,9 @@ for (const file of tsFiles(SRC)) {
   for (const { model, args, line } of findManyArgs(readFileSync(file, "utf8"))) {
     if (!/\btake\s*:/.test(args)) continue;
     if (!/createdAt\s*:\s*"asc"/.test(args)) continue;
-    const where = `${path.relative(path.join(SRC, ".."), file)}:${line} (${model})`;
-    if (where in ALLOWED) continue;
+    const relative = path.relative(path.join(SRC, ".."), file);
+    const where = `${relative}:${line} (${model})`;
+    if (`${relative} (${model})` in ALLOWED) continue;
     offenders.push(where);
   }
 }

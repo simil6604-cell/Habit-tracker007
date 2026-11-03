@@ -7,7 +7,7 @@ import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { aiFailureMessage } from "@/lib/ai/api-key";
 import { buildNotesPrompt, lessonLabel, MAX_TRANSCRIPT_CHARS } from "./lesson-notes";
-import { getSchoolAIMessages, type SchoolAIMessageEntry } from "./school-ai-actions";
+import { currentSchoolAIChatId, getSchoolAIMessages, type SchoolAIMessageEntry } from "./school-ai-actions";
 
 async function requireUserId() {
   const session = await auth();
@@ -240,7 +240,10 @@ export async function saveLesson(input: {
 }
 
 /** Makes notes for a lesson that was saved without them. */
-export async function makeNotesForLesson(recordingId: string): Promise<SaveLessonResult | { error: string }> {
+export async function makeNotesForLesson(
+  recordingId: string,
+  chatId?: string | null
+): Promise<SaveLessonResult | { error: string }> {
   const userId = await requireUserId();
   const recording = await prisma.classRecording.findFirst({
     where: { id: recordingId, userId },
@@ -261,7 +264,7 @@ export async function makeNotesForLesson(recordingId: string): Promise<SaveLesso
     const lessons = await getLessons();
     const updated = lessons.find((l) => l.id === recording.id);
     // Same as the fresh route: notes are only useful if the tutor has them.
-    const messages = updated?.notes ? await postNotesToChat(updated) : undefined;
+    const messages = updated?.notes ? await postNotesToChat(updated, chatId ?? undefined) : undefined;
     return { lessons, noted: true, problem: null, messages };
   } catch (err) {
     return { lessons: await getLessons(), noted: false, problem: aiFailureMessage(err) };
@@ -293,6 +296,7 @@ export async function makeStudyNotes(input: {
   subjectId?: string | null;
   title?: string | null;
   recordedSeconds?: number | null;
+  chatId?: string | null;
 }): Promise<SaveLessonResult | { error: string }> {
   const saved = await saveLesson(input);
   if ("error" in saved) return saved;
@@ -304,7 +308,7 @@ export async function makeStudyNotes(input: {
     return saved;
   }
 
-  return { ...saved, messages: await postNotesToChat(newest) };
+  return { ...saved, messages: await postNotesToChat(newest, input.chatId ?? undefined) };
 }
 
 /**
@@ -315,8 +319,14 @@ export async function makeStudyNotes(input: {
  * history is what every later question is answered against — so it has to say
  * what was asked for as well as what came back.
  */
-async function postNotesToChat(lesson: LessonEntry): Promise<SchoolAIMessageEntry[]> {
+async function postNotesToChat(lesson: LessonEntry, chatId?: string): Promise<SchoolAIMessageEntry[]> {
   const userId = await requireUserId();
+  // Into the conversation that is open, so the notes are part of what the
+  // tutor is already being asked about rather than loose rows.
+  const target = chatId
+    ? (await prisma.schoolAIChat.findFirst({ where: { id: chatId, userId }, select: { id: true } }))?.id
+    : undefined;
+  const activeChatId = target ?? (await currentSchoolAIChatId());
   const label = lessonLabel({
     title: lesson.title,
     subjectName: lesson.subjectName,
@@ -324,12 +334,23 @@ async function postNotesToChat(lesson: LessonEntry): Promise<SchoolAIMessageEntr
   });
 
   await prisma.schoolAIMessage.create({
-    data: { userId, role: "USER", content: `Make study notes from the lesson I recorded: ${label}.` },
+    data: { userId, chatId: activeChatId, role: "USER", content: `Make study notes from the lesson I recorded: ${label}.` },
   });
   await prisma.schoolAIMessage.create({
-    data: { userId, role: "ASSISTANT", content: `**Study notes — ${label}**\n\n${lesson.notes}` },
+    data: { userId, chatId: activeChatId, role: "ASSISTANT", content: `**Study notes — ${label}**\n\n${lesson.notes}` },
   });
 
+  await prisma.schoolAIChat.updateMany({ where: { id: activeChatId, userId }, data: { updatedAt: new Date() } });
   revalidatePath("/school");
-  return getSchoolAIMessages();
+  return getSchoolAIMessages(activeChatId);
+}
+
+/** Renames a recorded lesson. An empty name gives it back its derived one. */
+export async function renameLesson(recordingId: string, title: string): Promise<LessonEntry[]> {
+  const userId = await requireUserId();
+  const clean = title.replace(/\s+/g, " ").trim().slice(0, 80) || null;
+  // Scoped to the account, like every other write that takes an id.
+  await prisma.classRecording.updateMany({ where: { id: recordingId, userId }, data: { title: clean } });
+  revalidatePath("/school");
+  return getLessons();
 }
