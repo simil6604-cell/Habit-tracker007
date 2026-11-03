@@ -61,6 +61,10 @@ instruction to include at most one diagram: on the board a short series is the p
 - Every picture starts with a <title> of three to six words. That is the caption written under it, so it names what is being shown ("Two to one by moles"), not what the step is called ("Step 2").
 - Basic shapes and text only: rect, circle, ellipse, line, polyline, polygon, path, text, g. Clear <text> labels, around 40 elements at most, no images, no scripts, no external references.
 - Draw the thing, not decoration. Label the parts. Assume it is being looked at on a phone, so few words, large and spaced out.
+- MARK THE ONE THING TO LOOK AT. In each picture you may add exactly one marker: <rect id="focus" x=".." y=".." width=".." height=".."/> or <circle id="focus" cx=".." cy=".." r=".."/>, placed around the part your sentence is about. Give it no fill and no stroke of your own — the app draws the highlight, and it is animated so the eye goes there while you talk. Leave the marker out when the whole picture is the point.
+- Biology and the sciences: draw the structure and label its parts, then mark the part you are naming as you name it. A nucleus is drawn inside its cell, not floating on its own.
+- Economics and anything with axes: label both axes and every curve, and mark the point, area or intersection you are talking about. Show a shift as a second curve plus an arrow, never by redrawing the first one somewhere else.
+- Maths: put the working on separate lines, one step per line, and mark the line you are explaining. Never jump a step — the point of showing it is that each line follows from the one above.
 - Do NOT draw for small talk, a yes or no, a correction, or a question about their week — those are just spoken. Most turns need no picture at all; a picture is for when you are explaining.
 - The spoken sentences must stand on their own. Someone not looking at the screen still has to understand you, so never say "as you can see here" or "this one".`;
 

@@ -85,3 +85,28 @@ test.describe("sanitizeSvg in a real browser", () => {
     expect(out).toContain("Force");
   });
 });
+
+test.describe("the marker that highlights what to look at", () => {
+  test("survives sanitising, and cannot smuggle anything in with it", async ({ page }) => {
+    await page.setContent("<div id='host'></div>");
+    await page.evaluate(sanitizerAsScript());
+
+    const clean = await page.evaluate(() => {
+      (window as unknown as { __pwned: number }).__pwned = 0;
+      return (window as unknown as { sanitizeSvg: (s: string) => string | null }).sanitizeSvg(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220">` +
+          `<circle cx="160" cy="110" r="34"/>` +
+          // The id is the whole mechanism: the highlight is styled against it.
+          `<rect id="focus" x="118" y="68" width="84" height="84" fill="#ff0000" onclick="window.__pwned=1"/>` +
+          `</svg>`
+      );
+    });
+
+    expect(clean ?? "", "the marker was stripped, so nothing would be highlighted").toContain('id="focus"');
+    // Its geometry has to come through or the highlight lands in the wrong place.
+    expect(clean ?? "").toContain('x="118"');
+    expect(clean ?? "").toContain('width="84"');
+    // And it is still just a rectangle.
+    expect(clean ?? "").not.toContain("onclick");
+  });
+});
