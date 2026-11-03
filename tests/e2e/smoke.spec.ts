@@ -1049,6 +1049,28 @@ test.describe.serial("full app walkthrough", () => {
     await page.getByTestId("library-sections").getByRole("link", { name: /^Not in a section/ }).click();
     await expect(page.getByTestId("library-items").getByText(cardFront)).toBeVisible();
 
+    // Deleting a whole folder while something is filed inside one of its
+    // sections. Two SetNulls have to fire, one of them through the section
+    // the folder takes with it, and a foreign key that refuses here would
+    // lose the card rather than unfile it.
+    const spare = `Nebensatz Komma ${Date.now()}`;
+    await page.goto("/school/flashcards");
+    await page.fill('input[name="front"]', spare);
+    await page.fill('input[name="back"]', "Vor dem Nebensatz steht ein Komma");
+    await page.getByRole("button", { name: "Add card" }).click();
+    await page.goto("/library");
+    const spareCard = page.locator('[data-testid^="library-item-flashcard-"]').filter({ hasText: spare });
+    const germanSection = await spareCard
+      .locator("option", { hasText: "German › Corrections" })
+      .getAttribute("value");
+    await spareCard.locator("select").selectOption(germanSection!);
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Delete folder German" }).click();
+    await expect(shelves).not.toContainText("German");
+    await page.goto("/library?folder=UNFILED");
+    await expect(page.getByTestId("library-items").getByText(spare)).toBeVisible();
+
+    await page.goto(biologyHref!);
     // File it under the renamed divider and leave it there. The backup and
     // restore further down this file carry this account, and an item actually
     // sitting in a section is the only thing that proves the section link
