@@ -22,7 +22,12 @@ services:
     # disk is only mounted at runtime, so a build-time write fails with
     # "Read-only file system (os error 30)". Here it also means a schema change
     # applies itself on the next deploy.
-    startCommand: npx prisma db push --skip-generate && npm run start
+    #
+    # Through a script rather than inline, because the push and the server
+    # used to be joined by "&&" — which made every possible reason for a
+    # failed push, including a deploy overlapping with itself, take the whole
+    # site down with a 502. The script retries and then starts regardless.
+    startCommand: ./scripts/start.sh
     # /login is reachable without a session, so it is a real health signal.
     healthCheckPath: /login
 
