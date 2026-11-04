@@ -1689,23 +1689,43 @@ test.describe.serial("full app walkthrough", () => {
 
     // One section open, not four: the entry field is in front of you without
     // burying the day's overview.
-    const openForms = page.locator('input[name="description"]');
+    const openForms = page.locator('textarea[name="description"]');
     await expect(openForms).toHaveCount(1);
     await expect(openForms.first()).toBeVisible();
-
-    // The suggestion list is a shortcut, not a menu you must pick from — that
-    // is what made this feel like the app refused your own wording.
     await expect(openForms.first()).toHaveAttribute("placeholder", /however you like/);
-    await expect(page.getByText(/the suggestions are only a shortcut/)).toBeVisible();
 
-    const form = page.locator('form:has(input[name="description"])').first();
-    await openForms.first().fill("Zwei Spiegeleier, Brot und ein Apfel vom Baum");
+    // Nothing is suggested. The field used to carry a list of English foods
+    // that dropped over the keyboard as soon as you typed, and picking one
+    // wrote numbers into the fields below without being asked.
+    await expect(openForms.first()).not.toHaveAttribute("list", /.*/);
+    await expect(page.locator("datalist#common-foods")).toHaveCount(0);
+
+    const form = page.locator('form:has(textarea[name="description"])').first();
+
+    // A name that is on nobody's list, in the language it was eaten in, over
+    // more than one line.
+    await openForms.first().fill("Zwei Spiegeleier, Brot und ein Apfel vom Baum\nDazu ein Kaffee mit Milch");
     await expect(openForms.first()).toHaveValue(/Apfel vom Baum/);
+    await expect(openForms.first()).toHaveValue(/Kaffee mit Milch/);
 
-    // Free text fills nothing in behind your back.
+    // And nothing is filled in behind your back — not even for a food that
+    // used to be on the list by exactly this name.
     for (const field of ["kcal", "proteinG", "carbsG", "fatG"]) {
       await expect(form.locator(`[name="${field}"]`)).toHaveValue("");
     }
+    await openForms.first().fill("Banana");
+    await page.waitForTimeout(150);
+    for (const field of ["kcal", "proteinG", "carbsG", "fatG"]) {
+      await expect(
+        form.locator(`[name="${field}"]`),
+        `"Banana" does not quietly fill ${field} in`
+      ).toHaveValue("");
+    }
+
+    // What you wrote is what gets logged.
+    await openForms.first().fill("Spiegeleier mit Brot, Apfel vom Baum");
+    await form.getByRole("button", { name: "Log" }).click();
+    await expect(page.getByText("Spiegeleier mit Brot, Apfel vom Baum").first()).toBeVisible();
   });
 
   test("gym: example days hit the protein goal with real listed food", async () => {
