@@ -200,3 +200,32 @@ body {
     animation: none;
   }
 }
+
+/* A section says "here I am" when the jump bar sends you to it.
+
+   The bar's last chips point at sections that sit inside the final screenful,
+   so the page has no scroll left to give and tapping them moved nothing at
+   all — a button that does nothing looks broken whether or not you are
+   already looking at what it points to. The ring is the answer: the page
+   scrolls as far as it can, and the section itself confirms it was the one
+   asked for. */
+@keyframes jump-arrive {
+  0% {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+.jump-arrive {
+  border-radius: 1rem;
+  animation: jump-arrive 0.9s ease-out 2;
+}
+/* Without motion the ring simply stays for the second or so the class is on,
+   which says the same thing and never moves. */
+@media (prefers-reduced-motion: reduce) {
+  .jump-arrive {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+}
