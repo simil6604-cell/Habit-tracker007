@@ -175,7 +175,10 @@ export function OnboardingWizard() {
   }, [orderedSystems, subjectsBySystem, igcseTiers]);
   const [yearGroup, setYearGroup] = useState("");
 
-  const [gymGoals, setGymGoals] = useState<string[]>(["Improve consistency"]);
+  // Nothing ticked to start with. A goal that is already selected when you
+  // arrive is a goal the app set for you, and it then sits in your list
+  // afterwards looking like something you chose.
+  const [gymGoals, setGymGoals] = useState<string[]>([]);
 
   const [footballPosition, setFootballPosition] = useState("ST");
   const [footballTeamName, setFootballTeamName] = useState("");
