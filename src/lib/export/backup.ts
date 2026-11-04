@@ -131,6 +131,11 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
       // The dividers inside them. Separate rather than nested, like every
       // other pair here: nested means each one twice in the file.
       librarySections: true,
+      // What was ticked off and what was missed, with the note saying why.
+      // That record is the student's own account of their month, and losing
+      // it to a restore would be losing the only part of this nobody can
+      // reconstruct from somewhere else.
+      planChecks: true,
       revisionLinks: true,
       footballLinks: true,
       markedPapers: { include: { questions: true } },

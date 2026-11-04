@@ -52,7 +52,15 @@ export function WorkoutPlanCard({
               <Trash2 size={14} />
             </button>
           </form>
-          <button onClick={() => setOpen((o) => !o)} className="text-muted">
+          {/* A chevron with no name at all: a screen reader read it as
+              "button", and nothing in the page said what it opened. */}
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-label={open ? `Hide ${workout.name} details` : `Show ${workout.name} details`}
+            className="text-muted"
+          >
             <ChevronDown size={16} className={open ? "rotate-180 transition" : "transition"} />
           </button>
         </div>

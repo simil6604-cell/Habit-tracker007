@@ -83,6 +83,7 @@ model User {
   examPlans          ExamPlan[]
   libraryFolders     LibraryFolder[]
   librarySections    LibrarySection[]
+  planChecks         PlanCheck[]
   revisionLinks      RevisionLink[]
   footballLinks      FootballLink[]
   markedPapers       MarkedPaper[]
@@ -935,6 +936,41 @@ model LibraryFolder {
 // A second level rather than more folders, because "Economics — corrections"
 // and "Biology — corrections" as two top-level folders stops being a
 // structure the moment there are five subjects.
+// One row per thing-you-had-to-do per day: ticked off, or missed with a note
+// saying why and when you actually got to it.
+//
+// A separate table because the things it marks live in five others —
+// homework, exams, workouts, football trainings, matches — and most of them
+// repeat. A weekly gym workout is one Workout row and fifty-two days, so the
+// mark cannot live on the thing itself; it belongs to the pair (thing, day).
+//
+// Where the thing has a status of its own (Homework.status,
+// FootballTraining.completed) that is written too, so the School and Football
+// pages never disagree with this one, and a tick made over there still shows
+// as ticked here.
+model PlanCheck {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // What it is about: "homework:<id>", "workout:<id>", "match:<id>" …
+  // A plain string rather than six nullable foreign keys, because the row has
+  // to survive the thing it points at being deleted — "I missed this and here
+  // is why" is a note about your week, not about the row.
+  sourceKey String
+  // The day it was planned for, at midnight.
+  date      DateTime
+  status    String // DONE | MISSED
+  // Why it did not happen, or anything worth remembering about it.
+  note      String?
+  // When it actually happened, in your own words: "18:30", "nach der Schule".
+  atTime    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, sourceKey, date])
+  @@index([userId, date])
+}
+
 model LibrarySection {
   id        String        @id @default(cuid())
   userId    String

@@ -2134,6 +2134,159 @@ test.describe.serial("full app walkthrough", () => {
     await expect(opponents).toContainText("Not matched to a table row");
   });
 
+  test("tasks: school, gym and football in one month, each with what it actually takes", async () => {
+    // The ask in one sentence: one page that holds all three, says which kind
+    // of thing each is, says what it takes — which exercises, which drills,
+    // which pitch — and lets you tick it off or write down why it did not
+    // happen. Plus the month as a table of dates.
+    const todayLocal = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    // Homework and an exam dated inside this month, so the month view has
+    // one of each kind to show whatever day the suite happens to run on.
+    const dayInMonth = (d: number) =>
+      `${todayLocal.getFullYear()}-${String(todayLocal.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    await page.goto("/school");
+    const hwForm = page.locator('form:has(input[placeholder="Homework title"])');
+    await hwForm.locator('input[placeholder="Homework title"]').fill("Marktformen Arbeitsblatt");
+    await hwForm.locator('input[type="date"]').fill(dayInMonth(10));
+    await hwForm.getByRole("button", { name: "Add" }).click();
+    const examForm = page.locator('form:has(input[placeholder="Exam title"])');
+    await examForm.locator('input[placeholder="Exam title"]').fill("Economics Klausur");
+    await examForm.locator('input[type="date"]').fill(dayInMonth(20));
+    await examForm.getByRole("button", { name: "Add" }).click();
+    // The School page lists homework that is still PENDING, so its presence
+    // here now and its absence later is what proves the tick on /tasks
+    // really wrote through to the row.
+    await expect(page.getByText("Marktformen Arbeitsblatt").first()).toBeVisible();
+
+    // A gym plan on a weekday, with a real exercise on it. A weekly plan is
+    // one row and many days, which is the case the whole page turns on.
+    await page.goto("/gym");
+    const planForm = page.locator('form:has(input[placeholder="e.g. Upper Body"])');
+    await planForm.locator('input[placeholder="e.g. Upper Body"]').fill("Push Day");
+    await planForm.locator('select[name="dayOfWeek"]').selectOption(String((todayLocal.getDay() + 6) % 7));
+    await planForm.getByRole("button", { name: "Add plan" }).click();
+
+    await page.getByRole("button", { name: "Show Push Day details" }).click();
+    const exerciseForm = page
+      .locator('form:has(input[placeholder="Exercise (start typing for suggestions)"])')
+      .first();
+    await exerciseForm.locator('input[name="name"]').fill("Bankdrücken");
+    await exerciseForm.locator('input[name="targetSets"]').fill("4");
+    await exerciseForm.locator('input[name="targetReps"]').fill("8");
+    await exerciseForm.locator('input[name="targetWeight"]').fill("60");
+    await exerciseForm.getByRole("button", { name: "Add" }).click();
+    await expect(page.getByText(/Bankdrücken/).first()).toBeVisible();
+
+    await page.goto("/tasks");
+
+    // The table of dates, whole weeks Monday to Sunday.
+    const table = page.getByTestId("plan-month-table");
+    await expect(table).toBeVisible();
+    await expect(table.locator("tbody td")).toHaveCount(42);
+    await expect(table.locator("thead th").first()).toHaveText("Mo");
+
+    // Each kind says which kind it is. "School" alone would not tell you
+    // whether tonight is an hour of homework or a test on Friday.
+    const list = page.getByTestId("plan-days");
+    await expect(list).toContainText("Homework");
+    await expect(list).toContainText("Exam");
+    await expect(list).toContainText("Workout");
+    await expect(list).toContainText("Marktformen Arbeitsblatt");
+    await expect(list).toContainText("Economics Klausur");
+
+    // Gym says which exercise, with the sets and reps — the thing you need
+    // standing in front of the rack.
+    const workout = page.locator('[data-testid^="plan-item-workout:"]').first();
+    await expect(workout).toContainText("Push Day");
+    await expect(workout).toContainText("Bankdrücken");
+    await expect(workout).toContainText("4 × 8");
+    await expect(workout).toContainText("60 kg");
+
+    // A weekly plan is on every one of its weekdays this month, not once.
+    expect(await page.locator('[data-testid^="plan-item-workout:"]').count()).toBeGreaterThan(1);
+
+    // Football brings the match along with where to be.
+    const matchRow = page.locator('[data-testid^="plan-item-match:"]').first();
+    if ((await matchRow.count()) > 0) {
+      await expect(matchRow).toContainText("FC Baar");
+      await expect(matchRow).toContainText("Sportplatz Herti");
+    }
+
+    // Tick one off.
+    const homework = page
+      .locator('[data-testid^="plan-item-homework:"]')
+      .filter({ hasText: "Marktformen Arbeitsblatt" })
+      .first();
+    const homeworkTitle = "Marktformen Arbeitsblatt";
+    await homework.getByRole("button", { name: /^Mark done/ }).click();
+    await expect(homework).toHaveAttribute("data-state", "DONE");
+
+    // And the page that owns it agrees — two screens disagreeing about the
+    // same piece of work is worse than either of them being wrong alone.
+    // School's list is the pending ones, so done means gone from it.
+    await page.goto("/school");
+    // Scoped to the homework panel: the agenda above it lists what is coming
+    // up in the next seven days, which is a different question.
+    await expect(page.locator("#homework").getByText(homeworkTitle)).toHaveCount(0);
+
+    // The other answer: it did not happen, and here is why. This is the half
+    // a checkbox cannot hold — by Sunday, a thing that did not happen with no
+    // note is indistinguishable from one you forgot existed.
+    await page.goto("/tasks");
+    const missTarget = page.locator('[data-testid^="plan-item-workout:"]').first();
+    const missKey = (await missTarget.getAttribute("data-testid"))!.replace("plan-item-", "");
+    await missTarget.getByRole("button", { name: /^Couldn't do/ }).click();
+    const missForm = page.getByTestId(`plan-miss-form-${missKey}`);
+    await missForm.locator('textarea[name="note"]').fill("Rücken verspannt, nur Cardio gemacht");
+    await missForm.locator('input[name="atTime"]').fill("Samstag 10:00");
+    await missForm.getByRole("button", { name: "Save" }).click();
+
+    const missed = page.locator(`[data-testid="plan-item-${missKey}"]`).first();
+    await expect(missed).toHaveAttribute("data-state", "MISSED");
+    await expect(missed.getByTestId("plan-item-note")).toContainText("Rücken verspannt");
+    await expect(missed.getByTestId("plan-item-note")).toContainText("Samstag 10:00");
+
+    // The counts underneath the table follow.
+    await expect(page.getByTestId("plan-counts")).toContainText("1 done");
+    await expect(page.getByTestId("plan-counts")).toContainText("1 missed");
+
+    // Marking the FIRST of the weekly workouts must not mark the rest: the
+    // mark belongs to the day, not to the plan.
+    const laterWorkouts = page.locator('[data-testid^="plan-item-workout:"][data-state="OPEN"]');
+    expect(await laterWorkouts.count(), "the other weeks are untouched").toBeGreaterThan(0);
+
+    // A mis-tap can be taken back.
+    await missed.getByRole("button", { name: /^Undo/ }).click();
+    await expect(page.locator(`[data-testid="plan-item-${missKey}"]`).first()).toHaveAttribute(
+      "data-state",
+      "OPEN"
+    );
+
+    // Tapping a date in the table narrows the list to that day.
+    const todayCell = page.getByTestId(`plan-day-${iso(todayLocal)}`);
+    await todayCell.click();
+    await expect(page).toHaveURL(new RegExp(`day=${iso(todayLocal)}`));
+    await expect(page.getByRole("button", { name: "Show the whole month" }).or(
+      page.getByRole("link", { name: "Show the whole month" })
+    )).toBeVisible();
+
+    // Football's individual training is generated with no day at all, and a
+    // gym plan can be added without one. Neither has a place in a month of
+    // dates, so they get their own list rather than being quietly dropped —
+    // a page that knows about work it never mentions is worse than no page.
+    const parked = page.getByTestId("plan-unscheduled");
+    await expect(parked).toBeVisible();
+    await expect(parked).toContainText("Training");
+    await expect(page.getByText(/Not on a day yet/)).toBeVisible();
+
+    // A month in the URL that is not a month falls back instead of breaking.
+    await page.goto("/tasks?month=banana&day=nope");
+    await expect(page.getByTestId("plan-month-table")).toBeVisible();
+  });
+
   test("ai coach: responds to a chat message", async () => {
     await page.goto("/coach");
     const chat = page.locator('form:has(input[name="message"])');

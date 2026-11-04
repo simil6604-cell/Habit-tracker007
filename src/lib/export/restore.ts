@@ -208,6 +208,7 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   // After the things that sit in folders: those rows carry folderId, and this
   // relation is SetNull, so deleting folders first means SQLite rewrites every
   // one of them to null on the way to deleting them anyway.
+  await tx.planCheck.deleteMany({ where: { userId } });
   await tx.librarySection.deleteMany({ where: { userId } });
   await tx.libraryFolder.deleteMany({ where: { userId } });
   await tx.revisionLink.deleteMany({ where: { userId } });
@@ -663,6 +664,28 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
           }
         }
       }
+    }
+
+    /**
+     * Last, because every one of these points at something restored above.
+     *
+     * A plan check names what it is about inside a string — "homework:<id>",
+     * "match:<id>" — rather than with a foreign key, so `link` cannot help:
+     * the id has to be dug out of the text and put back rewritten. Left
+     * alone, every tick and every "I missed this because…" would come back
+     * naming ids that no longer exist anywhere, and the page would show a
+     * month of untouched work.
+     */
+    for (const entry of rows(data.planChecks)) {
+      const row = scalars(entry, owned);
+      if (!row || typeof row.sourceKey !== "string") continue;
+      const [table, oldId] = row.sourceKey.split(":");
+      const mapped = oldId ? ids.get(oldId) : undefined;
+      // The thing itself did not make it into this backup, so there is
+      // nothing for the mark to be about.
+      if (!mapped) continue;
+      row.sourceKey = `${table}:${mapped}`;
+      await create((r) => tx.planCheck.create({ data: r as never }), withNewId(row));
     }
     },
     { timeout: 180_000, maxWait: 20_000 }
