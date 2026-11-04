@@ -15,7 +15,6 @@ import { NutritionBalanceCard } from "@/components/gym/nutrition-balance-card";
 import { WaterTrackerCard } from "@/components/gym/water-tracker-card";
 import { PhysiqueGoalCard } from "@/components/gym/physique-goal-card";
 import { GoalsPanel } from "@/components/shared/goals-panel";
-import { GYM_GOALS } from "@/lib/data/football";
 import { getNutritionSummary } from "@/lib/gym/nutrition-summary";
 import { DomainHero } from "@/components/layout/domain-hero";
 import { ProgressPlanPanel } from "@/components/progress/progress-plan";
@@ -151,7 +150,7 @@ export default async function GymPage({
         <Card>
           <CardHeader><CardTitle>Goals</CardTitle></CardHeader>
           <CardContent>
-            <GoalsPanel goals={goals} category="GYM" path="/gym" suggestions={GYM_GOALS} />
+            <GoalsPanel goals={goals} category="GYM" path="/gym" />
           </CardContent>
         </Card>
         <Card>

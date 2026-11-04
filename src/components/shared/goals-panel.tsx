@@ -5,16 +5,25 @@ import { Trash2 } from "lucide-react";
 
 type Goal = { id: string; title: string; progressPct: number };
 
+/**
+ * Your goals, in your words.
+ *
+ * The field used to carry a <datalist> of five stock gym goals. On a phone
+ * that drops a list over the keyboard as soon as you type, so a box meant for
+ * anything at all looked like a menu of five things — and the five were in
+ * English, which is not the language most of these get written in.
+ *
+ * Nothing is offered now. A goal is a sentence somebody means; the app has no
+ * business finishing it for them.
+ */
 export function GoalsPanel({
   goals,
   category,
   path,
-  suggestions = [],
 }: {
   goals: Goal[];
   category: string;
   path: string;
-  suggestions?: string[];
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -24,15 +33,11 @@ export function GoalsPanel({
         <input
           name="title"
           required
-          list={`goal-suggestions-${category}`}
-          placeholder="New goal"
-          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          autoComplete="off"
+          placeholder="Write your own goal…"
+          aria-label="New goal"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
         />
-        <datalist id={`goal-suggestions-${category}`}>
-          {suggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
         <Button type="submit" size="sm" variant="secondary">Add goal</Button>
       </form>
 
@@ -41,10 +46,14 @@ export function GoalsPanel({
       ) : (
         <ul className="flex flex-col gap-3">
           {goals.map((g) => (
-            <li key={g.id} className="flex items-center gap-3">
-              <span className="w-40 shrink-0 truncate text-sm">{g.title}</span>
+            <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {/* The goal gets its own line and the bar sits under it, rather
+                  than the two sharing one. Cut at a fixed width, a goal you
+                  wrote yourself loses the end of the sentence — which is
+                  usually the part that means something. */}
+              <span className="w-full text-sm">{g.title}</span>
               <ProgressBar value={g.progressPct} className="flex-1" />
-              <span className="w-10 text-right text-xs text-muted">{g.progressPct}%</span>
+              <span className="w-10 shrink-0 text-right text-xs text-muted">{g.progressPct}%</span>
               <form action={deleteGoal.bind(null, g.id, path)}>
                 <button type="submit" className="text-muted hover:text-danger"><Trash2 size={14} /></button>
               </form>

@@ -1728,6 +1728,38 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByText("Spiegeleier mit Brot, Apfel vom Baum").first()).toBeVisible();
   });
 
+  test("gym: a goal is a sentence you write, not one of five the app knows", async () => {
+    await page.goto("/gym");
+    // Found by its form field name, not by its label, so this test still
+    // reaches the old version of the box when the fix is taken back out.
+    const field = page.locator('form:has(input[name="category"][value="GYM"]) input[name="title"]').first();
+    await expect(field).toBeVisible();
+
+    // The field used to carry a list of five stock goals in English, which on
+    // a phone drops over the keyboard the moment you type and makes a free
+    // box look like a menu.
+    await expect(field).not.toHaveAttribute("list", /.*/);
+    await expect(page.locator("datalist")).toHaveCount(0);
+    await expect(field).toHaveAttribute("placeholder", /write your own/i);
+
+    // Something nobody would have suggested, in the language it was thought
+    // in, long enough that a fixed-width cell would have cut it.
+    const goal = `Bankdrücken 80 kg bis Ostern schaffen ${Date.now()}`;
+    await field.fill(goal);
+    await page.getByRole("button", { name: "Add goal" }).click();
+
+    const row = page.locator("li", { hasText: goal }).first();
+    await expect(row).toBeVisible();
+    // Shown whole, not clipped: the end of the sentence is the part that
+    // means something.
+    await expect(row).toContainText("bis Ostern schaffen");
+
+    // And it can be taken off again — the goals already in an account came
+    // from the onboarding chips, and nothing has to stay.
+    await row.getByRole("button").click();
+    await expect(page.locator("li", { hasText: goal })).toHaveCount(0);
+  });
+
   test("gym: example days hit the protein goal with real listed food", async () => {
     await page.goto("/gym/meal-plan");
 
