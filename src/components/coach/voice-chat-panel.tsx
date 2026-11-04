@@ -8,6 +8,7 @@ import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
+import { utteranceFor } from "@/lib/ai/voice/speak";
 import {
   sendCoachMessageLive,
   clearCoachChat,
@@ -135,9 +136,9 @@ export function VoiceChatPanel({
     const text = speakableText(lastReply.content);
     if (!text) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = navigator.language || "en-GB";
-    window.speechSynthesis.speak(utterance);
+    // In the language the reply is written in, not the language of the
+    // phone — see utteranceFor.
+    window.speechSynthesis.speak(utteranceFor(text));
   }, [lastReply, speakReplies, canSpeak, pending, voice]);
 
   // Leaving the page mid-sentence shouldn't leave the browser talking.

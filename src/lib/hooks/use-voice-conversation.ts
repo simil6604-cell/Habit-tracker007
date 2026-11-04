@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSpeechRecognition } from "./use-speech-recognition";
 import { spokenGreeting, toSpokenText, type VoiceWho } from "@/lib/ai/spoken-mode";
+import { primeVoices, utteranceFor } from "@/lib/ai/voice/speak";
 
 /** How long a silence has to last before a spoken turn counts as finished. */
 export const TURN_END_SILENCE_MS = 1400;
@@ -112,7 +113,13 @@ export function useVoiceConversation({
   const onSendRef = useRef(onSend);
   onSendRef.current = onSend;
 
-  useEffect(() => setCanSynth(synthSupported()), []);
+  useEffect(() => {
+    setCanSynth(synthSupported());
+    // Chrome hands back an empty voice list until something has asked for
+    // it once, and an empty list means the default voice — which is the
+    // whole problem. Asked for here so the greeting already has one.
+    primeVoices();
+  }, []);
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -262,8 +269,10 @@ export function useVoiceConversation({
 
         const browserVoice = () => {
           if (!current() || handedOver) return;
-          const utterance = new SpeechSynthesisUtterance(spokenText);
-          utterance.lang = lang ?? (typeof navigator !== "undefined" ? navigator.language : "en-GB");
+          // Read in the language of the SENTENCE, by a voice that speaks it.
+          // This used to be the language of the phone, so a German device
+          // read every English answer in a German accent.
+          const utterance = utteranceFor(spokenText, lang);
           utterance.onend = handOver;
           // A synthesiser that fails silently would leave the microphone shut
           // and voice mode looking hung, so an error moves on as well.
