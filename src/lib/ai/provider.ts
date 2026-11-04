@@ -33,9 +33,28 @@ export class MockAIProvider implements AIProvider {
 
 export const isRealAIConfigured = Boolean(process.env.ANTHROPIC_API_KEY);
 
-let activeProvider: AIProvider = isRealAIConfigured ? new AnthropicProvider() : new MockAIProvider();
+let activeProvider: AIProvider | null = null;
 
+/**
+ * Built on first use rather than when this file loads.
+ *
+ * It used to be constructed at module level, and that made the app depend
+ * on which of three files happened to be imported first: anthropic-provider
+ * imports health, health imports this, and this imported anthropic-provider.
+ * Entered from the wrong end, the class is still undefined when the
+ * `new` runs and the whole app dies at startup with "AnthropicProvider is
+ * not a constructor" — a message that names nothing you could act on. It
+ * resolved the right way only because every call site happens to import
+ * this file first, which is not a thing to rely on.
+ *
+ * Reading the key at first use rather than at import is the second reason:
+ * a host that populates the environment a moment after the module graph
+ * loads would otherwise be stuck with the mock for the life of the process.
+ */
 export function getAIProvider(): AIProvider {
+  if (!activeProvider) {
+    activeProvider = process.env.ANTHROPIC_API_KEY ? new AnthropicProvider() : new MockAIProvider();
+  }
   return activeProvider;
 }
 

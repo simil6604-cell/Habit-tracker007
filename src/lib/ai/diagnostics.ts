@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth/auth";
 import { getAIProvider, isRealAIConfigured } from "./provider";
+import { anthropicModel } from "./model-config";
 
 export type AIDiagnosis = {
   ok: boolean;
@@ -24,7 +25,7 @@ export async function runAIDiagnostics(): Promise<AIDiagnosis> {
   if (!session?.user?.id) throw new Error("Unauthorized");
 
   const raw = process.env.ANTHROPIC_API_KEY ?? "";
-  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+  const model = anthropicModel();
   const keyHint = raw
     ? `set — ${raw.length} characters, starts "${raw.slice(0, 7)}…", ends "…${raw.slice(-4)}"`
     : "not set";

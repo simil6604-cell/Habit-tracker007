@@ -2,8 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider } from "./provider";
 import { recordAIFailure, recordAISuccess } from "./health";
 import { describeKeyShape, inspectApiKey } from "./api-key";
-
-const DEFAULT_MODEL = "claude-sonnet-5";
+import { anthropicEffort, anthropicModel, DEFAULT_MAX_TOKENS, type Effort } from "./model-config";
 
 function friendlyAnthropicError(err: unknown): string {
   if (err instanceof Anthropic.APIError) {
@@ -65,10 +64,12 @@ export class AnthropicProvider implements AIProvider {
   name = "anthropic";
   private client: Anthropic;
   private model: string;
+  private effort: Effort;
 
   constructor() {
     this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    this.model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+    this.model = anthropicModel();
+    this.effort = anthropicEffort();
   }
 
   async generate(prompt: string, context: Record<string, unknown> = {}): Promise<string> {
@@ -88,7 +89,7 @@ export class AnthropicProvider implements AIProvider {
     }
 
     const system = typeof context.system === "string" ? context.system : undefined;
-    const maxTokens = typeof context.maxTokens === "number" ? context.maxTokens : 1024;
+    const maxTokens = typeof context.maxTokens === "number" ? context.maxTokens : DEFAULT_MAX_TOKENS;
     const images = collectImages(context);
 
     const content: Anthropic.MessageParam["content"] =
@@ -109,6 +110,10 @@ export class AnthropicProvider implements AIProvider {
       message = await this.client.messages.create({
         model: this.model,
         max_tokens: maxTokens,
+        // Thinking is always on and cannot be switched off on this model;
+        // effort is the dial, and it is set rather than left to a default
+        // that moves when the model does.
+        output_config: { effort: this.effort },
         system,
         messages: [{ role: "user", content }],
       });
