@@ -18,6 +18,7 @@ import {
 } from "@/lib/ai/explainer-board";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
+import { utteranceFor } from "@/lib/ai/voice/speak";
 import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
 import { getLessons, renameLesson, type LessonEntry } from "@/lib/school/class-recording-actions";
 import {
@@ -279,9 +280,9 @@ export function SchoolAIPanel({
     const text = speakableText(lastReply.content);
     if (!text) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = navigator.language || "en-GB";
-    window.speechSynthesis.speak(utterance);
+    // In the language the reply is written in, not the language of the
+    // phone — see utteranceFor.
+    window.speechSynthesis.speak(utteranceFor(text));
   }, [lastReply, speakReplies, canSpeak, pending, voice]);
 
   // Leaving the page mid-sentence shouldn't leave the browser talking.
