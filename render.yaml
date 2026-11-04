@@ -66,8 +66,30 @@ services:
       - key: INVITE_CODE
         sync: false
 
+      # The key that makes every AI feature in this app a real Claude.
       # Prompted for in the dashboard, never stored in the repo.
+      #
+      # Without it nothing breaks: the school AI, the tutor, the quizzes,
+      # the marked-paper reader and the coach all fall back to their own
+      # rule-based answers and the app says so in a banner. With it, every
+      # one of them is answered by Claude.
+      #
+      # Made at console.anthropic.com → API keys → Create key. Copy it from
+      # the screen that appears right then — the shortened value in the list
+      # afterwards is a label, not the key, and the app will tell you so.
       - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # Which Claude, and how hard it thinks. Both optional.
+      #
+      # Unset, the app uses claude-opus-5-5 at medium effort. Set
+      # ANTHROPIC_MODEL to claude-sonnet-5-5 for roughly half the cost per
+      # token, or ANTHROPIC_EFFORT to high for more thorough answers at a
+      # higher one. A value that is not one of low/medium/high/xhigh/max is
+      # ignored rather than sent, so a typo here cannot take the AI down.
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: ANTHROPIC_EFFORT
         sync: false
 
       - key: AUTH_SECRET
