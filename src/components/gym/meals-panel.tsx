@@ -6,7 +6,6 @@ import { createMeal, deleteMeal, type MealFormState } from "@/lib/nutrition/acti
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
-import { COMMON_FOODS } from "@/lib/data/nutrition";
 import { estimateMealNutrition } from "@/lib/nutrition/estimate";
 import type { MealTypeSummary } from "@/lib/gym/nutrition-summary";
 import { currentMealType } from "@/lib/gym/meal-time";
@@ -30,8 +29,6 @@ const TYPE_META: Record<string, { label: string; emoji: string }> = {
   DINNER: { label: "Dinner", emoji: "🥗" },
   SNACK: { label: "Snacks", emoji: "🍎" },
 };
-
-const FOODS_DATALIST_ID = "common-foods";
 
 /** Server actions take plain data, so the photo travels as a data URL. */
 function fileToDataUrl(file: File): Promise<string> {
@@ -65,7 +62,7 @@ function MealTypeRow({
   const proteinRef = useRef<HTMLInputElement>(null);
   const carbsRef = useRef<HTMLInputElement>(null);
   const fatRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateNote, setEstimateNote] = useState<string | null>(null);
@@ -108,15 +105,6 @@ function MealTypeRow({
     }
   }
 
-  function onDescriptionChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const match = COMMON_FOODS.find((f) => f.name.toLowerCase() === e.target.value.toLowerCase());
-    if (!match) return;
-    if (kcalRef.current && !kcalRef.current.value) kcalRef.current.value = String(match.kcal);
-    if (proteinRef.current && !proteinRef.current.value) proteinRef.current.value = String(match.proteinG);
-    if (carbsRef.current && !carbsRef.current.value) carbsRef.current.value = String(match.carbsG);
-    if (fatRef.current && !fatRef.current.value) fatRef.current.value = String(match.fatG);
-  }
-
   return (
     <div className="rounded-xl border border-border bg-surface p-3">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 text-left">
@@ -138,27 +126,24 @@ function MealTypeRow({
 
       {open && (
         <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-          <datalist id={FOODS_DATALIST_ID}>
-            {COMMON_FOODS.map((f) => (
-              <option key={f.name} value={f.name} />
-            ))}
-          </datalist>
           <form action={mealAction} className="flex flex-wrap gap-2">
             <input type="hidden" name="type" value={breakdown.type} />
-            <input
+            {/* Your own words, in your own language, in as many lines as it
+                takes. This was a one-line field with a list of English foods
+                attached: the list dropped itself over the keyboard the moment
+                you typed, and picking from it silently wrote numbers into the
+                fields below. Nothing is suggested and nothing is filled in
+                unless you ask for it. */}
+            <textarea
               ref={descriptionRef}
               name="description"
               required
+              rows={2}
               placeholder="What did you eat? Write it however you like…"
-              list={FOODS_DATALIST_ID}
-              onChange={onDescriptionChange}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm"
             />
-            {/* The datalist pops a suggestion list as soon as you type, which
-                reads as though the app only accepts what's on it. It doesn't. */}
             <p className="w-full text-xs text-muted">
-              Type anything — the suggestions are only a shortcut that fills the numbers for you. Leave the numbers
-              blank and use ✨ Estimate with AI, or fill them in yourself.
+              The numbers are optional. Leave them blank and use ✨ Estimate with AI, or fill them in yourself.
             </p>
             <input ref={kcalRef} name="kcal" type="number" min={0} placeholder="kcal" className="w-20 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
             <input ref={proteinRef} name="proteinG" type="number" min={0} placeholder="protein g" className="w-24 rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
