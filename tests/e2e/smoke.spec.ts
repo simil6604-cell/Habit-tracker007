@@ -1474,6 +1474,43 @@ test.describe.serial("full app walkthrough", () => {
     const top = await page.locator("#tutor").evaluate((el) => el.getBoundingClientRect().top);
     expect(top, "the tutor section is at the top of the screen, not below the fold").toBeLessThan(200);
     expect(await page.evaluate(() => window.scrollY), "the page itself scrolled").toBeGreaterThan(100);
+
+    // EVERY chip, pressed from the bottom of the page, which is where this
+    // broke. A plain #anchor cannot scroll past the end of the document, so
+    // the last sections — Homework, Marked work, Notes — all sit inside the
+    // final screenful and tapping them moved nothing whatsoever. Only the
+    // first chip was ever tested, and it is one of the ones that worked.
+    const labels = await bar
+      .locator("a")
+      .evaluateAll((links) => links.map((l) => (l.textContent ?? "").trim()));
+    for (const label of labels) {
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.waitForTimeout(150);
+      const chip = bar.getByRole("link", { name: label, exact: true });
+      await chip.click();
+      await page.waitForTimeout(250);
+
+      const href = (await chip.getAttribute("href"))!;
+      const section = page.locator(href);
+      const box = (await section.boundingBox())!;
+      const viewport = page.viewportSize()!.height;
+      // Either it came up to the top, or the page had no room left and the
+      // section is at least on the screen. What must never happen again is a
+      // tap that leaves the section off the bottom of the window.
+      expect(box.y, `"${label}" is on screen after tapping its chip`).toBeLessThan(viewport - 40);
+      expect(box.y + box.height, `"${label}" is not above the window`).toBeGreaterThan(0);
+
+      // And the chip you pressed says so. When the page cannot move, nothing
+      // crosses the observer's fold line, so this is the only signal there
+      // is that the tap was heard at all.
+      await expect(chip, `"${label}" is the current chip after tapping it`).toHaveAttribute(
+        "aria-current",
+        "true"
+      );
+      // The section rings on arrival, which is what makes a tap that cannot
+      // scroll anywhere still answer.
+      await expect(section, `"${label}" flashes when you arrive`).toHaveClass(/jump-arrive/);
+    }
   });
 
   test("school: each subject's two slots, and its deck on the flashcards page", async () => {
