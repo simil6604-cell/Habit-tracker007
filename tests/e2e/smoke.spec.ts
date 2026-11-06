@@ -2182,11 +2182,12 @@ test.describe.serial("full app walkthrough", () => {
 
     await page.goto("/tasks");
 
-    // The table of dates, whole weeks Monday to Sunday.
-    const table = page.getByTestId("plan-month-table");
-    await expect(table).toBeVisible();
-    await expect(table.locator("tbody td")).toHaveCount(42);
-    await expect(table.locator("thead th").first()).toHaveText("Mo");
+    // The month grid is NOT here. It was a wall of mostly-empty dated boxes
+    // sitting above the only list that says what the days actually hold,
+    // with a Calendar page one tap away — the same month twice, and the
+    // useful half pushed off the screen.
+    await expect(page.getByTestId("plan-month-table")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /See the month ticked off/ })).toBeVisible();
 
     // Each kind says which kind it is. "School" alone would not tell you
     // whether tonight is an hour of homework or a test on Friday.
@@ -2265,13 +2266,12 @@ test.describe.serial("full app walkthrough", () => {
       "OPEN"
     );
 
-    // Tapping a date in the table narrows the list to that day.
-    const todayCell = page.getByTestId(`plan-day-${iso(todayLocal)}`);
-    await todayCell.click();
-    await expect(page).toHaveURL(new RegExp(`day=${iso(todayLocal)}`));
-    await expect(page.getByRole("button", { name: "Show the whole month" }).or(
+    // A day in the URL narrows the list to that day — which is what the day
+    // numbers in the Analytics tracker link to.
+    await page.goto(`/tasks?day=${iso(todayLocal)}`);
+    await expect(
       page.getByRole("link", { name: "Show the whole month" })
-    )).toBeVisible();
+    ).toBeVisible();
 
     // Football's individual training is generated with no day at all, and a
     // gym plan can be added without one. Neither has a place in a month of
@@ -2284,7 +2284,78 @@ test.describe.serial("full app walkthrough", () => {
 
     // A month in the URL that is not a month falls back instead of breaking.
     await page.goto("/tasks?month=banana&day=nope");
-    await expect(page.getByTestId("plan-month-table")).toBeVisible();
+    await expect(page.getByTestId("plan-days")).toBeVisible();
+  });
+
+  test("analytics: the month as a wall of ticks, one row per thing, coloured by which part of life", async () => {
+    // Asked for with photographs of a habit-tracker spreadsheet: a ring with
+    // a percentage, a bar per week, a grid of ticks, a table of what is
+    // holding up. The difference is that nothing here is typed in — the rows
+    // are the homework, workouts and training the app already knows about.
+    await page.goto("/analytics#tracker");
+
+    const grid = page.getByTestId("tracker-grid");
+    await expect(grid).toBeVisible();
+
+    // One row per thing, not one per occurrence: the weekly workout is a
+    // single row with a square on each of its days.
+    const workoutRow = page.locator('[data-testid^="tracker-row-workout:"]').first();
+    await expect(workoutRow).toBeVisible();
+    await expect(workoutRow).toContainText("Push Day");
+    expect(await page.locator('[data-testid^="tracker-row-workout:"]').count()).toBe(1);
+
+    // All three parts of life are in the same grid.
+    await expect(grid).toContainText("Marktformen Arbeitsblatt");
+    await expect(grid).toContainText("Economics Klausur");
+
+    // Colour is never the only signal: the app's gym orange and football
+    // green are about ΔE 6 apart for the commonest colour blindness, which
+    // is only allowed alongside something else. Every row is named, the
+    // rings are labelled, and a square's state is a shape first.
+    const ticked = grid.locator("td span[title*='done']").first();
+    await expect(ticked).toContainText("✓");
+    const legend = page.getByTestId("tracker-legend");
+    await expect(legend).toContainText("School");
+    await expect(legend).toContainText("Gym");
+    await expect(legend).toContainText("Football");
+    await expect(legend).toContainText("done");
+    await expect(legend).toContainText("missed");
+
+    // The rings, each with its own name beside it rather than a colour
+    // alone.
+    await expect(page.getByRole("img", { name: /^Everything:/ })).toBeVisible();
+    await expect(page.getByRole("img", { name: /^School:/ })).toBeVisible();
+
+    // And no ring for a part of life that has nothing due yet. The gym plan
+    // is in the grid — its first day is today and the rest are still to
+    // come — but an empty ring reading 0% would say you had failed at
+    // something that has not happened.
+    await expect(page.getByRole("img", { name: /^Gym:/ })).toHaveCount(0);
+
+    // What is holding up, with the best run.
+    const top = page.getByTestId("tracker-top");
+    await expect(top).toBeVisible();
+    await expect(top).toContainText("Best run");
+    // Each line says which part of life it is and what kind of thing, in
+    // words — "School · Homework" — so the colour beside it is a second
+    // signal rather than the only one.
+    await expect(top).toContainText("Marktformen Arbeitsblatt");
+    await expect(top).toContainText("School");
+    await expect(top).toContainText("Homework");
+    // Nothing that is not due yet is ranked: a row at 0% that has not
+    // happened is not information.
+    await expect(top).not.toContainText("Push Day");
+
+    // A day number is the way back to what was on that day.
+    await expect(page.locator('[data-testid="tracker-grid"] a[href*="/tasks?month="]').first()).toBeVisible();
+
+    // A month from before any of this existed is empty, not a wall of
+    // failure. A weekly plan is projected onto its weekday — and was
+    // projected backwards through every month in the past until it was
+    // taught not to exist before it was written down.
+    await page.goto("/analytics?month=2020-01#tracker");
+    await expect(page.getByText(/Nothing planned in January/)).toBeVisible();
+    await expect(page.getByTestId("tracker-grid")).toHaveCount(0);
   });
 
   test("ai coach: responds to a chat message", async () => {

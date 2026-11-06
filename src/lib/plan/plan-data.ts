@@ -127,10 +127,20 @@ export async function getPlanMonth(
   const weeklyWorkouts = workouts.filter((workout) => workout.dayOfWeek !== null);
   const weeklyTrainings = trainings.filter((training) => training.date === null && training.dayOfWeek !== null);
 
+  /**
+   * A standing plan did not exist before it was made.
+   *
+   * Projecting it backwards puts it on every matching weekday of every
+   * month in the past, and the tracker scores each of those as a day you
+   * did not do it — a wall of failure for weeks that happened before the
+   * plan was written down.
+   */
+  const startedBy = (createdAt: Date, day: Date) => startOfDay(createdAt) <= startOfDay(day);
+
   for (let day = startOfDay(from); day <= to; day = addDays(day, 1)) {
     const dow = (day.getDay() + 6) % 7;
     for (const workout of weeklyWorkouts) {
-      if (workout.dayOfWeek !== dow) continue;
+      if (workout.dayOfWeek !== dow || !startedBy(workout.createdAt, day)) continue;
       items.push({
         sourceKey: `workout:${workout.id}`,
         kind: "WORKOUT",
@@ -144,7 +154,7 @@ export async function getPlanMonth(
       });
     }
     for (const training of weeklyTrainings) {
-      if (training.dayOfWeek !== dow) continue;
+      if (training.dayOfWeek !== dow || !startedBy(training.createdAt, day)) continue;
       items.push({
         sourceKey: `training:${training.id}`,
         kind: "TRAINING",

@@ -6,7 +6,6 @@ import { createTask } from "@/lib/tasks/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TaskItem } from "@/components/tasks/task-item";
-import { PlanMonthTable } from "@/components/tasks/plan-month-table";
 import { PlanItemRow } from "@/components/tasks/plan-item-row";
 import { getPlanMonth } from "@/lib/plan/plan-data";
 import { KIND_META, DOMAIN_META } from "@/lib/plan/plan";
@@ -76,10 +75,16 @@ export default async function TasksPage({
         School, gym and football in one list — what it is, what it takes, and whether it happened.
       </p>
 
+      {/* The month grid that used to sit here is gone. There is a Calendar
+          page a tap away, and a wall of mostly-empty dated boxes above the
+          only list that says what the days hold is the same month twice,
+          with the useful half pushed off the screen. The whole month as a
+          tracker — ticks, rings, weeks — is under Analytics, where the rest
+          of the measuring lives. */}
       <Card className="mt-6">
         <CardHeader className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>{format(month, "MMMM yyyy")}</CardTitle>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Link
               href={`/tasks?month=${monthParam(subMonths(month, 1))}`}
               className="rounded-lg border border-border px-2.5 py-1 text-xs hover:border-accent/50"
@@ -98,11 +103,16 @@ export default async function TasksPage({
             >
               {format(addMonths(month, 1), "MMM")} →
             </Link>
+            <Link
+              href={`/analytics?month=${monthParam(month)}#tracker`}
+              className="rounded-lg border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent"
+            >
+              See the month ticked off →
+            </Link>
           </div>
         </CardHeader>
-        <CardContent>
-          <PlanMonthTable month={month} items={items} checks={checkIndex} selected={selectedDay} today={today} />
-          <p className="mt-3 text-xs text-muted" data-testid="plan-counts">
+        <CardContent className="pt-2">
+          <p className="text-xs text-muted" data-testid="plan-counts">
             {counts.total === 0
               ? "Nothing on this month yet — homework, workouts, training and matches all land here on their own."
               : `${counts.total} this month · ${counts.done} done · ${counts.missed} missed · ${counts.open} still open`}
