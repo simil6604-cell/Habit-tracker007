@@ -649,6 +649,11 @@ model FootballTraining {
   drills        String // JSON-encoded list of {name, minutes, cueText?, videoUrl?}
   isTeamSession Boolean         @default(true)
   completed     Boolean         @default(false)
+  // When the session was added. A weekly session is a standing plan with no
+  // dates of its own, and the tracker projects it onto every matching
+  // weekday — so without this it would also appear on every Tuesday of
+  // every month before it existed, each one scored as not done.
+  createdAt     DateTime        @default(now())
   wentWell      String? // training diary
   toImprove     String? // training diary
 

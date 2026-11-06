@@ -1,5 +1,11 @@
+import Link from "next/link";
+import { addMonths, format, startOfDay, subMonths } from "date-fns";
 import { auth } from "@/lib/auth/auth";
 import { getAnalyticsData } from "@/lib/analytics/data";
+import { getPlanMonth } from "@/lib/plan/plan-data";
+import { indexChecks, monthParam, parseMonth } from "@/lib/plan/plan";
+import { buildTracker } from "@/lib/plan/tracker";
+import { TrackerDashboard } from "@/components/analytics/tracker-dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScoreRow } from "@/components/ui/progress-bar";
 import { ConsistencyChart } from "@/components/charts/gym-charts";
@@ -19,10 +25,21 @@ function Stat({ value, label, accent }: { value: string; label: string; accent?:
   );
 }
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   const userId = session!.user.id;
-  const data = await getAnalyticsData(userId);
+
+  const params = await searchParams;
+  const rawMonth = params.month;
+  const today = startOfDay(new Date());
+  const month = parseMonth(Array.isArray(rawMonth) ? rawMonth[0] : rawMonth, today);
+
+  const [data, plan] = await Promise.all([getAnalyticsData(userId), getPlanMonth(userId, month)]);
+  const tracker = buildTracker(plan.items, indexChecks(plan.checks), month, today);
 
   const winRate = data.matchesPlayed > 0 ? Math.round((data.matchesWon / data.matchesPlayed) * 100) : null;
 
@@ -34,7 +51,44 @@ export default async function AnalyticsPage() {
         School, gym and football — each with its own block, so you can look at one without reading all three.
       </p>
 
-      <div className="mt-6">
+      <div className="mt-6" id="tracker">
+        <SectionHeading
+          domain="overview"
+          emoji="✅"
+          title="Everything, ticked off"
+          subtitle="School, gym and football — what was on, and what actually happened"
+        />
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold tracking-tight">{format(month, "MMMM yyyy")}</h3>
+          <div className="flex items-center gap-1.5">
+            <Link
+              href={`/analytics?month=${monthParam(subMonths(month, 1))}#tracker`}
+              className="rounded-lg border border-border px-2.5 py-1 text-xs hover:border-accent/50"
+            >
+              ← {format(subMonths(month, 1), "MMM")}
+            </Link>
+            <Link
+              href={`/analytics?month=${monthParam(today)}#tracker`}
+              className="rounded-lg border border-border px-2.5 py-1 text-xs hover:border-accent/50"
+            >
+              This month
+            </Link>
+            <Link
+              href={`/analytics?month=${monthParam(addMonths(month, 1))}#tracker`}
+              className="rounded-lg border border-border px-2.5 py-1 text-xs hover:border-accent/50"
+            >
+              {format(addMonths(month, 1), "MMM")} →
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <TrackerDashboard data={tracker} month={month} />
+        </div>
+      </div>
+
+      <div className="mt-8">
         <SectionHeading
           domain="overview"
           emoji="📊"
