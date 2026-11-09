@@ -25,6 +25,38 @@ const DEFAULT_MODEL = "eleven_flash_v2_5";
 /** ElevenLabs' own long-standing default voice ("Rachel"). */
 const DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM";
 
+/**
+ * How much life the voice puts into it.
+ *
+ * Stability is badly named: high is not "better", it is flatter. At 0.5 the
+ * delivery is even and a bit of a readout; lower lets the model move the
+ * pitch and pace around the way a person does. Style pushes it further
+ * towards performance. This is a tutor talking to one student, so it wants
+ * expression, not a newsreader — but not so loose that it starts inventing
+ * accents, which is what the bottom of the stability range does.
+ *
+ * Tunable because the right setting is a matter of taste and the person
+ * listening is not here.
+ */
+const DEFAULT_STABILITY = 0.32;
+const DEFAULT_STYLE = 0.45;
+const DEFAULT_SIMILARITY = 0.8;
+
+/** A number from the environment, ignored unless it is one, and in range. */
+function tuned(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 1 ? value : fallback;
+}
+
+export function voiceSettings(env: Record<string, string | undefined> = process.env) {
+  return {
+    stability: tuned(env.ELEVENLABS_STABILITY, DEFAULT_STABILITY),
+    similarity_boost: tuned(env.ELEVENLABS_SIMILARITY, DEFAULT_SIMILARITY),
+    style: tuned(env.ELEVENLABS_STYLE, DEFAULT_STYLE),
+    use_speaker_boost: true,
+  };
+}
+
 export function humanVoiceKey(): string | null {
   return process.env.ELEVENLABS_API_KEY?.trim() || null;
 }
@@ -126,7 +158,7 @@ export async function synthesizeSpeech(
       body: JSON.stringify({
         text: speakableWithin(text),
         model_id: humanVoiceModel(),
-        voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true },
+        voice_settings: voiceSettings(),
       }),
     });
   } catch {

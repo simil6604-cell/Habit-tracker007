@@ -19,6 +19,8 @@ import {
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import { utteranceFor } from "@/lib/ai/voice/speak";
+import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
+import { DICTATION_LANGS } from "@/lib/ai/voice/dictation-lang";
 import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
 import { getLessons, renameLesson, type LessonEntry } from "@/lib/school/class-recording-actions";
 import {
@@ -94,7 +96,11 @@ export function SchoolAIPanel({
   const fileRef = useRef<HTMLInputElement>(null);
   const spokenRef = useRef<string | null>(null);
 
-  const mic = useSpeechRecognition();
+  // Dictation is told which language to listen in — it cannot work it out.
+  // Asked for English and given a German sentence it does not produce a bad
+  // transcript, it produces English words that sound a bit like it.
+  const [dictationLang, setDictationLang] = useDictationLang();
+  const mic = useSpeechRecognition({ lang: dictationLang });
 
   /*
    * Voice mode, separate from the dictation button. Dictation is for saying a
@@ -104,6 +110,7 @@ export function SchoolAIPanel({
   const voice = useVoiceConversation({
     who: "tutor",
     name,
+    lang: dictationLang,
     onSend: (heard) => send(heard, true),
   });
 
@@ -341,6 +348,23 @@ export function SchoolAIPanel({
             {mic.listening ? <MicOff size={14} /> : <Mic size={14} />}
             {mic.listening ? "Stop & send" : "Dictate"}
           </Button>
+          {/* Beside the button rather than buried in settings: which
+              language it is listening in is the single thing that decides
+              whether dictation works, and it changes between a German
+              thought and an English past paper. */}
+          <select
+            value={dictationLang}
+            onChange={(event) => setDictationLang(event.target.value)}
+            disabled={mic.listening || voice.active}
+            aria-label="Language to listen in"
+            title="Which language the microphone listens in"
+            data-testid="dictation-lang"
+            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-muted disabled:opacity-50"
+          >
+            {DICTATION_LANGS.map((lang) => (
+              <option key={lang.code} value={lang.code}>{lang.short}</option>
+            ))}
+          </select>
           <Button
             type="button"
             size="sm"

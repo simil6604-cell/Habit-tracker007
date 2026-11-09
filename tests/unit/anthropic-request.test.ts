@@ -128,12 +128,74 @@ describe("the request this app sends", () => {
       { ANTHROPIC_API_KEY: FAKE_KEY },
       { imageBase64: "QUJD", imageMediaType: "image/png", system: "You are a tutor." }
     );
-    expect(request.body.system).toBe("You are a tutor.");
+    // The system prompt goes as a cacheable block rather than a bare string
+    // — see the caching assertions below.
+    expect(request.body.system).toEqual([
+      { type: "text", text: "You are a tutor.", cache_control: { type: "ephemeral" } },
+    ]);
     const content = (request.body.messages as { content: unknown[] }[])[0].content;
     expect(content).toEqual([
       { type: "image", source: { type: "base64", media_type: "image/png", data: "QUJD" } },
       { type: "text", text: "Was macht der Zellkern?" },
     ]);
+  });
+
+  it("sends a conversation as turns, not as a transcript in one message", async () => {
+    // The school AI used to flatten its history into one user message with
+    // "Student:" and "Tutor:" in front of each line. Told which words were
+    // its own, Claude follows a thread far better than it does reading a
+    // transcript of itself.
+    const { request } = await ask(
+      { ANTHROPIC_API_KEY: FAKE_KEY },
+      {
+        turns: [
+          { role: "user", content: "Was ist Osmose?" },
+          { role: "assistant", content: "Wasser wandert zur höheren Konzentration." },
+        ],
+      }
+    );
+    expect(request.body.messages).toEqual([
+      { role: "user", content: "Was ist Osmose?" },
+      { role: "assistant", content: "Wasser wandert zur höheren Konzentration." },
+      { role: "user", content: "Was macht der Zellkern?" },
+    ]);
+  });
+
+  it("refuses to open a conversation with the assistant, which the API rejects", async () => {
+    // A trimmed history can easily begin with the tutor's turn, and a
+    // conversation that does not start with the person is a 400 on every
+    // message from then on.
+    const { request } = await ask(
+      { ANTHROPIC_API_KEY: FAKE_KEY },
+      { turns: [{ role: "assistant", content: "Where were we?" }, { role: "user", content: "Osmose." }] }
+    );
+    const messages = request.body.messages as { role: string }[];
+    expect(messages[0].role).toBe("user");
+    expect(messages).toHaveLength(2);
+  });
+
+  it("drops anything in the history that is not a turn, rather than sending it", async () => {
+    const { request } = await ask(
+      { ANTHROPIC_API_KEY: FAKE_KEY },
+      { turns: [{ role: "system", content: "x" }, { role: "user", content: "   " }, null, "nope"] }
+    );
+    expect(request.body.messages).toHaveLength(1);
+  });
+
+  it("marks the system prompt cacheable, and nothing else", async () => {
+    // It is the long, unchanging half of every request — which syllabus,
+    // which subjects, what is due — repeated on every message. A breakpoint
+    // after the question, which changes every time, would cache nothing.
+    const { request } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, { system: "Long standing context." });
+    expect(request.body.system).toEqual([
+      { type: "text", text: "Long standing context.", cache_control: { type: "ephemeral" } },
+    ]);
+    expect(JSON.stringify(request.body.messages)).not.toContain("cache_control");
+  });
+
+  it("sends no system block at all when there is no system prompt", async () => {
+    const { request } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY });
+    expect(request.body.system).toBeUndefined();
   });
 
   it("does not send a thinking budget, which this model refuses", async () => {

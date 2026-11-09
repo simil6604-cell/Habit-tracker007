@@ -136,6 +136,9 @@ export async function loadBackupData(userId: string): Promise<Record<string, unk
       // it to a restore would be losing the only part of this nobody can
       // reconstruct from somewhere else.
       planChecks: true,
+      // Written once and paid for once. A restore that dropped these would
+      // quietly bill the next one again.
+      podcastEpisodes: true,
       revisionLinks: true,
       footballLinks: true,
       markedPapers: { include: { questions: true } },

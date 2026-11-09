@@ -9,7 +9,8 @@ import type { ProviderImage } from "@/lib/ai/anthropic-provider";
 import { deleteUploadedImage, readUploadedImage, saveUploadedImage } from "@/lib/uploads/save-image";
 import {
   NO_REAL_AI_MESSAGE,
-  buildSchoolAIPrompt,
+  buildSchoolAITurns,
+  buildSchoolAIMessage,
   buildSchoolAISystemPrompt,
   type SchoolAITurn,
 } from "./school-ai";
@@ -250,7 +251,13 @@ export async function sendSchoolAIMessage(
     // coming up still apply out loud. Only the shape of the answer changes.
     const base = await buildSchoolAISystemPrompt(userId);
     const system = spoken ? `${base}\n${SPOKEN_BOARD_STYLE}` : base;
-    const prompt = buildSchoolAIPrompt(turns, trimmed || "Have a look at these and tell me what you see.", images.length);
+    // Real turns rather than a transcript flattened into one message: this
+    // is a conversation, and the API takes one.
+    const conversation = buildSchoolAITurns(turns);
+    const prompt = buildSchoolAIMessage(
+      trimmed || "Have a look at these and tell me what you see.",
+      images.length
+    );
 
     try {
       // A spoken reply now carries the board with it — two to four drawings
@@ -259,6 +266,7 @@ export async function sendSchoolAIMessage(
       // diagram replies already get.
       reply = await getAIProvider().generate(prompt, {
         system,
+        turns: conversation,
         maxTokens: spoken ? 4000 : 2000,
         images,
       });
