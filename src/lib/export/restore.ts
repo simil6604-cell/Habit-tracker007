@@ -208,6 +208,7 @@ async function wipe(tx: Prisma.TransactionClient, userId: string): Promise<void>
   // After the things that sit in folders: those rows carry folderId, and this
   // relation is SetNull, so deleting folders first means SQLite rewrites every
   // one of them to null on the way to deleting them anyway.
+  await tx.podcastEpisode.deleteMany({ where: { userId } });
   await tx.planCheck.deleteMany({ where: { userId } });
   await tx.librarySection.deleteMany({ where: { userId } });
   await tx.libraryFolder.deleteMany({ where: { userId } });
@@ -676,6 +677,16 @@ export async function restoreBackup(userId: string, archive: Buffer): Promise<Re
      * naming ids that no longer exist anywhere, and the page would show a
      * month of untouched work.
      */
+    // After the subjects, whose ids they point at. An episode whose subject
+    // did not survive is still worth keeping — the script is the thing, and
+    // it reads the same without a subject attached.
+    for (const entry of rows(data.podcastEpisodes)) {
+      const row = scalars(entry, owned);
+      if (!row) continue;
+      if (row.subjectId != null && !link(row, "subjectId")) row.subjectId = null;
+      await create((r) => tx.podcastEpisode.create({ data: r as never }), withNewId(row));
+    }
+
     for (const entry of rows(data.planChecks)) {
       const row = scalars(entry, owned);
       if (!row || typeof row.sourceKey !== "string") continue;

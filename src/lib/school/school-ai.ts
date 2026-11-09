@@ -280,6 +280,39 @@ export type SchoolAITurn = { role: "USER" | "ASSISTANT"; content: string; photoC
  * assistant reads "look at this" with nothing attached and says the student
  * forgot to send anything, about a photo it was shown four turns ago.
  */
+/**
+ * The conversation as turns, for the Messages API to read as a conversation.
+ *
+ * Photos from earlier turns are named rather than re-sent: a student working
+ * through a past paper sends six pictures, and attaching all of them again
+ * on every message afterwards costs more on each turn than the whole rest of
+ * the conversation. The note is enough for "the one in the second photo".
+ */
+export function buildSchoolAITurns(history: SchoolAITurn[]): { role: "user" | "assistant"; content: string }[] {
+  return history
+    .slice(-HISTORY_TURNS)
+    .map((turn) => {
+      const photos =
+        turn.photoCount > 0
+          ? `[sent ${turn.photoCount} photo${turn.photoCount === 1 ? "" : "s"}] `
+          : "";
+      return {
+        role: turn.role === "USER" ? ("user" as const) : ("assistant" as const),
+        content: `${photos}${turn.content}`.trim(),
+      };
+    })
+    .filter((turn) => turn.content !== "");
+}
+
+/** What this message says, on its own — the turns above carry the rest. */
+export function buildSchoolAIMessage(message: string, photoCount: number): string {
+  const attached =
+    photoCount > 0
+      ? `\n[${photoCount} photo${photoCount === 1 ? "" : "s"} attached to this message — they are the images above.]`
+      : "";
+  return `${message}${attached}`;
+}
+
 export function buildSchoolAIPrompt(history: SchoolAITurn[], message: string, photoCount: number): string {
   const past = history
     .slice(-HISTORY_TURNS)

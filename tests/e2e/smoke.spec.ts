@@ -1582,6 +1582,21 @@ test.describe.serial("full app walkthrough", () => {
     // And it is not a row in the sidebar any more — one School, not two.
     await expect(page.locator('nav a[href="/school/ai"]')).toHaveCount(0);
 
+    // Dictation is told which language to listen in — it cannot work it
+    // out. Asked for English and given a German sentence it does not
+    // produce a bad transcript, it produces English words that sound a bit
+    // like it, which is most of what "the recording is not good enough"
+    // turns out to be. So the choice sits beside the microphone.
+    const dictationLang = page.getByTestId("dictation-lang");
+    await expect(dictationLang).toBeVisible();
+    await expect(dictationLang.locator("option")).toHaveCount(3);
+    await dictationLang.selectOption("de-DE");
+    await expect(dictationLang).toHaveValue("de-DE");
+    // Remembered on this device, so it is chosen once rather than every time.
+    await page.reload();
+    await expect(page.getByTestId("dictation-lang")).toHaveValue("de-DE");
+    await page.getByTestId("dictation-lang").selectOption("en-GB");
+
     // An unrelated photo of this account's, in the same upload directory, put
     // there before any of the school-AI work. Discarding a staged photo is a
     // delete driven by a path from the browser, and "under your own folder" is
@@ -2356,6 +2371,27 @@ test.describe.serial("full app walkthrough", () => {
     await page.goto("/analytics?month=2020-01#tracker");
     await expect(page.getByText(/Nothing planned in January/)).toBeVisible();
     await expect(page.getByTestId("tracker-grid")).toHaveCount(0);
+  });
+
+  test("school: a podcast page that offers nothing it cannot make", async () => {
+    // Asked for beside the flashcards: when there is no time to read, hear
+    // it instead. This suite runs with no AI key, which is the state a
+    // fresh deployment is in — so what it checks is that the page says so
+    // plainly instead of offering a button that cannot work.
+    await page.goto("/school");
+    await expect(page.getByRole("link", { name: "Podcast" })).toBeVisible();
+
+    await page.goto("/school/podcast");
+    await expect(page.getByRole("heading", { name: "Podcast" })).toBeVisible();
+    // Scoped to the card: the app-wide banner mentions the same key.
+    await expect(
+      page.getByText(/An episode has to be written before it can be read out/)
+    ).toBeVisible();
+    await expect(page.getByTestId("make-episode")).toHaveCount(0);
+    await expect(page.getByText(/No episodes yet/)).toBeVisible();
+
+    // And back to the flashcards from here, since they are the same material.
+    await expect(page.getByRole("link", { name: "Flashcards" })).toBeVisible();
   });
 
   test("ai coach: responds to a chat message", async () => {

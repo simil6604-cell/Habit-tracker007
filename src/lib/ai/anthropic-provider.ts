@@ -23,6 +23,35 @@ function friendlyAnthropicError(err: unknown): string {
 
 export type ProviderImage = { base64: string; mediaType: ImageMediaType };
 
+/**
+ * One turn of a real conversation, as the Messages API wants it.
+ *
+ * The school AI used to flatten its history into a single user message with
+ * "Student:" and "Tutor:" written in front of each line. That is the shape
+ * you use when the API only takes one string, and this one does not: it
+ * takes a list of turns, and told which words were its own, Claude follows a
+ * thread far better than it does reading a transcript of itself.
+ */
+export type ProviderTurn = { role: "user" | "assistant"; content: string };
+
+function collectTurns(context: Record<string, unknown>): ProviderTurn[] {
+  if (!Array.isArray(context.turns)) return [];
+  const turns: ProviderTurn[] = [];
+  for (const entry of context.turns) {
+    if (!entry || typeof entry !== "object") continue;
+    const { role, content } = entry as { role?: unknown; content?: unknown };
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string") continue;
+    const text = content.trim();
+    if (!text) continue;
+    // Two of the same role in a row are legal, but a leading assistant turn
+    // is not: the API refuses a conversation that does not start with the
+    // person. A history that has been trimmed can easily begin that way.
+    if (turns.length === 0 && role === "assistant") continue;
+    turns.push({ role, content: text });
+  }
+  return turns;
+}
+
 export type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
 const MEDIA_TYPES: ImageMediaType[] = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -88,7 +117,7 @@ export class AnthropicProvider implements AIProvider {
       throw new Error(`${keyProblem.problem} ${keyProblem.fix}`);
     }
 
-    const system = typeof context.system === "string" ? context.system : undefined;
+    const systemText = typeof context.system === "string" ? context.system : undefined;
     const maxTokens = typeof context.maxTokens === "number" ? context.maxTokens : DEFAULT_MAX_TOKENS;
     const images = collectImages(context);
 
@@ -105,6 +134,29 @@ export class AnthropicProvider implements AIProvider {
           ]
         : prompt;
 
+    // The earlier turns, then this one. Everything that passes no turns is
+    // unchanged: one user message, exactly as before.
+    const messages: Anthropic.MessageParam[] = [
+      ...collectTurns(context),
+      { role: "user", content },
+    ];
+
+    /*
+     * The system prompt is marked cacheable.
+     *
+     * It is the long, unchanging half of every request — which syllabus,
+     * which subjects, what is due — repeated on every message of a
+     * conversation. Cached, the repeat costs about a tenth as much and comes
+     * back sooner. Nothing else is marked: the question changes every time,
+     * and a breakpoint after something volatile caches nothing.
+     *
+     * A prefix shorter than the model's minimum simply is not cached. That
+     * is not an error and needs no handling here.
+     */
+    const system: Anthropic.MessageCreateParams["system"] = systemText
+      ? [{ type: "text", text: systemText, cache_control: { type: "ephemeral" } }]
+      : undefined;
+
     let message;
     try {
       message = await this.client.messages.create({
@@ -115,7 +167,7 @@ export class AnthropicProvider implements AIProvider {
         // that moves when the model does.
         output_config: { effort: this.effort },
         system,
-        messages: [{ role: "user", content }],
+        messages,
       });
     } catch (err) {
       const message = friendlyAnthropicError(err);

@@ -320,11 +320,20 @@ export default async function SchoolPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>My notes &amp; recordings</CardTitle>
-            <Link href="/school/flashcards">
-              <Button variant="outline" size="sm">
-                Flashcards
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/school/flashcards">
+                <Button variant="outline" size="sm">
+                  Flashcards
+                </Button>
+              </Link>
+              {/* Beside the flashcards, which is where it was asked for: the
+                  same material, for when there is no time to read it. */}
+              <Link href="/school/podcast">
+                <Button variant="outline" size="sm">
+                  Podcast
+                </Button>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
             <NotesOverviewPanel entries={notes} />

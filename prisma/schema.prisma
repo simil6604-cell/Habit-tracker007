@@ -84,6 +84,7 @@ model User {
   libraryFolders     LibraryFolder[]
   librarySections    LibrarySection[]
   planChecks         PlanCheck[]
+  podcastEpisodes    PodcastEpisode[]
   revisionLinks      RevisionLink[]
   footballLinks      FootballLink[]
   markedPapers       MarkedPaper[]
@@ -184,6 +185,7 @@ model Subject {
   markedPapers    MarkedPaper[]
 
   @@index([userId])
+  podcastEpisodes PodcastEpisode[]
 }
 
 model TimetableSlot {
@@ -953,6 +955,31 @@ model LibraryFolder {
 // FootballTraining.completed) that is written too, so the School and Football
 // pages never disagree with this one, and a tick made over there still shows
 // as ticked here.
+// An episode to listen to, written from this student's own material.
+//
+// Asked for next to the flashcards: when there is no time to read, hear it
+// instead. The script is Claude's, the material is theirs — their topics,
+// their flashcards, what they wrote down as not understood — and it is kept
+// so it can be played again without being paid for twice.
+model PodcastEpisode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  // What it was made from, in words: "Biology · Cells, Enzymes".
+  source    String
+  // The spoken script, as prose. No markdown: it is read out loud, and a
+  // synthesiser says "asterisk".
+  script    String
+  // Roughly how long it takes to say, from the word count.
+  seconds   Int
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
 model PlanCheck {
   id     String @id @default(cuid())
   userId String
