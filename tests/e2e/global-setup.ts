@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
+import { startProductStubs } from "./off-stub";
 
 /**
  * Runs once before the whole test suite: points a dedicated SQLite file at the
@@ -16,6 +17,11 @@ import { PrismaClient } from "@prisma/client";
  * the stale rows this is meant to remove would show up anyway.
  */
 export default async function globalSetup() {
+  // The product databases, replaced by stand-ins on localhost for the whole
+  // run. The scanner's job is to ask someone else's server about a barcode,
+  // and that must not be a thing the suite depends on being up.
+  const stopStubs = await startProductStubs();
+
   const testDbPath = path.join(__dirname, "..", "..", "prisma", "test.db");
   const url = `file:${testDbPath}`;
 
@@ -41,4 +47,8 @@ export default async function globalSetup() {
   } finally {
     await prisma.$disconnect();
   }
+
+  // Returned rather than left running: Playwright calls this when the run
+  // finishes, and a port left open makes the next run fail to start.
+  return stopStubs;
 }

@@ -8,7 +8,9 @@ import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
-import { utteranceFor } from "@/lib/ai/voice/speak";
+import { speakAloud } from "@/lib/ai/voice/speak";
+import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
+import { DICTATION_LANGS, mismatchedLang } from "@/lib/ai/voice/dictation-lang";
 import {
   sendCoachMessageLive,
   clearCoachChat,
@@ -41,7 +43,17 @@ export function VoiceChatPanel({
   // Which reply we've already read out, so a re-render doesn't repeat it.
   const spokenRef = useRef<string | null>(null);
 
-  const mic = useSpeechRecognition();
+  /*
+   * Which language the microphone listens in.
+   *
+   * It was not told one at all here, so it used the phone's language —
+   * which, on a German phone, is a German recogniser hearing an English
+   * question and returning German words that sound like it. The school AI
+   * already had this picker; the coach was the half that did not, and it is
+   * the half this app opens on.
+   */
+  const [dictationLang, setDictationLang] = useDictationLang();
+  const mic = useSpeechRecognition({ lang: dictationLang });
 
   /*
    * Voice mode, separate from the dictation button above it and deliberately
@@ -52,8 +64,25 @@ export function VoiceChatPanel({
   const voice = useVoiceConversation({
     who: "coach",
     name,
+    lang: dictationLang,
     onSend: (heard) => send(heard, true),
   });
+
+  // Heard in the wrong language — see the same offer on the school AI.
+  const heardSoFar = `${mic.transcript} ${mic.interim}`.trim();
+  const wrongLang = mismatchedLang(heardSoFar, dictationLang);
+
+  function switchDictation(code: string) {
+    setDictationLang(code);
+    // The language is fixed when the recognizer starts, so a change while
+    // it is listening means nothing until it is started again.
+    if (mic.listening) {
+      mic.stop();
+      mic.reset();
+      setInput("");
+      setTimeout(() => mic.start(), 50);
+    }
+  }
 
   useEffect(() => setCanSpeak(speechSupported()), []);
 
@@ -137,8 +166,8 @@ export function VoiceChatPanel({
     if (!text) return;
     window.speechSynthesis.cancel();
     // In the language the reply is written in, not the language of the
-    // phone — see utteranceFor.
-    window.speechSynthesis.speak(utteranceFor(text));
+    // phone — see speakAloud.
+    speakAloud(text);
   }, [lastReply, speakReplies, canSpeak, pending, voice]);
 
   // Leaving the page mid-sentence shouldn't leave the browser talking.
@@ -189,6 +218,18 @@ export function VoiceChatPanel({
             {mic.listening ? <MicOff size={14} /> : <Mic size={14} />}
             {mic.listening ? "Stop & send" : "Dictate"}
           </Button>
+          <select
+            aria-label="Microphone language"
+            value={dictationLang}
+            onChange={(event) => switchDictation(event.target.value)}
+            disabled={voice.active}
+            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs"
+            title="Speech recognition is told which language to listen in — it cannot work it out"
+          >
+            {DICTATION_LANGS.map((lang) => (
+              <option key={lang.code} value={lang.code}>{lang.short}</option>
+            ))}
+          </select>
           <Button
             type="button"
             size="sm"
@@ -236,6 +277,25 @@ export function VoiceChatPanel({
         <p className="mb-2 rounded-lg bg-accent/10 px-3 py-1.5 text-xs text-accent">
           🎙 Listening… {mic.interim || "say what's on your mind, then press Stop & send."}
         </p>
+      )}
+      {wrongLang && (
+        <div
+          className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-warning/10 px-3 py-1.5 text-xs"
+          data-testid="dictation-mismatch"
+        >
+          <span>
+            That sounded like {wrongLang.label}, but the microphone is listening in{" "}
+            {DICTATION_LANGS.find((lang) => lang.code === dictationLang)?.label ?? dictationLang} — so the words
+            come out wrong.
+          </span>
+          <button
+            type="button"
+            onClick={() => switchDictation(wrongLang.code)}
+            className="rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground"
+          >
+            Listen in {wrongLang.short}
+          </button>
+        </div>
       )}
       {mic.error && <p className="mb-2 text-xs text-danger">{mic.error}</p>}
       {!mic.supported && (

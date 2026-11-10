@@ -1,6 +1,6 @@
 "use client";
 
-import { voiceFor } from "./browser-voice";
+import { speechChunks, voiceFor } from "./browser-voice";
 
 /**
  * Saying something with the browser's own voice, set up properly.
@@ -35,16 +35,47 @@ export function availableVoices(): SpeechSynthesisVoice[] {
 
 /**
  * Builds an utterance that will be read in the language it is written in, by
- * the best voice the device has for it.
+ * the best voice the device has for it, at the pace someone talking uses.
+ *
+ * `shapeOf` decides the language from the text being spoken, so a chunk is
+ * always passed the WHOLE reply to decide from: four words on their own
+ * ("Genau, so ist es.") are not enough to tell the languages apart, and a
+ * single sentence read in the wrong one is worse than none of it being.
  */
-export function utteranceFor(text: string, deviceLang?: string | null): SpeechSynthesisUtterance {
+export function utteranceFor(
+  text: string,
+  deviceLang?: string | null,
+  decideFrom?: string
+): SpeechSynthesisUtterance {
   const utterance = new SpeechSynthesisUtterance(text);
   const chosen = voiceFor(
-    text,
+    decideFrom ?? text,
     availableVoices(),
     deviceLang ?? (typeof navigator !== "undefined" ? navigator.language : null)
   );
   utterance.lang = chosen.lang;
   if (chosen.voice) utterance.voice = chosen.voice;
+  utterance.rate = chosen.rate;
+  utterance.pitch = chosen.pitch;
   return utterance;
+}
+
+/**
+ * Says something out loud, in the pieces a person would say it in.
+ *
+ * Queued as separate utterances rather than one: the synthesiser puts a real
+ * pause between them, which is what makes a long answer sound spoken rather
+ * than recited, and it sidesteps Chrome's habit of cutting a long single
+ * utterance off part way through.
+ *
+ * `speechSynthesis.cancel()` still stops all of it, so every caller that
+ * already cancels before speaking keeps working unchanged.
+ */
+export function speakAloud(text: string, deviceLang?: string | null): void {
+  if (!speechSupported()) return;
+  const chunks = speechChunks(text);
+  for (const chunk of chunks) {
+    // Each chunk is told to decide its language from the whole reply.
+    window.speechSynthesis.speak(utteranceFor(chunk, deviceLang, text));
+  }
 }

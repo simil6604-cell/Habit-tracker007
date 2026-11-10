@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  speechChunks,
+  speechShape,
   DEFAULT_LOCALE,
   detectSpokenLang,
   normalizeLang,
@@ -133,5 +135,54 @@ describe("voiceFor", () => {
     const german = voiceFor("Der Zellkern steuert die Zelle.", GERMAN_PHONE, "de-CH");
     expect(english.voice?.lang).toBe("en-GB");
     expect(german.voice?.lang).toBe("de-DE");
+  });
+});
+
+describe("speaking it in pieces", () => {
+  it("breaks a reply where a person would draw breath", () => {
+    const chunks = speechChunks(
+      "Right, so osmosis is water moving. It goes from high water potential to low. That is all it is. Does that match what your notes say?",
+      60
+    );
+    expect(chunks.length).toBeGreaterThan(1);
+    // Nothing is lost and nothing is duplicated.
+    expect(chunks.join(" ")).toBe(
+      "Right, so osmosis is water moving. It goes from high water potential to low. That is all it is. Does that match what your notes say?"
+    );
+    // And every piece ends where a sentence ends.
+    for (const chunk of chunks) expect(chunk).toMatch(/[.!?…]$/);
+  });
+
+  it("groups short sentences rather than pausing after every four words", () => {
+    // A pause after each of these would sound like someone reading a list.
+    const chunks = speechChunks("Yes. Exactly. That is the one.", 220);
+    expect(chunks).toEqual(["Yes. Exactly. That is the one."]);
+  });
+
+  it("breathes at a comma when one sentence runs very long", () => {
+    const long = `In economics, ${"a long clause about elasticity, ".repeat(12)}and that is the idea.`;
+    const chunks = speechChunks(long, 80);
+    expect(chunks.length).toBeGreaterThan(2);
+    expect(chunks.join(" ")).toBe(long);
+  });
+
+  it("says nothing at all for nothing at all", () => {
+    expect(speechChunks("   ")).toEqual([]);
+  });
+});
+
+describe("how it is said", () => {
+  it("pushes a good voice slightly, the way someone talking sounds", () => {
+    const shape = speechShape({ name: "Google UK English Female", lang: "en-GB" });
+    expect(shape.rate).toBeGreaterThan(1);
+    expect(shape.pitch).toBeGreaterThan(1);
+    // Not so far that it stops being understandable to someone revising.
+    expect(shape.rate).toBeLessThan(1.15);
+    expect(shape.pitch).toBeLessThan(1.15);
+  });
+
+  it("leaves an old robotic voice alone, because pushing it distorts", () => {
+    expect(speechShape({ name: "Daniel Compact", lang: "en-GB" })).toEqual({ rate: 1, pitch: 1 });
+    expect(speechShape(null)).toEqual({ rate: 1, pitch: 1 });
   });
 });

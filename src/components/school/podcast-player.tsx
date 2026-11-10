@@ -96,7 +96,9 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
           setNote("This browser cannot speak, so there is nothing to play. The script is below.");
           return;
         }
-        const utterance = utteranceFor(pieces[index]);
+        // The whole script decides the language: one piece of an English
+        // episode can easily be four words that look German.
+        const utterance = utteranceFor(pieces[index], null, script);
         utterance.onend = next;
         utterance.onerror = next;
         window.speechSynthesis.speak(utterance);
