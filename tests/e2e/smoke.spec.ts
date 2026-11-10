@@ -1460,7 +1460,17 @@ test.describe.serial("full app walkthrough", () => {
     const hrefs = await bar.locator("a").evaluateAll((links) => links.map((l) => l.getAttribute("href") ?? ""));
     expect(hrefs.length, "the bar has chips at all").toBeGreaterThan(3);
 
-    for (const href of hrefs) {
+    // Two of the chips are pages rather than sections — flashcards and the
+    // podcast, both of which were reachable only from a button nine
+    // sections down this page, which is to say not reachable.
+    const anchors = hrefs.filter((href) => href.startsWith("#"));
+    const pages = hrefs.filter((href) => !href.startsWith("#"));
+    expect(pages).toEqual(["/school/flashcards", "/school/podcast"]);
+    for (const href of pages) {
+      expect((await page.request.get(href)).status(), `${href} is a real page`).toBeLessThan(400);
+    }
+
+    for (const href of anchors) {
       const id = href.replace("#", "");
       await expect(page.locator(`#${id}`), `the "${id}" chip points at a section that exists`).toHaveCount(1);
     }
@@ -1481,7 +1491,7 @@ test.describe.serial("full app walkthrough", () => {
     // final screenful and tapping them moved nothing whatsoever. Only the
     // first chip was ever tested, and it is one of the ones that worked.
     const labels = await bar
-      .locator("a")
+      .locator('a[href^="#"]')
       .evaluateAll((links) => links.map((l) => (l.textContent ?? "").trim()));
     for (const label of labels) {
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -2373,13 +2383,70 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("tracker-grid")).toHaveCount(0);
   });
 
+  test("school ai: a question you typed wrong can be fixed and asked again", async () => {
+    // Asked for in these words: let me edit the chat if I wrote something
+    // wrong. Everything after the edited question goes with it — the answer
+    // below was an answer to the old wording, and the turns after it were a
+    // conversation about that answer.
+    await page.goto("/school#school-ai");
+    const box = page.locator('input[placeholder*="Ask anything about a subject"]').first();
+    await box.waitFor({ timeout: 15000 });
+
+    // A new chat, so this test owns the whole conversation it checks.
+    await page.getByTestId("new-chat").click();
+    await page.waitForTimeout(600);
+
+    const typo = `Was macht der Zellkren ${Date.now()}`;
+    await box.fill(typo);
+    await box.press("Enter");
+    const thread = page.getByTestId("school-ai-messages");
+    await expect(thread.getByText(typo)).toBeVisible();
+    await expect(thread.locator("> div")).toHaveCount(2);
+
+    // A second question, so there is a conversation to invalidate.
+    await box.fill("Und was ist mit den Mitochondrien?");
+    await box.press("Enter");
+    await expect(thread.getByText("Und was ist mit den Mitochondrien?")).toBeVisible();
+    await expect(thread.locator("> div")).toHaveCount(4);
+
+    // Fix the first one.
+    const first = thread.locator("> div").first();
+    await first.locator('[data-testid^="edit-message-"]').click();
+    const form = page.locator('[data-testid^="edit-form-"]').first();
+    await expect(form).toBeVisible();
+    const fixed = typo.replace("Zellkren", "Zellkern");
+    await form.locator("textarea").fill(fixed);
+    await form.getByRole("button", { name: "Ask again" }).click();
+
+    // The question now reads correctly, and the conversation that followed
+    // the old wording is gone rather than left to be read back as though it
+    // followed from the new one.
+    await expect(thread.getByText(fixed)).toBeVisible();
+    await expect(thread.getByText(typo, { exact: true })).toHaveCount(0);
+    await expect(thread.getByText("Und was ist mit den Mitochondrien?")).toHaveCount(0);
+    await expect(thread.locator("> div")).toHaveCount(2);
+
+    // It survives a reload: the edit was written down, not just redrawn.
+    await page.reload();
+    await expect(page.getByTestId("school-ai-messages").getByText(fixed)).toBeVisible();
+
+    // Claude's own answers carry no edit button — an edited answer would be
+    // this app putting words in its mouth and reading them back as its own.
+    const answer = page.getByTestId("school-ai-messages").locator("> div").nth(1);
+    await expect(answer.locator('[data-testid^="edit-message-"]')).toHaveCount(0);
+  });
+
   test("school: a podcast page that offers nothing it cannot make", async () => {
     // Asked for beside the flashcards: when there is no time to read, hear
     // it instead. This suite runs with no AI key, which is the state a
     // fresh deployment is in — so what it checks is that the page says so
     // plainly instead of offering a button that cannot work.
     await page.goto("/school");
-    await expect(page.getByRole("link", { name: "Podcast" })).toBeVisible();
+    // Two ways in now: a chip at the top of School, and the button beside
+    // the notes. The chip is the one that matters — the button was nine
+    // sections down, which is to say nobody found it.
+    await expect(page.getByTestId("section-jump").getByRole("link", { name: /Podcast/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Podcast", exact: true })).toHaveCount(1);
 
     await page.goto("/school/podcast");
     await expect(page.getByRole("heading", { name: "Podcast" })).toBeVisible();

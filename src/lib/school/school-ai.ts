@@ -288,6 +288,15 @@ export type SchoolAITurn = { role: "USER" | "ASSISTANT"; content: string; photoC
  * on every message afterwards costs more on each turn than the whole rest of
  * the conversation. The note is enough for "the one in the second photo".
  */
+/**
+ * How much an edited question may hold.
+ *
+ * Here rather than beside the action that uses it: a "use server" file may
+ * export nothing but async functions, and a constant there fails the build
+ * with an error that names the line and not the rule.
+ */
+export const MAX_EDIT_CHARS = 4_000;
+
 export function buildSchoolAITurns(history: SchoolAITurn[]): { role: "user" | "assistant"; content: string }[] {
   return history
     .slice(-HISTORY_TURNS)

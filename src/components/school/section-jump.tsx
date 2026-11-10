@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
@@ -19,7 +20,15 @@ import { cn } from "@/lib/utils";
  * bar looked broken. Now the page goes as far as it can and the section
  * itself flashes a ring, so a tap always answers.
  */
-export type JumpSection = { id: string; label: string };
+/**
+ * A chip in the bar: a section of this page, or a page of its own.
+ *
+ * Flashcards and the podcast are pages rather than sections, and they were
+ * reachable only from a button most of the way down this one. A thing you
+ * have to scroll nine sections to discover is a thing nobody finds — so
+ * they get a chip here too, marked as going somewhere.
+ */
+export type JumpSection = { id: string; label: string; href?: string };
 
 /** How long the ring stays on the section you were sent to. */
 const ARRIVE_MS = 1800;
@@ -86,6 +95,7 @@ export function SectionJump({ sections, className }: { sections: readonly JumpSe
     // keeping "the last one above the fold line" highlighted whichever chip
     // happened to come last in the list, not the section you are looking at.
     const elements = sections
+      .filter((section) => !section.href)
       .map((section) => document.getElementById(section.id))
       .filter((el): el is HTMLElement => el !== null)
       .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
@@ -143,7 +153,18 @@ export function SectionJump({ sections, className }: { sections: readonly JumpSe
         className
       )}
     >
-      {sections.map((section) => (
+      {sections.map((section) =>
+        section.href ? (
+          // Another page: an ordinary link, no scrolling and no ring.
+          <Link
+            key={section.id}
+            href={section.href}
+            data-jump={section.id}
+            className="shrink-0 rounded-full border border-dashed border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-accent/50 hover:text-foreground"
+          >
+            {section.label} →
+          </Link>
+        ) : (
         <a
           key={section.id}
           href={`#${section.id}`}
@@ -159,7 +180,8 @@ export function SectionJump({ sections, className }: { sections: readonly JumpSe
         >
           {section.label}
         </a>
-      ))}
+        )
+      )}
     </div>
   );
 }

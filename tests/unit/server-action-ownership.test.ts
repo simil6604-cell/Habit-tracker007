@@ -20,13 +20,13 @@ import path from "node:path";
 /** Actions that run before anyone is signed in, so there is no user to check. */
 const PRE_AUTH: Record<string, string> = {
   registerAction: "creates the account — by definition there is no session yet",
-  // Not a server action at all: signup-state.ts has no "use server", and is
-  // caught by this scan only because that string appears in its own comment
-  // explaining why it doesn't. Left listed rather than reworded around — it is
-  // a pre-auth database read either way, and a named exception is a better
-  // record of that decision than a file quietly outside the scan.
-  getSignupState:
-    "runs on the public /login and /register pages, reads only how many accounts exist so a fresh deployment's first account can be created, and returns no personal data",
+  // getSignupState was listed here, and should not have been: signup-state.ts
+  // has no directive and is not a server action. The old scan matched the
+  // words anywhere in a file, so it audited that one over the comment
+  // explaining why the function is NOT in actions.ts — and the false positive
+  // was settled with an exception rather than by fixing the scan. The scan
+  // now reads the directive where the runtime reads it, and the entry is
+  // gone with it.
 };
 
 /** Actions whose ownership check the scan cannot see, each verified by hand. */
@@ -36,12 +36,41 @@ const VERIFIED_SAFE: Record<string, string> = {
   submitMistake: "guarded by loadTopicContext(topicId, userId) returning null first",
 };
 
+/**
+ * Whether a file really is a server-action file.
+ *
+ * The directive counts only where the runtime counts it: as the first
+ * statement of the file, before anything but comments. Searching the whole
+ * text for the words instead meant any file that MENTIONED the directive —
+ * a comment explaining why a constant cannot live in one — was audited as
+ * though it were one, and its pure functions reported as unguarded actions.
+ * Caught exactly that way.
+ */
+export function declaresUseServer(source: string): boolean {
+  let rest = source.replace(/^\uFEFF/, "").trimStart();
+  // Skip leading comments, which is all that may precede the directive.
+  for (;;) {
+    if (rest.startsWith("//")) {
+      const end = rest.indexOf("\n");
+      if (end === -1) return false;
+      rest = rest.slice(end + 1).trimStart();
+    } else if (rest.startsWith("/*")) {
+      const end = rest.indexOf("*/");
+      if (end === -1) return false;
+      rest = rest.slice(end + 2).trimStart();
+    } else {
+      break;
+    }
+  }
+  return /^(?:"use server"|'use server')\s*;?/.test(rest);
+}
+
 function serverActionFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) return serverActionFiles(full);
     if (!full.endsWith(".ts")) return [];
-    return readFileSync(full, "utf8").includes('"use server"') ? [full] : [];
+    return declaresUseServer(readFileSync(full, "utf8")) ? [full] : [];
   });
 }
 
@@ -286,6 +315,31 @@ describe("server actions", () => {
     const bare = `{ await prisma.task.delete({ where: { id: taskId } }); }`;
     expect(prismaQueries(guarded).some((q) => isOwnershipScoped(q.text))).toBe(true);
     expect(prismaQueries(bare).some((q) => isOwnershipScoped(q.text))).toBe(false);
+  });
+
+  it("reads the directive where the runtime reads it, not anywhere in the file", () => {
+    // What gets audited at all now hangs on this. Too loose and a file that
+    // merely mentions the directive is scanned as though it were one — which
+    // is how getSignupState came to be listed as an exception. Too strict
+    // and a real action file silently drops out of the scan, which is the
+    // failure nobody notices.
+    expect(declaresUseServer('"use server";\n\nexport async function a() {}')).toBe(true);
+    expect(declaresUseServer("'use server';\nexport async function a() {}")).toBe(true);
+    expect(declaresUseServer('// a comment first\n"use server";\n')).toBe(true);
+    expect(declaresUseServer('/* a block\n   comment */\n"use server";\n')).toBe(true);
+    expect(declaresUseServer('\n\n  "use server"\n')).toBe(true);
+
+    expect(declaresUseServer('// explains why it is not a "use server" file\nexport const x = 1;')).toBe(false);
+    expect(declaresUseServer('import x from "y";\n"use server";')).toBe(false);
+    expect(declaresUseServer("export const note = 'a \"use server\" file';")).toBe(false);
+    expect(declaresUseServer("")).toBe(false);
+  });
+
+  it("finds the real action files, and only those", () => {
+    // A sanity floor on the whole scan: if the directive reader became too
+    // strict, this collapses to nothing and every other assertion here
+    // passes vacuously.
+    expect(ACTIONS.length).toBeGreaterThan(80);
   });
 
   it("only lists an exception with a reason", () => {

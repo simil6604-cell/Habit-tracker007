@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { AudioLines, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, ImagePlus, Mic, MicOff, Pencil, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
@@ -19,6 +19,8 @@ import {
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import { utteranceFor } from "@/lib/ai/voice/speak";
+import { editSchoolAIMessage } from "@/lib/school/school-ai-actions";
+import { MAX_EDIT_CHARS } from "@/lib/school/school-ai";
 import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
 import { DICTATION_LANGS } from "@/lib/ai/voice/dictation-lang";
 import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
@@ -99,6 +101,11 @@ export function SchoolAIPanel({
   // Dictation is told which language to listen in — it cannot work it out.
   // Asked for English and given a German sentence it does not produce a bad
   // transcript, it produces English words that sound a bit like it.
+  // Editing one of your own questions: which one, and what it now says.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [editPending, startEdit] = useTransition();
+
   const [dictationLang, setDictationLang] = useDictationLang();
   const mic = useSpeechRecognition({ lang: dictationLang });
 
@@ -527,7 +534,7 @@ export function SchoolAIPanel({
         // as a rendering fault rather than as a conversation underneath.
         <div ref={scrollRef} data-testid="school-ai-messages" className="flex min-h-24 flex-1 flex-col gap-3 overflow-y-auto py-2">
           {messages.map((m) => (
-            <div key={m.id} className={`flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
+            <div key={m.id} className={`group flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
               {m.imagePaths.length > 0 && (
                 <div className="flex max-w-[85%] flex-wrap justify-end gap-1.5">
                   {m.imagePaths.map((path) => (
@@ -544,19 +551,78 @@ export function SchoolAIPanel({
                   ))}
                 </div>
               )}
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                  m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
-                }`}
-              >
-                <SafeRender>
-                  <AIMessageContent content={m.content} />
-                </SafeRender>
-              </div>
-              <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
+              {editing === m.id ? (
+                <form
+                  className="flex w-full max-w-[85%] flex-col gap-2 rounded-2xl border border-accent bg-surface p-2"
+                  data-testid={`edit-form-${m.id}`}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const next = draft.trim();
+                    if (!next && m.imagePaths.length === 0) return;
+                    setEditing(null);
+                    startEdit(async () => {
+                      const updated = await editSchoolAIMessage(m.id, next);
+                      setMessages(updated);
+                    });
+                  }}
+                >
+                  <textarea
+                    value={draft}
+                    autoFocus
+                    rows={3}
+                    maxLength={MAX_EDIT_CHARS}
+                    aria-label="Edit your question"
+                    onChange={(event) => setDraft(event.target.value)}
+                    className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  />
+                  <p className="text-[11px] text-muted">
+                    The answer below, and anything after it, is replaced — it was an answer to the old wording.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="submit" size="sm" variant="secondary">Ask again</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                    m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
+                  }`}
+                >
+                  <SafeRender>
+                    <AIMessageContent content={m.content} />
+                  </SafeRender>
+                </div>
+              )}
+              <span className="flex items-center gap-2 text-[10px] text-muted">
+                {format(m.createdAt, "HH:mm")}
+                {m.role === "USER" && editing !== m.id && (
+                  // Your own questions only. An edited answer would be this
+                  // app putting words in Claude's mouth and then reading
+                  // them back to it as its own.
+                  <button
+                    type="button"
+                    data-testid={`edit-message-${m.id}`}
+                    aria-label="Edit this question and ask again"
+                    title="Edit and ask again"
+                    disabled={pending || editPending}
+                    onClick={() => {
+                      setDraft(m.content);
+                      setEditing(m.id);
+                    }}
+                    className="opacity-60 transition hover:text-accent hover:opacity-100 disabled:opacity-30"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                )}
+              </span>
             </div>
           ))}
-          {pending && <p className="text-xs text-muted">Reading and thinking…</p>}
+          {(pending || editPending) && (
+            <p className="text-xs text-muted">{editPending ? "Asking again…" : "Reading and thinking…"}</p>
+          )}
         </div>
       )}
 
