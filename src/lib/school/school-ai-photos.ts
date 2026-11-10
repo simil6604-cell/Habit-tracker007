@@ -28,8 +28,38 @@ export function visionMediaType(fileType: string | null | undefined): ImageMedia
   return VISION_TYPES[(fileType ?? "").toLowerCase()] ?? null;
 }
 
+/**
+ * What a PDF counts as: a document, read page by page rather than looked at.
+ *
+ * A past paper, a mark scheme and a set of lesson slides all arrive as PDFs,
+ * and until now the only way to ask about one was to photograph the screen.
+ * Sent as a document the model reads the real pages — the diagrams, the mark
+ * allocations, the question numbering — instead of a photo of them.
+ */
+export const DOCUMENT_MEDIA_TYPE = "application/pdf";
+
+export type AttachmentKind = "image" | "document";
+
+/**
+ * Which of the two an uploaded file is, or null if the AI can't read it.
+ *
+ * One function so the upload action, the sending action and the panel cannot
+ * disagree about what is allowed — a disagreement there shows up as a file
+ * that uploads fine and is then silently never looked at.
+ */
+export function attachmentKind(fileType: string | null | undefined): AttachmentKind | null {
+  const type = (fileType ?? "").toLowerCase();
+  if (type === DOCUMENT_MEDIA_TYPE) return "document";
+  return visionMediaType(type) ? "image" : null;
+}
+
+/** Whether a stored path is a PDF, which is shown as a file rather than a picture. */
+export function isDocumentPath(path: string): boolean {
+  return path.toLowerCase().endsWith(".pdf");
+}
+
 /** The accept= list for the file input, so the picker filters before anything uploads. */
-export const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+export const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,application/pdf";
 
 /**
  * Keeps only the upload paths that provably belong to this user.

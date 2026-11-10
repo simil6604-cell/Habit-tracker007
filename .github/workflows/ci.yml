@@ -3,10 +3,20 @@ name: CI
 # Pull requests, and pushes to main. Not every push to every branch: while a
 # branch has an open pull request, both events fire for the same commit and the
 # whole suite runs twice side by side — twice the minutes, no more information.
+#
+# `workflow_dispatch` is here because of a failure mode that costs an hour to
+# work out: a pull request with a merge conflict gets no run at all. A
+# `pull_request` run is built on the merge of head into base, and with a
+# conflict there is nothing to build, so the page shows no checks and says
+# nothing about why — it reads as CI being broken rather than as the branch
+# needing a merge. (Seen here: two pushes with no run, then a run within
+# seconds of the push that resolved the conflict.) With this, the suite can
+# also be started by hand from the Actions tab.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # A second push to the same branch makes the first run pointless.
 concurrency:

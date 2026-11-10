@@ -62,6 +62,41 @@ export async function saveUploadedImage(file: File, userId: string): Promise<str
 }
 
 /**
+ * Saves an uploaded PDF, the same way and in the same place as a photo.
+ *
+ * Separate from saveUploadedImage rather than another entry in its allow
+ * list: every other caller of that function — progress photos, meal photos,
+ * note photos — would silently start accepting PDFs it has no way to show,
+ * and a type list is the wrong place to decide what a feature accepts.
+ *
+ * A PDF is what a past paper, a mark scheme or a set of lesson slides
+ * actually arrives as, and the model reads the pages directly, so the
+ * diagrams and the mark allocations survive in a way a text extraction
+ * would not.
+ *
+ * The size limit is the photo limit, not a bigger one of its own: every
+ * upload here goes through a Server Action, and the transport cap in
+ * next.config.ts is the real ceiling. A bigger PDF would be refused with a
+ * 413 before this function ever ran — a failure the app cannot explain.
+ */
+export const MAX_PDF_BYTES = MAX_UPLOAD_BYTES;
+
+export async function saveUploadedDocument(file: File, userId: string): Promise<string | null> {
+  if (!file || file.size === 0) return null;
+  if (file.size > MAX_PDF_BYTES) throw new Error("PDF is too large (max 10MB).");
+  if (file.type !== "application/pdf") throw new Error("Unsupported document type.");
+
+  const filename = `${randomUUID()}.pdf`;
+  const userDir = path.join(UPLOAD_ROOT, userId);
+  await mkdir(userDir, { recursive: true });
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(path.join(userDir, filename), buffer);
+
+  return `/uploads/${userId}/${filename}`;
+}
+
+/**
  * Turns a stored `/uploads/<owner>/<file>` path into the two segments it must
  * consist of, or null.
  *

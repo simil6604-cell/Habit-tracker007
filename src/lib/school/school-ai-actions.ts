@@ -6,7 +6,12 @@ import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { SPOKEN_BOARD_STYLE } from "@/lib/ai/spoken-mode";
 import type { ProviderImage } from "@/lib/ai/anthropic-provider";
-import { deleteUploadedImage, readUploadedImage, saveUploadedImage } from "@/lib/uploads/save-image";
+import {
+  deleteUploadedImage,
+  readUploadedImage,
+  saveUploadedDocument,
+  saveUploadedImage,
+} from "@/lib/uploads/save-image";
 import {
   NO_REAL_AI_MESSAGE,
   buildSchoolAITurns,
@@ -15,7 +20,16 @@ import {
   buildSchoolAISystemPrompt,
   type SchoolAITurn,
 } from "./school-ai";
-import { MAX_PHOTOS_PER_MESSAGE, ownedUploadPaths, parseImagePaths, visionMediaType } from "./school-ai-photos";
+import {
+  attachmentKind,
+  isDocumentPath,
+  MAX_PHOTOS_PER_MESSAGE,
+  ownedUploadPaths,
+  parseImagePaths,
+  visionMediaType,
+} from "./school-ai-photos";
+import { schoolAITools } from "./ai-tools";
+import type { ProviderDocument } from "@/lib/ai/anthropic-provider";
 import { aiFailureMessage } from "@/lib/ai/api-key";
 import { ADOPTED_CHAT_TITLE, chatLabel, cleanChatTitle } from "./chat-titles";
 
@@ -42,6 +56,15 @@ export type SchoolAIMessageEntry = {
  * is checked here, where we can say which photo pushed it over.
  */
 const MAX_IMAGE_BYTES = 18 * 1024 * 1024;
+
+/**
+ * The pages a tool can change under the student's feet.
+ *
+ * Homework and exams show on /school, cards on the flashcards page, and the
+ * unified tracker on /analytics reads all three. None of them would notice
+ * a row written during a chat.
+ */
+const SCHOOL_PAGES = ["/school/ai", "/school", "/school/flashcards", "/analytics"];
 
 /** How much of the conversation is kept on screen and available to the tutor. */
 const HISTORY_LIMIT = 200;
@@ -106,14 +129,18 @@ export async function uploadSchoolAIPhotos(formData: FormData): Promise<UploadRe
     // An iPhone's default HEIC saves fine but the vision API can't read it, so
     // it would sit in the thread as a photo the tutor silently never saw. Say
     // so at the point where it can still be re-taken.
-    if (!visionMediaType(file.type)) {
+    const kind = attachmentKind(file.type);
+    if (!kind) {
       problems.push(
-        `${file.name || "that photo"} is ${file.type || "an unknown format"}, which the AI can't read. On iPhone: Settings → Camera → Formats → Most Compatible, or send a screenshot of it instead.`
+        `${file.name || "that file"} is ${file.type || "an unknown format"}, which the AI can't read. Send a JPEG, PNG or PDF — on iPhone: Settings → Camera → Formats → Most Compatible, or send a screenshot instead.`
       );
       continue;
     }
     try {
-      const path = await saveUploadedImage(file, userId);
+      // A PDF is stored beside the photos and sent as a document block, so a
+      // past paper can be asked about as the real pages rather than as a
+      // photograph of a screen.
+      const path = kind === "document" ? await saveUploadedDocument(file, userId) : await saveUploadedImage(file, userId);
       if (path) {
         // Recorded as staged, which is what later tells this file apart from
         // every other photo sitting in the same directory.
@@ -121,7 +148,7 @@ export async function uploadSchoolAIPhotos(formData: FormData): Promise<UploadRe
         paths.push(path);
       }
     } catch (err) {
-      problems.push(`${file.name || "a photo"}: ${err instanceof Error ? err.message : "couldn't be saved"}`);
+      problems.push(`${file.name || "a file"}: ${err instanceof Error ? err.message : "couldn't be saved"}`);
     }
   }
 
@@ -167,15 +194,26 @@ async function sweepAbandonedUploads(userId: string): Promise<void> {
   for (const row of stale) await deleteUploadedImage(row.path);
 }
 
-async function loadImages(paths: string[]): Promise<{ images: ProviderImage[]; skipped: number }> {
+/**
+ * Reads the attachments off the disk, as the two kinds the API takes.
+ *
+ * The budget is shared between them on purpose: twelve photos and a forty
+ * page PDF is one request either way, and the limit that matters is the one
+ * on the whole request rather than one per kind.
+ */
+async function loadAttachments(
+  paths: string[]
+): Promise<{ images: ProviderImage[]; documents: ProviderDocument[]; skipped: number }> {
   const images: ProviderImage[] = [];
+  const documents: ProviderDocument[] = [];
   let skipped = 0;
   let bytes = 0;
 
   for (const path of paths) {
+    const document = isDocumentPath(path);
     const ext = path.split(".").pop()?.toLowerCase() ?? "";
-    const mediaType = visionMediaType(`image/${ext === "jpg" ? "jpeg" : ext}`);
-    if (!mediaType) {
+    const mediaType = document ? null : visionMediaType(`image/${ext === "jpg" ? "jpeg" : ext}`);
+    if (!document && !mediaType) {
       skipped += 1;
       continue;
     }
@@ -185,10 +223,11 @@ async function loadImages(paths: string[]): Promise<{ images: ProviderImage[]; s
       continue;
     }
     bytes += buffer.byteLength;
-    images.push({ base64: buffer.toString("base64"), mediaType });
+    if (document) documents.push({ base64: buffer.toString("base64"), title: path.split("/").pop() });
+    else images.push({ base64: buffer.toString("base64"), mediaType: mediaType! });
   }
 
-  return { images, skipped };
+  return { images, documents, skipped };
 }
 
 /**
@@ -216,7 +255,7 @@ async function answerInChat(
       photoCount: parseImagePaths(m.imagePaths).length,
     }));
 
-    const { images, skipped } = await loadImages(photos);
+    const { images, documents, skipped } = await loadAttachments(photos);
     // Appended rather than replacing: which syllabus they are on and what is
     // coming up still apply out loud. Only the shape of the answer changes.
     const base = await buildSchoolAISystemPrompt(userId);
@@ -224,7 +263,22 @@ async function answerInChat(
     // Real turns rather than a transcript flattened into one message: this
     // is a conversation, and the API takes one.
     const conversation = buildSchoolAITurns(turns);
-    const prompt = buildSchoolAIMessage(question || "Have a look at these and tell me what you see.", images.length);
+    const prompt = buildSchoolAIMessage(
+      question || "Have a look at these and tell me what you see.",
+      images.length,
+      documents.length
+    );
+
+    /*
+     * The hands.
+     *
+     * Built here, once per question, closed over the user id that came out
+     * of the session at the top of the action — so the tools write to this
+     * account and there is no argument through which they could write to
+     * another. `done` fills as they run, and goes under the reply, because a
+     * tutor that says it added something must be able to show that it did.
+     */
+    const { tools, done } = schoolAITools(userId);
 
     try {
       // A spoken reply now carries the board with it — two to four drawings
@@ -234,17 +288,33 @@ async function answerInChat(
       reply = await getAIProvider().generate(prompt, {
         system,
         turns: conversation,
-        maxTokens: spoken ? 4000 : 2000,
+        // Room for the answer AND the tool calls on the way to it: a reply
+        // cut off mid tool call is a question that got nothing done and no
+        // text either.
+        maxTokens: spoken ? 4000 : 3000,
         images,
+        documents,
+        tools,
       });
     } catch (err) {
       reply = aiFailureMessage(err);
     }
 
+    /*
+     * What actually happened, under the answer.
+     *
+     * Written from this app's own record of the tools that ran, not from
+     * what the reply claims — those are different things, and the only one
+     * worth showing someone is the first.
+     */
+    if (done.length > 0) {
+      reply = `${reply}\n\n**Done in your app:**\n${done.map((line) => `- ${line}`).join("\n")}`;
+    }
+
     // Never let a photo go unanswered-for in silence: if one couldn't be read
     // or didn't fit, the reply says so rather than quietly covering the rest.
     if (skipped > 0) {
-      reply = `_(${skipped} of your ${photos.length} photos couldn't be included — too large, or the file is missing. Send ${skipped === 1 ? "it" : "them"} again on their own if ${skipped === 1 ? "it matters" : "they matter"}.)_\n\n${reply}`;
+      reply = `_(${skipped} of your ${photos.length} files couldn't be included — too large, or the file is missing. Send ${skipped === 1 ? "it" : "them"} again on their own if ${skipped === 1 ? "it matters" : "they matter"}.)_\n\n${reply}`;
     }
   }
 
@@ -300,7 +370,11 @@ export async function sendSchoolAIMessage(
   }
 
   await answerInChat(userId, activeChatId, history, trimmed, photos, spoken);
-  revalidatePath("/school/ai");
+  // The tutor can now add homework, exams and cards, so the pages that show
+  // them are stale the moment it does. Revalidated unconditionally: whether
+  // a tool ran is known inside answerInChat, and a wasted revalidate costs
+  // less than a homework list that is one navigation behind.
+  for (const page of SCHOOL_PAGES) revalidatePath(page);
   return getSchoolAIMessages(activeChatId);
 }
 
@@ -373,7 +447,7 @@ export async function editSchoolAIMessage(
   });
 
   await answerInChat(userId, message.chatId, history, trimmed, photos, false);
-  revalidatePath("/school/ai");
+  for (const page of SCHOOL_PAGES) revalidatePath(page);
   return getSchoolAIMessages(message.chatId);
 }
 
