@@ -3,10 +3,16 @@ name: CI
 # Pull requests, and pushes to main. Not every push to every branch: while a
 # branch has an open pull request, both events fire for the same commit and the
 # whole suite runs twice side by side — twice the minutes, no more information.
+#
+# `workflow_dispatch` is here because a pull request opened through the API,
+# with a token the run itself would use, does not start a run at all: the
+# branch sits with no checks and nothing says why. With this, the suite can
+# be started by hand on any branch from the Actions tab.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # A second push to the same branch makes the first run pointless.
 concurrency:
