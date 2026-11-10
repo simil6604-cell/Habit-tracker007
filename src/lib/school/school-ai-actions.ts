@@ -10,6 +10,7 @@ import { deleteUploadedImage, readUploadedImage, saveUploadedImage } from "@/lib
 import {
   NO_REAL_AI_MESSAGE,
   buildSchoolAITurns,
+  MAX_EDIT_CHARS,
   buildSchoolAIMessage,
   buildSchoolAISystemPrompt,
   type SchoolAITurn,
@@ -190,6 +191,68 @@ async function loadImages(paths: string[]): Promise<{ images: ProviderImage[]; s
   return { images, skipped };
 }
 
+/**
+ * Asks, and writes the answer down.
+ *
+ * Pulled out of sending so that editing a question can reuse it: both have
+ * to read the conversation up to that point, ask, and store one reply, and
+ * two copies of that would drift the moment one of them changed.
+ */
+async function answerInChat(
+  userId: string,
+  chatId: string,
+  history: { role: string; content: string; imagePaths: string | null }[],
+  question: string,
+  photos: string[],
+  spoken: boolean
+): Promise<void> {
+  let reply: string;
+  if (!isRealAIConfigured) {
+    reply = NO_REAL_AI_MESSAGE;
+  } else {
+    const turns: SchoolAITurn[] = history.map((m) => ({
+      role: m.role as "USER" | "ASSISTANT",
+      content: m.content,
+      photoCount: parseImagePaths(m.imagePaths).length,
+    }));
+
+    const { images, skipped } = await loadImages(photos);
+    // Appended rather than replacing: which syllabus they are on and what is
+    // coming up still apply out loud. Only the shape of the answer changes.
+    const base = await buildSchoolAISystemPrompt(userId);
+    const system = spoken ? `${base}\n${SPOKEN_BOARD_STYLE}` : base;
+    // Real turns rather than a transcript flattened into one message: this
+    // is a conversation, and the API takes one.
+    const conversation = buildSchoolAITurns(turns);
+    const prompt = buildSchoolAIMessage(question || "Have a look at these and tell me what you see.", images.length);
+
+    try {
+      // A spoken reply now carries the board with it — two to four drawings
+      // as well as the words. Cut off mid-SVG there is no picture at all,
+      // only an unclosed block, so voice gets the same headroom the coach's
+      // diagram replies already get.
+      reply = await getAIProvider().generate(prompt, {
+        system,
+        turns: conversation,
+        maxTokens: spoken ? 4000 : 2000,
+        images,
+      });
+    } catch (err) {
+      reply = aiFailureMessage(err);
+    }
+
+    // Never let a photo go unanswered-for in silence: if one couldn't be read
+    // or didn't fit, the reply says so rather than quietly covering the rest.
+    if (skipped > 0) {
+      reply = `_(${skipped} of your ${photos.length} photos couldn't be included — too large, or the file is missing. Send ${skipped === 1 ? "it" : "them"} again on their own if ${skipped === 1 ? "it matters" : "they matter"}.)_\n\n${reply}`;
+    }
+  }
+
+  await prisma.schoolAIMessage.create({ data: { userId, chatId, role: "ASSISTANT", content: reply } });
+  // Moves it to the top of the list, which is what "recent" means there.
+  await prisma.schoolAIChat.updateMany({ where: { id: chatId, userId }, data: { updatedAt: new Date() } });
+}
+
 export async function sendSchoolAIMessage(
   content: string,
   imagePaths: string[] = [],
@@ -236,56 +299,82 @@ export async function sendSchoolAIMessage(
     await prisma.schoolAIUpload.deleteMany({ where: { userId, path: { in: photos } } });
   }
 
-  let reply: string;
-  if (!isRealAIConfigured) {
-    reply = NO_REAL_AI_MESSAGE;
-  } else {
-    const turns: SchoolAITurn[] = history.map((m) => ({
-      role: m.role as "USER" | "ASSISTANT",
-      content: m.content,
-      photoCount: parseImagePaths(m.imagePaths).length,
-    }));
-
-    const { images, skipped } = await loadImages(photos);
-    // Appended rather than replacing: which syllabus they are on and what is
-    // coming up still apply out loud. Only the shape of the answer changes.
-    const base = await buildSchoolAISystemPrompt(userId);
-    const system = spoken ? `${base}\n${SPOKEN_BOARD_STYLE}` : base;
-    // Real turns rather than a transcript flattened into one message: this
-    // is a conversation, and the API takes one.
-    const conversation = buildSchoolAITurns(turns);
-    const prompt = buildSchoolAIMessage(
-      trimmed || "Have a look at these and tell me what you see.",
-      images.length
-    );
-
-    try {
-      // A spoken reply now carries the board with it — two to four drawings
-      // as well as the words. Cut off mid-SVG there is no picture at all,
-      // only an unclosed block, so voice gets the same headroom the coach's
-      // diagram replies already get.
-      reply = await getAIProvider().generate(prompt, {
-        system,
-        turns: conversation,
-        maxTokens: spoken ? 4000 : 2000,
-        images,
-      });
-    } catch (err) {
-      reply = aiFailureMessage(err);
-    }
-
-    // Never let a photo go unanswered-for in silence: if one couldn't be read
-    // or didn't fit, the reply says so rather than quietly covering the rest.
-    if (skipped > 0) {
-      reply = `_(${skipped} of your ${photos.length} photos couldn't be included — too large, or the file is missing. Send ${skipped === 1 ? "it" : "them"} again on their own if ${skipped === 1 ? "it matters" : "they matter"}.)_\n\n${reply}`;
-    }
-  }
-
-  await prisma.schoolAIMessage.create({ data: { userId, chatId: activeChatId, role: "ASSISTANT", content: reply } });
-  // Moves it to the top of the list, which is what "recent" means there.
-  await prisma.schoolAIChat.updateMany({ where: { id: activeChatId, userId }, data: { updatedAt: new Date() } });
+  await answerInChat(userId, activeChatId, history, trimmed, photos, spoken);
   revalidatePath("/school/ai");
   return getSchoolAIMessages(activeChatId);
+}
+
+/**
+ * Fixes a question you have already sent, and asks it again.
+ *
+ * Everything after it goes. That is not tidiness: the answer below was an
+ * answer to the old wording, and the turns after it were a conversation
+ * about that answer. Left in place they would be sent back to Claude as
+ * though they followed from the new question, and it would be reasoning
+ * from a conversation that never happened.
+ *
+ * Photos stay attached. The usual reason to edit is a typo in the question
+ * asked about a photographed worksheet, and making someone take the picture
+ * again for a missing letter is not a feature.
+ */
+export async function editSchoolAIMessage(
+  messageId: string,
+  content: string
+): Promise<SchoolAIMessageEntry[]> {
+  const userId = await requireUserId();
+
+  const message = await prisma.schoolAIMessage.findFirst({
+    where: { id: messageId, userId },
+    select: { id: true, chatId: true, role: true, createdAt: true, imagePaths: true },
+  });
+  // Only your own, and only your own questions: an edited answer would be
+  // this app putting words in Claude's mouth and then reading them back to
+  // it as its own.
+  if (!message || message.role !== "USER" || !message.chatId) return getSchoolAIMessages();
+
+  const trimmed = content.trim().slice(0, MAX_EDIT_CHARS);
+  const photos = parseImagePaths(message.imagePaths);
+  if (!trimmed && photos.length === 0) return getSchoolAIMessages(message.chatId);
+
+  // The conversation up to this question, which is what it was asked in the
+  // light of. Newest-first then reversed, for the reason getSchoolAIMessages
+  // explains.
+  const history = (
+    await prisma.schoolAIMessage.findMany({
+      where: {
+        userId,
+        chatId: message.chatId,
+        OR: [
+          { createdAt: { lt: message.createdAt } },
+          // Same millisecond: the id breaks the tie the same way the list
+          // does, so what is "before" here and there cannot disagree.
+          { createdAt: message.createdAt, id: { lt: message.id } },
+        ],
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: HISTORY_LIMIT,
+    })
+  ).reverse();
+
+  await prisma.schoolAIMessage.updateMany({
+    where: { id: message.id, userId },
+    data: { content: trimmed || "(sent photos without a question)" },
+  });
+
+  await prisma.schoolAIMessage.deleteMany({
+    where: {
+      userId,
+      chatId: message.chatId,
+      OR: [
+        { createdAt: { gt: message.createdAt } },
+        { createdAt: message.createdAt, id: { gt: message.id } },
+      ],
+    },
+  });
+
+  await answerInChat(userId, message.chatId, history, trimmed, photos, false);
+  revalidatePath("/school/ai");
+  return getSchoolAIMessages(message.chatId);
 }
 
 export async function clearSchoolAIChat(chatId?: string): Promise<SchoolAIMessageEntry[]> {

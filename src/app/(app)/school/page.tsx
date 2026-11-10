@@ -47,6 +47,10 @@ const SCHOOL_SECTIONS: readonly JumpSection[] = [
   { id: "homework", label: "Homework" },
   { id: "marked-work", label: "Marked work" },
   { id: "notes", label: "Notes" },
+  // Pages of their own, not sections. Both were reachable only from a
+  // button beside "My notes & recordings", nine sections down.
+  { id: "flashcards-page", label: "Flashcards", href: "/school/flashcards" },
+  { id: "podcast-page", label: "Podcast", href: "/school/podcast" },
 ];
 
 export default async function SchoolPage({
