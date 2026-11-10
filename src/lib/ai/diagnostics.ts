@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth/auth";
 import { getAIProvider, isRealAIConfigured } from "./provider";
 import { anthropicModel } from "./model-config";
+import { objectSchema, requiredString, type ProviderTool } from "./tool-use";
 
 export type AIDiagnosis = {
   ok: boolean;
@@ -13,6 +14,24 @@ export type AIDiagnosis = {
   /** Masked so the key itself never reaches the browser. */
   keyHint: string;
   model: string;
+};
+
+/**
+ * A tool the test call offers and expects never to be used.
+ *
+ * It is here because the tutor's requests now carry tool definitions, and
+ * the ways that can fail are invisible from the app: a schema keyword the
+ * strict mode does not accept, or a field a future model refuses, comes back
+ * as one 400 on every message while a plain test call keeps saying the
+ * connection is fine. Offering one makes this page test the shape the app
+ * actually sends.
+ */
+const PROBE_TOOL: ProviderTool = {
+  name: "connection_probe",
+  description:
+    "Do not call this tool. It exists only so a connection test can check that tool definitions are accepted.",
+  schema: objectSchema({ why: requiredString("Why you called a tool you were told not to call.") }),
+  run: async () => ({ ok: true, message: "Nothing to do — this tool does nothing." }),
 };
 
 /**
@@ -55,12 +74,16 @@ export async function runAIDiagnostics(): Promise<AIDiagnosis> {
   try {
     const reply = await getAIProvider().generate("Reply with exactly: OK", {
       system: "You are a connection test. Reply with exactly the two letters OK and nothing else.",
-      maxTokens: 16,
+      // Room to think before saying two letters. Thinking is always on and
+      // its tokens count against this ceiling, so the old 16 was a test that
+      // could report "cut off" on a connection that is perfectly healthy.
+      maxTokens: 1_000,
+      tools: [PROBE_TOOL],
     });
     return {
       ok: true,
       headline: "The AI is connected and answering.",
-      detail: `Test call succeeded on model ${model}. Reply was: "${reply.trim().slice(0, 40)}"`,
+      detail: `Test call succeeded on model ${model}, with tool definitions attached — so your school AI can act in the app, not just answer. Reply was: "${reply.trim().slice(0, 40)}"`,
       keyHint,
       model,
     };

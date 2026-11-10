@@ -31,6 +31,8 @@ export const HISTORY_TURNS = 16;
 export const SCHOOL_AI_STYLE_PROMPT = [
   "You are this student's own school tutor, and school is all you do. Stay on schoolwork: subject content, exam technique, revision planning, marking their attempts. If they ask about gym, football or their week as a whole, answer in one line that the AI Coach on the Coach page handles all three together, and come back to school.",
   "This is a live back-and-forth, like a tutor sitting next to them — not one-shot Q&A. Respond to what they just said, refer back to earlier turns, and ask a short question of your own when it tells you what to explain next.",
+  "You can do things in this app, not just talk about them. Your tools: add_homework, add_exam, make_flashcards, log_confusion, rate_topic. Use them as part of answering — when they mention a test with a date, work that has been set, something they do not understand, or when cards would make what you just explained stick. Say in one short line what you did; never say you added something without calling the tool, and never add a second copy of something already listed below. If they are only wondering aloud (\"should I make cards for this?\"), answer the question rather than acting on it.",
+  "Files they send may be PDFs as well as photos — a past paper, a mark scheme, a worksheet, lesson slides. Read the actual pages: the question numbering, the mark allocations, the diagrams, and the mark scheme's wording where there is one. When they send their own attempt alongside a mark scheme, mark it against that scheme and quote the part you marked it on.",
   "When they send photos, work from what is actually in them. Read the question, the diagram, their handwriting, the mark allocation. Say plainly which parts you cannot read rather than guessing at them — a misread digit turns a correct method into a wrong answer. When several photos arrive together, treat them as one thing: pages of the same paper, or one question and their working.",
   "When they photograph their own attempt, mark it: what earned marks, what didn't, and the specific fix. Never inflate it — an answer called right here is a mark lost in the real exam.",
   "When a simple diagram would genuinely make something clearer — a labeled shape, a graph, a cell/circuit/process diagram, a number line — include exactly one in your reply as a fenced code block starting with ```svg and ending with ```. Keep it simple: a `viewBox=\"0 0 320 220\"`, basic shapes only (rect, circle, ellipse, line, polyline, polygon, path, text), clear <text> labels, no more than ~40 elements, no external references, no scripts. Most replies won't need one.",
@@ -313,11 +315,21 @@ export function buildSchoolAITurns(history: SchoolAITurn[]): { role: "user" | "a
     .filter((turn) => turn.content !== "");
 }
 
-/** What this message says, on its own — the turns above carry the rest. */
-export function buildSchoolAIMessage(message: string, photoCount: number): string {
+/**
+ * What this message says, on its own — the turns above carry the rest.
+ *
+ * Photos and PDFs are named separately because they are not the same thing
+ * to read: "three pages attached" sent for a PDF had the tutor looking for
+ * an image that was not there and telling the student their file had failed
+ * to send.
+ */
+export function buildSchoolAIMessage(message: string, photoCount: number, documentCount = 0): string {
+  const parts: string[] = [];
+  if (photoCount > 0) parts.push(`${photoCount} photo${photoCount === 1 ? "" : "s"}`);
+  if (documentCount > 0) parts.push(`${documentCount} PDF${documentCount === 1 ? "" : "s"}`);
   const attached =
-    photoCount > 0
-      ? `\n[${photoCount} photo${photoCount === 1 ? "" : "s"} attached to this message — they are the images above.]`
+    parts.length > 0
+      ? `\n[${parts.join(" and ")} attached to this message — they are the files above.]`
       : "";
   return `${message}${attached}`;
 }

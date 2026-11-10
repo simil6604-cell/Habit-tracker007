@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_UPLOAD_BYTES } from "@/lib/uploads/save-image";
+import { MAX_PDF_BYTES, MAX_UPLOAD_BYTES } from "@/lib/uploads/save-image";
 
 /**
  * The two limits a photo has to get past, and the rule that they agree.
@@ -57,6 +57,27 @@ describe("upload size limits", () => {
     // Batches upload one photo per request. A limit big enough for twelve
     // would hide that requirement until a phone on a slow connection hit it.
     expect(parseSizeLimit(literal![1])).toBeLessThan(MAX_UPLOAD_BYTES * 3);
+  });
+
+  it("covers a PDF too, which goes up the same way", () => {
+    // The school AI takes past papers as PDFs now. A PDF limit above the
+    // transport cap would be a file refused with a 413 before the app's own
+    // check — the same failure this whole test file exists for.
+    expect(parseSizeLimit(literal![1])).toBeGreaterThan(MAX_PDF_BYTES + 64 * 1024);
+  });
+
+  it("serves the extension the PDF is saved under", () => {
+    // Uploads live outside public/ and are served by one route with an
+    // allow-list of extensions. A type saved but not served is a file that
+    // uploads, is read by the AI, and 404s when the student taps it.
+    const routeSrc = readFileSync(
+      path.join(__dirname, "..", "..", "src", "app", "uploads", "[...path]", "route.ts"),
+      "utf8"
+    );
+    expect(routeSrc).toContain('".pdf": "application/pdf"');
+    // And the browser must not go looking for a better type than the one
+    // this app decided on.
+    expect(routeSrc).toContain("X-Content-Type-Options");
   });
 
   it("agrees with the 10MB the upload error message quotes at the student", () => {

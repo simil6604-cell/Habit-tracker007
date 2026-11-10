@@ -10,6 +10,9 @@ const CONTENT_TYPES: Record<string, string> = {
   ".webp": "image/webp",
   ".heic": "image/heic",
   ".heif": "image/heif",
+  // PDFs: a past paper or a mark scheme sent to the school AI is stored here
+  // like any other attachment, and the chat links to it.
+  ".pdf": "application/pdf",
 };
 
 /**
@@ -60,6 +63,11 @@ export async function GET(_request: Request, context: { params: Promise<{ path: 
       return new Response(new Uint8Array(file), {
         headers: {
           "Content-Type": contentType,
+          // The type above is decided by this app from an extension it
+          // generated, so the browser must not go looking for a better one.
+          // A file whose bytes are HTML would otherwise be rendered as HTML
+          // in this app's own origin.
+          "X-Content-Type-Options": "nosniff",
           // Private: the response is specific to this signed-in user, so no
           // shared cache may keep a copy for the next person.
           "Cache-Control": "private, max-age=31536000, immutable",

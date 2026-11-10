@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { AudioLines, ImagePlus, Mic, MicOff, Pencil, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, FileText, ImagePlus, Mic, MicOff, Pencil, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
@@ -23,7 +23,7 @@ import { editSchoolAIMessage } from "@/lib/school/school-ai-actions";
 import { MAX_EDIT_CHARS } from "@/lib/school/school-ai";
 import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
 import { DICTATION_LANGS } from "@/lib/ai/voice/dictation-lang";
-import { MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
+import { isDocumentPath, MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
 import { getLessons, renameLesson, type LessonEntry } from "@/lib/school/class-recording-actions";
 import {
   clearSchoolAIChat,
@@ -211,7 +211,7 @@ export function SchoolAIPanel({
     if (!files || files.length === 0) return;
     const room = MAX_PHOTOS_PER_MESSAGE - staged.length;
     if (room <= 0) {
-      setNotice(`${MAX_PHOTOS_PER_MESSAGE} photos is the most one question can carry — send these, then add the rest.`);
+      setNotice(`${MAX_PHOTOS_PER_MESSAGE} files is the most one question can carry — send these, then add the rest.`);
       return;
     }
 
@@ -232,7 +232,7 @@ export function SchoolAIPanel({
         // The upload reached the server and was refused, or never got there.
         // Either way, naming the photo is the useful part — blaming the
         // connection is a guess, and usually a wrong one.
-        problems.push(`${file.name || "One photo"} couldn't be uploaded. If it's very large, try a smaller one.`);
+        problems.push(`${file.name || "One file"} couldn't be uploaded. If it's very large, try a smaller one.`);
       }
     }
 
@@ -389,10 +389,10 @@ export function SchoolAIPanel({
             variant="outline"
             onClick={() => fileRef.current?.click()}
             disabled={uploading || pending}
-            title="Photograph a question, your notes, or your own working"
+            title="Photograph a question, your notes or your own working — or attach a PDF past paper or mark scheme"
           >
             <ImagePlus size={14} />
-            {uploading ? "Uploading…" : "Photos"}
+            {uploading ? "Uploading…" : "Photos / PDF"}
           </Button>
           <input
             ref={fileRef}
@@ -524,8 +524,9 @@ export function SchoolAIPanel({
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center text-muted">
           <span className="text-3xl">🎓</span>
           <p className="max-w-md text-sm">
-            This one only does school — Cambridge IGCSE and A Level. Press <strong>Voice chat</strong> and talk it through, or photograph
-            a question, your notes, or your own attempt and send up to {MAX_PHOTOS_PER_MESSAGE} pictures at once.
+            This one only does school — Cambridge IGCSE and A Level. Press <strong>Voice chat</strong> and talk it through, photograph
+            a question, your notes or your own attempt (up to {MAX_PHOTOS_PER_MESSAGE} at once), or attach a PDF past paper. It can also
+            put things straight into your app: tell it about a test, work that has been set, or something you don&apos;t get, and it adds it.
           </p>
         </div>
       ) : (
@@ -537,18 +538,34 @@ export function SchoolAIPanel({
             <div key={m.id} className={`group flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
               {m.imagePaths.length > 0 && (
                 <div className="flex max-w-[85%] flex-wrap justify-end gap-1.5">
-                  {m.imagePaths.map((path) => (
-                    <a key={path} href={path} target="_blank" rel="noreferrer">
-                      <Image
-                        src={path}
-                        alt="Photo sent to your school AI"
-                        width={96}
-                        height={96}
-                        unoptimized
-                        className="h-20 w-20 rounded-lg border border-border object-cover"
-                      />
-                    </a>
-                  ))}
+                  {m.imagePaths.map((path) =>
+                    // A PDF has no thumbnail, and an <Image> pointed at one
+                    // renders a broken picture — which reads as a file that
+                    // failed to send rather than one the tutor read.
+                    isDocumentPath(path) ? (
+                      <a
+                        key={path}
+                        href={path}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-surface p-1 text-[10px] text-muted hover:text-accent"
+                      >
+                        <FileText size={20} />
+                        PDF
+                      </a>
+                    ) : (
+                      <a key={path} href={path} target="_blank" rel="noreferrer">
+                        <Image
+                          src={path}
+                          alt="Photo sent to your school AI"
+                          width={96}
+                          height={96}
+                          unoptimized
+                          className="h-20 w-20 rounded-lg border border-border object-cover"
+                        />
+                      </a>
+                    )
+                  )}
                 </div>
               )}
               {editing === m.id ? (
@@ -630,19 +647,26 @@ export function SchoolAIPanel({
         <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border pt-2" data-testid="school-ai-staged">
           {staged.map((path) => (
             <div key={path} className="relative">
-              <Image
-                src={path}
-                alt="Photo ready to send"
-                width={64}
-                height={64}
-                unoptimized
-                className="h-16 w-16 rounded-lg border border-border object-cover"
-              />
+              {isDocumentPath(path) ? (
+                <span className="flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-surface text-[10px] text-muted">
+                  <FileText size={18} />
+                  PDF
+                </span>
+              ) : (
+                <Image
+                  src={path}
+                  alt="Photo ready to send"
+                  width={64}
+                  height={64}
+                  unoptimized
+                  className="h-16 w-16 rounded-lg border border-border object-cover"
+                />
+              )}
               <button
                 type="button"
                 onClick={() => removeStaged(path)}
                 className="absolute -right-1.5 -top-1.5 rounded-full bg-surface p-0.5 text-muted shadow ring-1 ring-border hover:text-danger"
-                title="Remove this photo"
+                title="Remove this file"
               >
                 <X size={12} />
               </button>

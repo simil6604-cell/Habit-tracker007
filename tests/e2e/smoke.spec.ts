@@ -1263,6 +1263,13 @@ test.describe.serial("full app walkthrough", () => {
     await expect(second.locator('select[name="kind"]')).toHaveValue("NOTES");
     await second.getByRole("button", { name: "Save link" }).click();
     await expect(panel).toContainText("Save My Exams");
+    // Wait for the SAVE to finish, not just for the list to show it.
+    //
+    // The list updates from the revalidated page; the form clears a moment
+    // later, when the action's own result lands. Typing into it in that gap
+    // was fine until the gap grew, and then the next line's text was wiped
+    // by the clear and the refusal below never had anything to refuse.
+    await expect(second.locator('input[name="url"]'), "the second save has landed").toHaveValue("");
 
     // The value ends up in an href, so a scheme that would run code is
     // refused with a sentence — and nothing like it reaches the page.

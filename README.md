@@ -84,7 +84,17 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   have answers read back), and it takes a whole stack of photos in one
   question — up to 12 at a time, staged as thumbnails so you can drop the
   blurry one before sending, so a three-page past-paper question or your own
-  handwritten working goes up as one thing and comes back marked. Kept
+  handwritten working goes up as one thing and comes back marked. **PDFs go
+  up the same way** and are read as real pages rather than as pictures of
+  them, so a past paper or a mark scheme keeps its question numbering, its
+  mark allocations and its diagrams. **It can also act in the app, not just
+  answer**: tell it about a test with a date, work that has been set, or
+  something you did not understand, and it adds the exam, the homework, the
+  flashcards or the logged gap itself — through five tools it is given
+  (`src/lib/school/ai-tools.ts`), each one scoped to your own account with
+  no argument through which it could reach anyone else's, and each one
+  listed under the reply as what was actually done, taken from this app's
+  own record of the tools that ran rather than from what the answer claims. Kept
   deliberately separate from the all-domains AI Coach: different
   conversation, different prompt, no school question competing with training
   load for attention,
