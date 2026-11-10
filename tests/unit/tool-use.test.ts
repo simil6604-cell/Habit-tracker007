@@ -123,12 +123,13 @@ describe("the school tutor's tools", () => {
   const { tools } = schoolAITools("user-1");
   const definitions = toolDefinitions(tools);
 
-  it("are the five the prompt tells it about", () => {
+  it("are the six the prompt tells it about", () => {
     expect(definitions.map((d) => d.name).sort()).toEqual([
       "add_exam",
       "add_homework",
       "log_confusion",
       "make_flashcards",
+      "make_podcast",
       "rate_topic",
     ]);
   });

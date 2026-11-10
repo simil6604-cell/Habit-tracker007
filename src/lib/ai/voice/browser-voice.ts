@@ -70,6 +70,18 @@ function words(text: string): string[] {
  * and the device is usually right about the person.
  */
 export function detectSpokenLang(text: string, fallback?: string | null): SpokenLang {
+  return decideSpokenLang(text) ?? normalizeLang(fallback) ?? "en";
+}
+
+/**
+ * The same decision, with "I cannot tell" as an answer.
+ *
+ * Needed wherever being wrong is worse than saying nothing — telling someone
+ * their dictation language is set wrong, for one. A formula, a list of
+ * numbers or a two-word reply carries no markers at all, and a confident
+ * answer there is a guess dressed up as a reading.
+ */
+export function decideSpokenLang(text: string): SpokenLang | null {
   const tokens = words(text);
   let german = 0;
   let english = 0;
@@ -83,7 +95,7 @@ export function detectSpokenLang(text: string, fallback?: string | null): Spoken
 
   if (german > english) return "de";
   if (english > german) return "en";
-  return normalizeLang(fallback) ?? "en";
+  return null;
 }
 
 /** "de-CH", "de", "German" → "de"; anything else that is not English → null. */
@@ -137,6 +149,19 @@ const QUALITY_MARKERS = [
   "studio",
 ];
 
+/**
+ * Voices worth asking for by name.
+ *
+ * The quality markers above catch most of it, but several of the best voices
+ * on a phone say nothing about themselves in their name — "Samantha" and
+ * "Anna" are the good Apple voices and read like nothing special in a list.
+ * Named here so the pick is the one a person would make.
+ */
+const PREFERRED_NAMES: Record<SpokenLang, string[]> = {
+  en: ["samantha", "serena", "daniel", "kate", "sonia", "ryan", "libby", "aria", "jenny", "karen", "moira"],
+  de: ["anna", "petra", "markus", "katja", "conrad", "amala", "viktoria", "helena", "seraphina", "florian"],
+};
+
 /** Names of the old robotic voices, kept out of the way unless nothing else exists. */
 const POOR_MARKERS = ["compact", "espeak", "pico", "festival", "eloquence", "novelty", "whisper", "zarvox", "trinoids"];
 
@@ -155,6 +180,7 @@ export function voiceScore(voice: VoiceLike, lang: SpokenLang): number {
 
   const name = (voice.name ?? "").toLowerCase();
   if (QUALITY_MARKERS.some((marker) => name.includes(marker))) score += 40;
+  if (PREFERRED_NAMES[lang].some((known) => name.includes(known))) score += 25;
   if (POOR_MARKERS.some((marker) => name.includes(marker))) score -= 60;
   // A cloud voice is the better one wherever a browser offers both, and
   // localService is the only flag that distinguishes them.
@@ -187,6 +213,27 @@ export function pickVoice<T extends VoiceLike>(voices: readonly T[], lang: Spoke
 }
 
 /**
+ * How fast and how high, for the voice that was picked.
+ *
+ * The browser's default is 1.0 and it reads like a station announcement:
+ * evenly paced, every sentence the same. A person talking to one other
+ * person is a shade quicker and a shade higher, and that small push is most
+ * of the difference between "a computer is reading this out" and "someone
+ * is telling me this".
+ *
+ * Only on a voice that can take it. The old formant voices distort when
+ * they are pushed, so a device that only has one of those is left alone —
+ * better flat than mangled.
+ */
+export function speechShape(voice: VoiceLike | null): { rate: number; pitch: number } {
+  if (!voice) return { rate: 1, pitch: 1 };
+  const name = (voice.name ?? "").toLowerCase();
+  const poor = POOR_MARKERS.some((marker) => name.includes(marker));
+  if (poor) return { rate: 1, pitch: 1 };
+  return { rate: 1.06, pitch: 1.04 };
+}
+
+/**
  * Everything the caller needs to set on an utterance.
  *
  * One function so the three places that speak cannot drift apart again —
@@ -197,8 +244,64 @@ export function voiceFor<T extends VoiceLike>(
   text: string,
   voices: readonly T[],
   deviceLang?: string | null
-): { lang: string; voice: T | null } {
+): { lang: string; voice: T | null; rate: number; pitch: number } {
   const spoken = detectSpokenLang(text, deviceLang);
   const voice = pickVoice(voices, spoken);
-  return { lang: voice?.lang ?? DEFAULT_LOCALE[spoken], voice };
+  return { lang: voice?.lang ?? DEFAULT_LOCALE[spoken], voice, ...speechShape(voice) };
+}
+
+/**
+ * The text, cut where a speaker would draw breath.
+ *
+ * Two things this fixes. A long reply handed to the browser as one utterance
+ * is read as one unbroken stream, and in Chrome it is also liable to stop
+ * dead part way through — a documented limit on how long a single utterance
+ * may be. Spoken as separate utterances, the synthesiser puts a real pause
+ * between them, which is what a person does, and nothing is lost.
+ *
+ * Sentences are grouped rather than spoken one by one: a pause after every
+ * four-word sentence sounds like someone reading a list.
+ */
+export function speechChunks(text: string, target = 220): string[] {
+  const clean = text.trim();
+  if (!clean) return [];
+
+  // Split after . ! ? … and after a newline, keeping the punctuation.
+  const sentences = clean
+    .split(/(?<=[.!?…])\s+|\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const chunks: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    if (!current) current = sentence;
+    else if (current.length + sentence.length + 1 <= target) current = `${current} ${sentence}`;
+    else {
+      chunks.push(current);
+      current = sentence;
+    }
+  }
+  if (current) chunks.push(current);
+
+  // One sentence longer than the target on its own: a comma is the next best
+  // place to breathe, and anything still over is left whole rather than cut
+  // somewhere that would change the meaning.
+  return chunks.flatMap((chunk) => (chunk.length <= target * 2 ? [chunk] : splitOnCommas(chunk, target)));
+}
+
+function splitOnCommas(text: string, target: number): string[] {
+  const parts = text.split(/(?<=,)\s+/);
+  const out: string[] = [];
+  let current = "";
+  for (const part of parts) {
+    if (!current) current = part;
+    else if (current.length + part.length + 1 <= target) current = `${current} ${part}`;
+    else {
+      out.push(current);
+      current = part;
+    }
+  }
+  if (current) out.push(current);
+  return out;
 }

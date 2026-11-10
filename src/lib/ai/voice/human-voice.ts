@@ -17,10 +17,19 @@
 export const MAX_SPEECH_CHARS = 1_200;
 
 /**
- * A fast model rather than the most expressive one: this is a back-and-forth
- * conversation, and a reply that arrives a second late stops it being one.
+ * Expression first.
+ *
+ * This was the flash model, chosen for latency, and latency is a real thing
+ * in a conversation. But the complaint was not that it was slow: it was that
+ * it sounded flat, and the flash models are the flat ones — they are built
+ * to be quick. The multilingual model puts the stress in the right places,
+ * reads a German sentence as German and an English one as English, and
+ * costs a fraction of a second more.
+ *
+ * ELEVENLABS_MODEL_ID takes it back to eleven_flash_v2_5 for anyone who
+ * would rather have the speed.
  */
-const DEFAULT_MODEL = "eleven_flash_v2_5";
+const DEFAULT_MODEL = "eleven_multilingual_v2";
 
 /** ElevenLabs' own long-standing default voice ("Rachel"). */
 const DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM";
@@ -38,8 +47,8 @@ const DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM";
  * Tunable because the right setting is a matter of taste and the person
  * listening is not here.
  */
-const DEFAULT_STABILITY = 0.32;
-const DEFAULT_STYLE = 0.45;
+const DEFAULT_STABILITY = 0.3;
+const DEFAULT_STYLE = 0.55;
 const DEFAULT_SIMILARITY = 0.8;
 
 /** A number from the environment, ignored unless it is one, and in range. */

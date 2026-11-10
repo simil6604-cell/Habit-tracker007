@@ -31,6 +31,30 @@ function creator(model: string) {
   });
 }
 
+/**
+ * The episode writer, stubbed.
+ *
+ * What the tool is responsible for is resolving the subject, passing the
+ * focus through and handing back a link that plays the result — not the
+ * writing, which has its own module and its own tests.
+ */
+const written: { userId: string; options: Record<string, unknown> }[] = [];
+let episodeResult: unknown = {
+  ok: true,
+  episode: { id: "ep-1", title: "Economics: elasticity", seconds: 185, subjectName: "Economics" },
+};
+
+vi.mock("@/lib/school/podcast-episode", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    writeEpisode: vi.fn(async (userId: string, options: Record<string, unknown>) => {
+      written.push({ userId, options });
+      return episodeResult;
+    }),
+  };
+});
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     subject: {
@@ -272,6 +296,59 @@ describe("rating a topic", () => {
     const { byName } = toolSet();
     await byName("rate_topic").run({ subject: "Biology", topic: "Osmosis", percent: 64.6, why: null });
     expect(updated[0].data.progressPct).toBe(65);
+  });
+});
+
+describe("making a podcast", () => {
+  beforeEach(() => {
+    written.length = 0;
+    episodeResult = {
+      ok: true,
+      episode: { id: "ep-1", title: "Economics: elasticity", seconds: 185, subjectName: "Economics" },
+    };
+    subjects = [{ id: "sub-eco", name: "Economics" }];
+  });
+
+  it("writes it for the subject they named, about the thing they named", async () => {
+    const { byName, done } = toolSet();
+    const outcome = await byName("make_podcast").run({
+      subject: "economics",
+      about: "price elasticity of demand",
+      minutes: 3,
+    });
+
+    expect(outcome.ok).toBe(true);
+    expect(written).toHaveLength(1);
+    expect(written[0].userId).toBe("user-1");
+    expect(written[0].options).toMatchObject({
+      subjectId: "sub-eco",
+      minutes: 3,
+      focus: "price elasticity of demand",
+    });
+  });
+
+  it("hands back a link that plays it, not directions to go and find it", async () => {
+    const { byName, done } = toolSet();
+    await byName("make_podcast").run({ subject: "Economics", about: null, minutes: 3 });
+
+    // The chat renders this as a real link: the path is in this app, it
+    // names the episode, and the fragment makes the browser scroll to it.
+    expect(done[0]).toBe("[▶ Listen: Economics: elasticity (3 min)](/school/podcast?play=ep-1#ep-ep-1)");
+  });
+
+  it("passes a failure to write it back as a failure, not as a link to nothing", async () => {
+    episodeResult = { ok: false, error: "That subject is not there any more." };
+    const { byName, done } = toolSet();
+    const outcome = await byName("make_podcast").run({ subject: "Economics", about: null, minutes: 5 });
+    expect(outcome.ok).toBe(false);
+    expect(done).toEqual([]);
+  });
+
+  it("does not write one for a subject this student does not take", async () => {
+    const { byName } = toolSet();
+    const outcome = await byName("make_podcast").run({ subject: "Astrophysics", about: null, minutes: 3 });
+    expect(outcome.ok).toBe(false);
+    expect(written).toHaveLength(0);
   });
 });
 

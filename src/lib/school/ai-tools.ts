@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
+import { EPISODE_LENGTHS, writeEpisode } from "./podcast-episode";
+import { formatLength } from "./podcast";
 import {
   objectSchema,
   optionalString,
@@ -306,6 +308,46 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
         });
         record(`${subject.name} · ${topic.name}: ${topic.progressPct}% → ${percent}%`);
         return ok(`Updated. ${subject.name} · ${topic.name} now reads ${percent}% (it was ${topic.progressPct}%).`);
+      },
+    },
+    {
+      name: "make_podcast",
+      description:
+        `Write an audio episode from this student's own material and put it in their podcast page, where it can be played out loud. Use it whenever they ask for a podcast, for something to listen to, or for a way to revise without reading — on the bus, on a walk, when they are tired of looking at a screen. One subject per episode, and a topic if they named one. Lengths: ${EPISODE_LENGTHS.join(", ")} minutes. It takes a moment to write, so say in your reply that it is ready and that the link below plays it.`,
+      schema: objectSchema({
+        subject: requiredString("The subject the episode is about, as the student calls it."),
+        about: optionalString("The one thing the episode should be about, e.g. 'price elasticity of demand'. Null to cover what they have been working on across the subject."),
+        minutes: {
+          type: "integer",
+          description: `How long, in minutes: ${EPISODE_LENGTHS.join(", ")}. Pick 3 unless they asked for more or the topic is big.`,
+        },
+      }),
+      async run(input) {
+        const named = readString(input, "subject", 80);
+        if (!named) return failed("Which subject is the episode about?");
+
+        const { subject, subjects } = await findSubject(userId, named);
+        if (!subject) {
+          return failed(`No subject called "${named}". This student takes: ${subjectList(subjects)}.`);
+        }
+
+        const result = await writeEpisode(userId, {
+          subjectId: subject.id,
+          minutes: Number(input.minutes),
+          focus: readString(input, "about", 200),
+        });
+        if (!result.ok) return failed(result.error);
+
+        const { episode } = result;
+        // A link, not a sentence saying where to go: this is the one place
+        // in the app where something was made that has to be played, and
+        // telling someone to navigate to it is how it never gets listened to.
+        record(
+          `[▶ Listen: ${episode.title} (${formatLength(episode.seconds)})](/school/podcast?play=${episode.id}#ep-${episode.id})`
+        );
+        return ok(
+          `Written. "${episode.title}" is ${formatLength(episode.seconds)} long and is on their podcast page — the link under your reply plays it. Tell them it is ready; do not write the script out in the chat.`
+        );
       },
     },
   ];

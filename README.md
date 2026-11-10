@@ -81,7 +81,12 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   the levels you set per subject, and briefed with your own subjects,
   upcoming exams, weakest topics and the questions you marked as not
   understood. Same one-to-one voice as the AI Coach (press Talk, speak, and
-  have answers read back), and it takes a whole stack of photos in one
+  have answers read back — the microphone is **told which language to listen
+  in**, with the choice on the toolbar and an offer to switch the moment a
+  sentence comes back in the other one, because browser speech recognition
+  never detects a language and being told the wrong one is most of what
+  "it doesn't listen properly" means; a Swiss device gets Standard German
+  rather than the Swiss German dialect model), and it takes a whole stack of photos in one
   question — up to 12 at a time, staged as thumbnails so you can drop the
   blurry one before sending, so a three-page past-paper question or your own
   handwritten working goes up as one thing and comes back marked. **PDFs go
@@ -90,7 +95,10 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   mark allocations and its diagrams. **It can also act in the app, not just
   answer**: tell it about a test with a date, work that has been set, or
   something you did not understand, and it adds the exam, the homework, the
-  flashcards or the logged gap itself — through five tools it is given
+  flashcards or the logged gap itself. Ask for **something to listen to**
+  and it writes a podcast episode from your own material and hands back a
+  link in the chat that opens it, cued up on the podcast page — through six
+  tools it is given
   (`src/lib/school/ai-tools.ts`), each one scoped to your own account with
   no argument through which it could reach anyone else's, and each one
   listed under the reply as what was actually done, taken from this app's
@@ -161,9 +169,13 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   logged that week, not a target), body progress photos (upload, gallery/timeline, oldest-vs-newest
   or pick-your-own before/after compare view) and optional photos attached
   to meal log entries, a barcode product scanner (camera or manual entry)
-  that looks products up against Open Food Facts — a real, free product
-  database — and shows a transparent 0–100 health score built from
-  Nutri-Score, processing level (NOVA) and additive count, the AI Coach's
+  that looks products up in Open Food Facts and, for anything that isn't
+  food, Open Beauty Facts — real, free product databases — and shows a
+  transparent 0–100 health score built from Nutri-Score, processing level
+  (NOVA) and additive count (cosmetics are found and listed but never
+  scored: none of those three exists for a shampoo), with a **"test the
+  product database" button** that says whether the app can reach them at all
+  — the question people actually mean when a scan fails, the AI Coach's
   balance/workload engine and chat, calendar (day/week/month), tasks,
   analytics, and settings.
 - **Explicitly interface-only (per the brief)**: official Cambridge syllabus
@@ -183,9 +195,15 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   ever uses real fields Open Food Facts actually has for a product; a
   missing field gets a neutral default rather than an invented value, and
   the score's full breakdown is always shown alongside the number. The
-  scanner needs outbound internet access to reach `openfoodfacts.org`; a
-  locked-down network (e.g. a restrictive dev sandbox) will surface a clear
-  "couldn't reach the product database" message instead of failing silently.
+  scanner needs outbound internet access to reach `openfoodfacts.org` and
+  `openbeautyfacts.org`; a locked-down network (e.g. a restrictive dev
+  sandbox) will surface a clear "couldn't reach the product databases"
+  message instead of failing silently, and the test button on the scanner
+  page settles which of the two it is. There is no connection to Yuka and
+  there cannot be: Yuka publishes no API. What it is built on is Open Food
+  Facts and Open Beauty Facts, which is exactly what this scanner reads —
+  the same products and the same published fields, with this app's own
+  score shown openly instead of a proprietary one.
   The topic quiz never invents questions, answers, or grading — without a
   real AI connected it says so plainly instead of faking a quiz. Note-photo
   summaries use Claude's real vision input (an actual multimodal API call on

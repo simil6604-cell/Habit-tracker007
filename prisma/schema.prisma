@@ -564,7 +564,15 @@ model ScannedProduct {
   imageUrl    String? // hotlinked from Open Food Facts, not stored locally
   nutriScore  String? // a-e, straight from Open Food Facts when available
   novaGroup   Int? // 1-4 processing level, straight from Open Food Facts when available
-  healthScore Int // our own 0-100 score, computed from the above — see lib/gym/health-score.ts
+  // Our own 0-100 score, computed from the above — see lib/gym/health-score.ts.
+  // Null for anything that is not food: the score is built from Nutri-Score,
+  // NOVA and additives, none of which exist for a shampoo, and a number
+  // printed next to a cosmetic would be a health claim this app cannot make.
+  healthScore Int?
+  // Which open database answered: "food" (Open Food Facts) or "beauty"
+  // (Open Beauty Facts). Defaulted, so rows written before cosmetics were
+  // looked up at all stay what they always were.
+  source      String   @default("food")
   scannedAt   DateTime @default(now())
 
   @@index([userId, scannedAt])

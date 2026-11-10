@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 import os from "node:os";
 import path from "node:path";
 import { E2E_INVITE_CODE } from "./tests/e2e/invite-code";
+import { BEAUTY_PORT, FOOD_PORT } from "./tests/e2e/off-stub";
 
 const PORT = 3100;
 const testDbPath = path.join(__dirname, "prisma", "test.db");
@@ -65,6 +66,11 @@ export default defineConfig({
       // point, invite-only is the configuration a real deployment runs, so it
       // is the one the tests should be walking through.
       INVITE_CODE: E2E_INVITE_CODE,
+      // The barcode scanner talks to Open Food Facts and Open Beauty Facts.
+      // Pointed at the stand-ins global-setup starts, so the scan path is
+      // tested end to end without depending on their servers.
+      OFF_BASE_URL: `http://127.0.0.1:${FOOD_PORT}`,
+      OBF_BASE_URL: `http://127.0.0.1:${BEAUTY_PORT}`,
     },
   },
 });

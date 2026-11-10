@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { SafeSvg } from "@/components/shared/safe-svg";
+import { internalHref } from "@/lib/utils/internal-link";
 
 /** A diagram inside a chat bubble. */
 function SvgDiagram({ code }: { code: string }) {
@@ -17,7 +19,7 @@ function SvgDiagram({ code }: { code: string }) {
 
 
 /**
- * Inline **bold** as real elements.
+ * Inline **bold** and in-app links as real elements.
  *
  * Built from React nodes rather than injected HTML: this is model output, and
  * the one thing it must never be able to do is bring markup with it. React
@@ -25,13 +27,30 @@ function SvgDiagram({ code }: { code: string }) {
  * appear on screen as those characters.
  */
 function inline(text: string, keyPrefix: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
-      <strong key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</strong>
-    ) : (
-      <span key={`${keyPrefix}-${i}`}>{part}</span>
-    )
-  );
+  return text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)\s]+\))/g).map((part, i) => {
+    const key = `${keyPrefix}-${i}`;
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>;
+    }
+    const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
+    if (link) {
+      const href = internalHref(link[2]);
+      return href ? (
+        <Link
+          key={key}
+          href={href}
+          className="font-medium text-accent underline underline-offset-2 hover:opacity-80"
+        >
+          {link[1]}
+        </Link>
+      ) : (
+        // Not a path in this app: shown as the text it is, so a reply can
+        // still mention an address without it becoming somewhere to go.
+        <span key={key}>{link[1]}</span>
+      );
+    }
+    return <span key={key}>{part}</span>;
+  });
 }
 
 /**

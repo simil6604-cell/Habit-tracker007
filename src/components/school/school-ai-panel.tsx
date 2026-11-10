@@ -18,11 +18,11 @@ import {
 } from "@/lib/ai/explainer-board";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
-import { utteranceFor } from "@/lib/ai/voice/speak";
+import { speakAloud } from "@/lib/ai/voice/speak";
 import { editSchoolAIMessage } from "@/lib/school/school-ai-actions";
 import { MAX_EDIT_CHARS } from "@/lib/school/school-ai";
 import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
-import { DICTATION_LANGS } from "@/lib/ai/voice/dictation-lang";
+import { DICTATION_LANGS, mismatchedLang } from "@/lib/ai/voice/dictation-lang";
 import { isDocumentPath, MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
 import { getLessons, renameLesson, type LessonEntry } from "@/lib/school/class-recording-actions";
 import {
@@ -154,6 +154,31 @@ export function SchoolAIPanel({
   useEffect(() => {
     if (mic.listening && mic.transcript) setInput(mic.transcript);
   }, [mic.transcript, mic.listening]);
+
+  /*
+   * Heard in the wrong language.
+   *
+   * Speech recognition is TOLD a language; it never works one out. Asked for
+   * English and given a German sentence it does not fail visibly — it
+   * returns confident English words that sound a little like what was said,
+   * and the tutor answers a question nobody asked. That is what "it doesn't
+   * listen properly" turns out to be, so the transcript is read back and the
+   * switch is offered right where the mistake is.
+   */
+  const heardSoFar = `${mic.transcript} ${mic.interim}`.trim();
+  const wrongLang = mismatchedLang(heardSoFar, dictationLang);
+
+  function switchDictation(code: string) {
+    setDictationLang(code);
+    // Already listening: the language is fixed when the recognizer starts,
+    // so it has to be started again for the change to mean anything.
+    if (mic.listening) {
+      mic.stop();
+      mic.reset();
+      setInput("");
+      setTimeout(() => mic.start(), 50);
+    }
+  }
 
   function clearBoard() {
     setBoardSteps([]);
@@ -295,8 +320,8 @@ export function SchoolAIPanel({
     if (!text) return;
     window.speechSynthesis.cancel();
     // In the language the reply is written in, not the language of the
-    // phone — see utteranceFor.
-    window.speechSynthesis.speak(utteranceFor(text));
+    // phone — see speakAloud.
+    speakAloud(text);
   }, [lastReply, speakReplies, canSpeak, pending, voice]);
 
   // Leaving the page mid-sentence shouldn't leave the browser talking.
@@ -445,6 +470,25 @@ export function SchoolAIPanel({
         <p className="mb-2 rounded-lg bg-accent/10 px-3 py-1.5 text-xs text-accent">
           🎙 Listening… {mic.interim || "ask your question, then press Stop & send."}
         </p>
+      )}
+      {wrongLang && (
+        <div
+          className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-warning/10 px-3 py-1.5 text-xs"
+          data-testid="dictation-mismatch"
+        >
+          <span>
+            That sounded like {wrongLang.label}, but the microphone is listening in{" "}
+            {DICTATION_LANGS.find((lang) => lang.code === dictationLang)?.label ?? dictationLang} — so the words
+            come out wrong.
+          </span>
+          <button
+            type="button"
+            onClick={() => switchDictation(wrongLang.code)}
+            className="rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground"
+          >
+            Listen in {wrongLang.short}
+          </button>
+        </div>
       )}
       {mic.error && <p className="mb-2 text-xs text-danger">{mic.error}</p>}
       {notice && <p className={`mb-2 text-xs ${uploading ? "text-muted" : "text-danger"}`}>{notice}</p>}

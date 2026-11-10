@@ -22,9 +22,17 @@ export const metadata = { title: "Podcast" };
  * from this account's own topics, flashcards and the things they wrote down
  * as not understood, and read out loud.
  */
-export default async function PodcastPage() {
+export default async function PodcastPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ play?: string }>;
+}) {
   const session = await auth();
   const userId = session!.user.id;
+  // Which episode to point at, when the chat sent them here. The id only
+  // ever picks one of this account's own rows out of the list below, so a
+  // made-up one simply matches nothing.
+  const { play } = await searchParams;
 
   const [episodes, sources] = await Promise.all([
     prisma.podcastEpisode.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 30 }),
@@ -81,7 +89,23 @@ export default async function PodcastPage() {
       ) : (
         <ul className="mt-3 flex flex-col gap-3" data-testid="podcast-episodes">
           {episodes.map((episode) => (
-            <li key={episode.id} className="rounded-2xl border border-border bg-surface p-4">
+            <li
+              key={episode.id}
+              // The anchor the chat's link carries, so the browser scrolls
+              // here by itself — no script, and it works on a cold open.
+              id={`ep-${episode.id}`}
+              className={
+                play === episode.id
+                  ? "scroll-mt-24 rounded-2xl border-2 border-accent bg-surface p-4"
+                  : "scroll-mt-24 rounded-2xl border border-border bg-surface p-4"
+              }
+              data-testid={play === episode.id ? "podcast-episode-new" : undefined}
+            >
+              {play === episode.id && (
+                <p className="mb-2 text-xs font-medium text-accent">
+                  Here it is — press play.
+                </p>
+              )}
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{episode.title}</p>
