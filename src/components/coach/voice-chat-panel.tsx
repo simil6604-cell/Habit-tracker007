@@ -29,10 +29,13 @@ function speechSupported(): boolean {
 export function VoiceChatPanel({
   initialMessages,
   name,
+  expression,
 }: {
   initialMessages: CoachMessage[];
   /** Who is signed in, so voice mode can greet them by name. */
   name?: string | null;
+  /** How much life to read replies with — set in Settings. */
+  expression?: string;
 }) {
   const [messages, setMessages] = useState<CoachMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -65,6 +68,7 @@ export function VoiceChatPanel({
     who: "coach",
     name,
     lang: dictationLang,
+    expression,
     onSend: (heard) => send(heard, true),
   });
 
@@ -167,8 +171,8 @@ export function VoiceChatPanel({
     window.speechSynthesis.cancel();
     // In the language the reply is written in, not the language of the
     // phone — see speakAloud.
-    speakAloud(text);
-  }, [lastReply, speakReplies, canSpeak, pending, voice]);
+    speakAloud(text, null, expression);
+  }, [lastReply, speakReplies, canSpeak, pending, voice, expression]);
 
   // Leaving the page mid-sentence shouldn't leave the browser talking.
   useEffect(() => () => { if (speechSupported()) window.speechSynthesis.cancel(); }, []);

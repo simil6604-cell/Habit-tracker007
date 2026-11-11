@@ -96,10 +96,13 @@ export function useVoiceConversation({
   onSend,
   lang,
   name,
+  expression,
 }: {
   who: VoiceWho;
   onSend: (text: string) => void;
   lang?: string;
+  /** How much life to read replies with — the student's own setting. */
+  expression?: string;
   /** Who is signed in, so it can greet them by name. */
   name?: string | null;
 }): VoiceConversation {
@@ -272,7 +275,7 @@ export function useVoiceConversation({
           // Read in the language of the SENTENCE, by a voice that speaks it.
           // This used to be the language of the phone, so a German device
           // read every English answer in a German accent.
-          const utterance = utteranceFor(spokenText, lang);
+          const utterance = utteranceFor(spokenText, lang, undefined, expression);
           utterance.onend = handOver;
           // A synthesiser that fails silently would leave the microphone shut
           // and voice mode looking hung, so an error moves on as well.
@@ -331,7 +334,9 @@ export function useVoiceConversation({
       setSpeaking(true);
       sayNext();
     },
-    [lang]
+    // The expression setting belongs here too: a reply started under the old
+    // one would keep reading in a voice the student has just changed.
+    [lang, expression]
   );
 
   const speak = useCallback((text: string) => speakSteps([text]), [speakSteps]);

@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { SPOKEN_BOARD_STYLE } from "@/lib/ai/spoken-mode";
+import { speechDirection, writingDirection } from "@/lib/ai/expression";
 import type { ProviderImage } from "@/lib/ai/anthropic-provider";
 import {
   deleteUploadedImage,
@@ -259,7 +260,14 @@ async function answerInChat(
     // Appended rather than replacing: which syllabus they are on and what is
     // coming up still apply out loud. Only the shape of the answer changes.
     const base = await buildSchoolAISystemPrompt(userId);
-    const system = spoken ? `${base}\n${SPOKEN_BOARD_STYLE}` : base;
+    // How much life to put into it, as the student set it in Settings. Last
+    // in the prompt, so it is the final word on tone.
+    const expression = (
+      await prisma.user.findUnique({ where: { id: userId }, select: { aiExpression: true } })
+    )?.aiExpression;
+    const system = spoken
+      ? `${base}\n${SPOKEN_BOARD_STYLE}\n${speechDirection(expression)}`
+      : `${base}\n${writingDirection(expression)}`;
     // Real turns rather than a transcript flattened into one message: this
     // is a conversation, and the API takes one.
     const conversation = buildSchoolAITurns(turns);

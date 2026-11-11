@@ -16,6 +16,8 @@
  * lists real devices report without a browser.
  */
 
+import { expressionFor } from "@/lib/ai/expression";
+
 export type SpokenLang = "en" | "de";
 
 /** A browser voice, as much of it as choosing one needs. */
@@ -225,12 +227,17 @@ export function pickVoice<T extends VoiceLike>(voices: readonly T[], lang: Spoke
  * they are pushed, so a device that only has one of those is left alone —
  * better flat than mangled.
  */
-export function speechShape(voice: VoiceLike | null): { rate: number; pitch: number } {
+export function speechShape(
+  voice: VoiceLike | null,
+  expression?: unknown
+): { rate: number; pitch: number } {
   if (!voice) return { rate: 1, pitch: 1 };
   const name = (voice.name ?? "").toLowerCase();
   const poor = POOR_MARKERS.some((marker) => name.includes(marker));
+  // The old formant voices distort when they are pushed, so they are left
+  // alone whatever the setting says — better flat than mangled.
   if (poor) return { rate: 1, pitch: 1 };
-  return { rate: 1.06, pitch: 1.04 };
+  return expressionFor(expression).browser;
 }
 
 /**
@@ -243,11 +250,12 @@ export function speechShape(voice: VoiceLike | null): { rate: number; pitch: num
 export function voiceFor<T extends VoiceLike>(
   text: string,
   voices: readonly T[],
-  deviceLang?: string | null
+  deviceLang?: string | null,
+  expression?: unknown
 ): { lang: string; voice: T | null; rate: number; pitch: number } {
   const spoken = detectSpokenLang(text, deviceLang);
   const voice = pickVoice(voices, spoken);
-  return { lang: voice?.lang ?? DEFAULT_LOCALE[spoken], voice, ...speechShape(voice) };
+  return { lang: voice?.lang ?? DEFAULT_LOCALE[spoken], voice, ...speechShape(voice, expression) };
 }
 
 /**
@@ -344,12 +352,13 @@ export function voiceForSpeaker<T extends VoiceLike>(
   speaker: "A" | "B",
   voices: readonly T[],
   decideFrom: string,
-  deviceLang?: string | null
+  deviceLang?: string | null,
+  expression?: unknown
 ): { lang: string; voice: T | null; rate: number; pitch: number } {
   const spoken = detectSpokenLang(decideFrom, deviceLang);
   const pair = pickVoicePair(voices, spoken);
   const own = speaker === "A" ? pair.a : pair.b ?? pair.a;
-  const shape = speechShape(own);
+  const shape = speechShape(own, expression);
 
   // Only one voice on the device: the second speaker is the same voice,
   // shifted enough to be heard as somebody else.

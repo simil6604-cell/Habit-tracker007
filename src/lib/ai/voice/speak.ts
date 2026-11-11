@@ -45,13 +45,15 @@ export function availableVoices(): SpeechSynthesisVoice[] {
 export function utteranceFor(
   text: string,
   deviceLang?: string | null,
-  decideFrom?: string
+  decideFrom?: string,
+  expression?: unknown
 ): SpeechSynthesisUtterance {
   const utterance = new SpeechSynthesisUtterance(text);
   const chosen = voiceFor(
     decideFrom ?? text,
     availableVoices(),
-    deviceLang ?? (typeof navigator !== "undefined" ? navigator.language : null)
+    deviceLang ?? (typeof navigator !== "undefined" ? navigator.language : null),
+    expression
   );
   utterance.lang = chosen.lang;
   if (chosen.voice) utterance.voice = chosen.voice;
@@ -71,12 +73,12 @@ export function utteranceFor(
  * `speechSynthesis.cancel()` still stops all of it, so every caller that
  * already cancels before speaking keeps working unchanged.
  */
-export function speakAloud(text: string, deviceLang?: string | null): void {
+export function speakAloud(text: string, deviceLang?: string | null, expression?: unknown): void {
   if (!speechSupported()) return;
   const chunks = speechChunks(text);
   for (const chunk of chunks) {
     // Each chunk is told to decide its language from the whole reply.
-    window.speechSynthesis.speak(utteranceFor(chunk, deviceLang, text));
+    window.speechSynthesis.speak(utteranceFor(chunk, deviceLang, text, expression));
   }
 }
 
@@ -91,14 +93,16 @@ export function utteranceForSpeaker(
   speaker: "A" | "B",
   text: string,
   script: string,
-  deviceLang?: string | null
+  deviceLang?: string | null,
+  expression?: unknown
 ): SpeechSynthesisUtterance {
   const utterance = new SpeechSynthesisUtterance(text);
   const chosen = voiceForSpeaker(
     speaker,
     availableVoices(),
     script,
-    deviceLang ?? (typeof navigator !== "undefined" ? navigator.language : null)
+    deviceLang ?? (typeof navigator !== "undefined" ? navigator.language : null),
+    expression
   );
   utterance.lang = chosen.lang;
   if (chosen.voice) utterance.voice = chosen.voice;
