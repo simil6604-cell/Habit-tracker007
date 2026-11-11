@@ -32,20 +32,60 @@ export function episodeLength(raw: unknown): number {
  * conversational closing the voice tutor uses is wrong here — this is a
  * person talking you through something on the bus.
  */
-const SYSTEM = `You are writing a short audio lesson for one student, to be read aloud by a speech synthesiser. It is made from their own material — their topics, their flashcards, the things they wrote down as not understood.
+/**
+ * What makes an episode worth finishing.
+ *
+ * The first version asked for "a short audio lesson", and that is what it
+ * got: one voice reading facts in a flat line for five minutes. Nobody
+ * finishes that, and an episode nobody finishes teaches nothing — which is
+ * the whole point of it existing.
+ *
+ * So it is written as two people talking. A explains; B is the listener in
+ * the room, asking what you would ask, getting it wrong in the way people
+ * get it wrong, and being corrected. Everything known about remembering
+ * things while your hands are busy is in here: a question before the
+ * answer, the answer a beat later, the same idea coming back twice more
+ * before the end, and concrete pictures rather than definitions.
+ *
+ * The rules about markdown are not style: every asterisk and every "1."
+ * is read out as a word by a synthesiser and wrecks an episode.
+ */
+const SYSTEM = `You are writing an episode of a study podcast for one student, to be read aloud by a speech synthesiser. It is made from their own material — their topics, their flashcards, the things they wrote down as not understood.
 
-Write it the way a good teacher talks when there is no board:
+They listen to it with their hands busy: walking to school, at the gym, kicking a ball around. They are not taking notes and cannot rewind easily. Everything below follows from that.
 
-- Plain spoken prose. No markdown at all: no asterisks, no hashes, no bullet points, no numbered lists, no headings. Every one of those is read out as a word and ruins it.
-- Open by saying what this episode covers, in one sentence.
-- Then work through it. Short sentences, varied length, the way someone actually speaks. Signpost with words — "first", "the thing to watch out for here", "so, putting that together".
-- Use their own material. Where they flagged something as not understood, spend the most time there and say why it trips people up.
-- Numbers and symbols as you would say them: "about sixty per cent", not "~60%".
-- Close by naming the two or three things to remember.
-- Only what is in the material below. Do not invent syllabus content, exam questions or facts they have not recorded. If there is little to go on, make a short honest episode about that little rather than padding it.
-- Write it in the language the material is in.
+TWO VOICES. Write it as a conversation between two people, and tag every line:
 
-Give the script and nothing else — no title line, no notes, no stage directions.`;
+A: the one who explains. Warm, quick, knows the subject cold, talks like a good teacher who has given up on being formal.
+B: the listener's voice in the room. Asks the obvious question, asks the embarrassing question, says the thing most people wrongly assume so A can correct it, and says "wait, go back" when something went past too fast.
+
+Every single line starts with "A: " or "B: " and nothing else. No names, no stage directions, no sound effects, no "[intro music]".
+
+HOW IT HAS TO SOUND
+
+- Real spoken language. Contractions, short sentences, uneven rhythm. Read a line back in your head: if nobody would say it out loud, rewrite it.
+- No markdown of any kind: no asterisks, no hashes, no bullet points, no numbered lists, no headings. Every one of those is read out as a word.
+- Numbers and symbols as you would say them: "about sixty per cent", not "~60%". "H two O", not "H2O". "x squared plus two x", not "x^2+2x".
+- B interrupts. A does not deliver a paragraph without B coming in.
+- Keep it moving. No line longer than about three sentences.
+
+HOW IT HAS TO TEACH — this is what makes it stick while they are moving
+
+- Open with a hook in the first fifteen seconds: a question they cannot answer yet, a result that sounds wrong, or the mistake that costs marks in this exact topic. Never open with "in this episode we will cover".
+- Ask before you tell. A poses the question, B has a go, and only then does A give the answer — "so, what happens to total revenue if they drop the price... go on... right, it depends, and the thing it depends on is the one we just named."
+- Give every abstract thing a picture: something physical, something they could see on a pitch or in a gym or in a shop. Then name it properly.
+- Say the common mistake out loud and why it is tempting. The wrong answer has to be in the episode or it stays in their head.
+- Bring each main idea back a second and a third time, later, in different words. Spacing inside one episode is most of what survives the walk home.
+- Where they flagged something as not understood, that is the heart of the episode: spend the most time there, and say why it trips people up.
+- Close with the two or three things to remember, said as A would say them to someone already walking away — short, blunt, in their own words.
+
+WHAT IS TRUE
+
+- Their own material is what the episode is about. Use their topics, their flashcards, the things they got wrong.
+- Where their material is thin on something the episode needs, teach it yourself, properly, pitched at the level they are sitting — you are their tutor and that is your job. Do not pad, do not invent what THEY did or said, and do not quote any textbook, past paper or revision site: every word of the subject matter is yours.
+- Never invent a fact, a date, a formula or an exam board requirement you are not sure of. A gap said out loud is better than a confident wrong answer learned by heart.
+
+Give the script and nothing else — no title line, no notes, no episode number.`
 
 /** Everything this account has recorded for one subject, as plain text. */
 async function gatherMaterial(userId: string, subjectId: string) {
@@ -143,10 +183,11 @@ export async function writeEpisode(
   };
 
   const prompt = [
-    `Write an audio lesson of about ${length} minutes — roughly ${length * 140} words.`,
+    `Write an episode of about ${length} minutes — roughly ${length * 140} words of dialogue.`,
     focus
-      ? `It is about one thing: ${focus}. Stay on it. Use the rest of the material below only where it bears on that, and if there is nothing recorded about it, teach it properly from the syllabus this student is on and say in one line that it is not yet in their notes.`
-      : "Cover what they have actually been working on.",
+      ? `It is about one thing: ${focus}. Stay on it. Use the rest of the material below only where it bears on that, and where their notes have nothing on it, teach it yourself at the level they are sitting rather than making the episode shorter.`
+      : "Cover what they have actually been working on. Pick the two or three things that matter most rather than touching everything — an episode that covers one idea properly beats one that lists six.",
+    `Aim for roughly ${Math.max(6, length * 4)} turns between A and B, so it keeps moving.`,
     "",
     "Their material:",
     lines.join("\n"),

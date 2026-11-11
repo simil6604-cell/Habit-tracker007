@@ -30,14 +30,83 @@ export function formatLength(seconds: number): string {
 }
 
 /**
+ * Who is speaking.
+ *
+ * An episode is two voices, not one. A single voice reading facts for ten
+ * minutes is the thing nobody finishes — it has no turns in it, nothing to
+ * wait for, and your attention has nowhere to catch. Two people, one
+ * explaining and one asking what you would have asked, is the form every
+ * listenable podcast uses, and it is the whole difference between something
+ * you put on at the gym and something you turn off after two minutes.
+ *
+ * "A" explains. "B" asks, pushes back, and says the wrong thing on purpose
+ * so it can be corrected — which is where the remembering happens.
+ */
+export type Speaker = "A" | "B";
+
+/** One line of the episode: who says it, and what. */
+export type DialogueLine = { speaker: Speaker; text: string };
+
+// Case-insensitive: a model that writes "a:" for twenty lines would
+// otherwise hand back an episode with one voice in it and nothing to say
+// why.
+const SPEAKER_LINE = /^\s*(?:\[)?([ABab])(?:\])?\s*[:\-–]\s*(.+)$/;
+
+/**
+ * The script as turns.
+ *
+ * Tolerant on the way in: the tags are written by a model, and "A:", "[A]:"
+ * and "A -" all mean the same thing. An episode written before this existed
+ * has no tags at all, and comes back as one speaker — which is exactly what
+ * it was, so it still plays.
+ */
+export function parseDialogue(script: string): DialogueLine[] {
+  const lines: DialogueLine[] = [];
+  let speaker: Speaker = "A";
+
+  for (const raw of script.replace(/\r/g, "").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const tagged = SPEAKER_LINE.exec(line);
+    if (tagged) {
+      speaker = tagged[1].toUpperCase() as Speaker;
+      const said = tagged[2].trim();
+      if (said) lines.push({ speaker, text: said });
+      continue;
+    }
+    // A continuation of whoever spoke last — a paragraph that ran on.
+    const previous = lines[lines.length - 1];
+    if (previous && previous.speaker === speaker) previous.text = `${previous.text} ${line}`;
+    else lines.push({ speaker, text: line });
+  }
+
+  return lines;
+}
+
+/** Whether a script was written as a conversation at all. */
+export function isDialogue(script: string): boolean {
+  return parseDialogue(script).some((line) => line.speaker === "B");
+}
+
+/**
  * The script cut into the pieces that get spoken one at a time.
  *
  * One request per piece, not one for the whole thing: the first sentence
  * starts playing while the rest is still being made, which is the
  * difference between pressing play and waiting. Sentences are grouped up to
  * a comfortable length so it is not one network round trip per clause.
+ *
+ * A piece never spans two speakers: it is one voice saying one thing.
  */
 export const MAX_PIECE_CHARS = 420;
+
+export type SpokenPiece = { speaker: Speaker; text: string };
+
+export function splitIntoSpokenPieces(script: string, limit: number = MAX_PIECE_CHARS): SpokenPiece[] {
+  return parseDialogue(script).flatMap((line) =>
+    splitIntoPieces(line.text, limit).map((text) => ({ speaker: line.speaker, text }))
+  );
+}
 
 export function splitIntoPieces(script: string, limit: number = MAX_PIECE_CHARS): string[] {
   // Split after . ! ? — and after a line break, which is how a paragraph
@@ -81,6 +150,9 @@ export function cleanScript(raw: string): string {
   return raw
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/^#{1,6}\s*/gm, "")
+    // Bullet markers go. A speaker tag written as "- A: ..." keeps its tag
+    // and loses the bullet, which is exactly right: the tag is the one
+    // piece of structure this script is allowed to carry.
     .replace(/^\s*[-*+]\s+/gm, "")
     .replace(/^\s*\d+[.)]\s+/gm, "")
     .replace(/\*\*(.+?)\*\*/g, "$1")

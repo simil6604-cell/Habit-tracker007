@@ -305,3 +305,59 @@ function splitOnCommas(text: string, target: number): string[] {
   if (current) out.push(current);
   return out;
 }
+
+/**
+ * Two voices that can be told apart, for an episode written as a
+ * conversation.
+ *
+ * The contrast is the point. Two people talking is what makes an hour of
+ * audio listenable, and it only works if the listener can hear instantly
+ * which of them is speaking — on a phone, through one earbud, while
+ * running.
+ *
+ * A device usually has several voices for a language, so the second speaker
+ * gets the best one that is not the first. Where there is genuinely only
+ * one, the voice is reused and shifted instead: the same voice a few
+ * semitones up and a shade slower is still unmistakably a second person,
+ * and it is better than pretending there is only one.
+ */
+export function pickVoicePair<T extends VoiceLike>(
+  voices: readonly T[],
+  lang: SpokenLang
+): { a: T | null; b: T | null } {
+  const a = pickVoice(voices, lang);
+  if (!a) return { a: null, b: null };
+  const rest = voices.filter((voice) => voice !== a && voice.name !== a.name);
+  return { a, b: pickVoice(rest, lang) };
+}
+
+export type SpokenShape = { lang: string; voice: VoiceLike | null; rate: number; pitch: number };
+
+/**
+ * Everything to set on an utterance for one speaker of a two-voice episode.
+ *
+ * `decideFrom` is the whole script rather than this line: "Genau." on its
+ * own is not enough to tell the languages apart, and one line read in the
+ * wrong language is worse than none of it being.
+ */
+export function voiceForSpeaker<T extends VoiceLike>(
+  speaker: "A" | "B",
+  voices: readonly T[],
+  decideFrom: string,
+  deviceLang?: string | null
+): { lang: string; voice: T | null; rate: number; pitch: number } {
+  const spoken = detectSpokenLang(decideFrom, deviceLang);
+  const pair = pickVoicePair(voices, spoken);
+  const own = speaker === "A" ? pair.a : pair.b ?? pair.a;
+  const shape = speechShape(own);
+
+  // Only one voice on the device: the second speaker is the same voice,
+  // shifted enough to be heard as somebody else.
+  const shifted = speaker === "B" && (!pair.b || pair.b === pair.a);
+  return {
+    lang: own?.lang ?? DEFAULT_LOCALE[spoken],
+    voice: own,
+    rate: shifted ? Math.max(0.8, shape.rate - 0.06) : shape.rate,
+    pitch: shifted ? Math.min(2, shape.pitch + 0.18) : shape.pitch,
+  };
+}

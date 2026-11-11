@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  pickVoicePair,
+  voiceForSpeaker,
   speechChunks,
   speechShape,
   DEFAULT_LOCALE,
@@ -184,5 +186,47 @@ describe("how it is said", () => {
   it("leaves an old robotic voice alone, because pushing it distorts", () => {
     expect(speechShape({ name: "Daniel Compact", lang: "en-GB" })).toEqual({ rate: 1, pitch: 1 });
     expect(speechShape(null)).toEqual({ rate: 1, pitch: 1 });
+  });
+});
+
+describe("two voices for an episode", () => {
+  const device = [
+    { name: "Google UK English Female", lang: "en-GB", localService: false },
+    { name: "Google UK English Male", lang: "en-GB", localService: false },
+    { name: "Daniel", lang: "en-GB", localService: true },
+    { name: "Google Deutsch", lang: "de-DE", localService: false },
+  ];
+
+  it("picks two different voices of the same language", () => {
+    const pair = pickVoicePair(device, "en");
+    expect(pair.a).not.toBeNull();
+    expect(pair.b).not.toBeNull();
+    expect(pair.b!.name).not.toBe(pair.a!.name);
+    // Both still English: a German second voice would be worse than one.
+    expect(pair.a!.lang).toContain("en");
+    expect(pair.b!.lang).toContain("en");
+  });
+
+  it("gives each speaker their own half of the pair", () => {
+    const a = voiceForSpeaker("A", device, "what happens to revenue when the price falls");
+    const b = voiceForSpeaker("B", device, "what happens to revenue when the price falls");
+    expect(a.voice!.name).not.toBe(b.voice!.name);
+  });
+
+  it("makes a second person out of one voice when the device has only one", () => {
+    const only = [{ name: "Google UK English Female", lang: "en-GB", localService: false }];
+    const a = voiceForSpeaker("A", only, "hello there, what is going on");
+    const b = voiceForSpeaker("B", only, "hello there, what is going on");
+    expect(b.voice!.name).toBe(a.voice!.name);
+    // Same voice, shifted — still unmistakably somebody else.
+    expect(b.pitch).toBeGreaterThan(a.pitch);
+    expect(b.rate).toBeLessThan(a.rate);
+  });
+
+  it("decides the language from the whole script, not from one line", () => {
+    // "Genau." is four characters and could be anything; the episode it
+    // belongs to is plainly German.
+    const german = "Also, was passiert mit dem Umsatz, wenn der Preis sinkt? Das kommt darauf an.";
+    expect(voiceForSpeaker("B", device, german).lang).toContain("de");
   });
 });

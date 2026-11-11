@@ -1,16 +1,14 @@
 import Link from "next/link";
-import { format } from "date-fns";
-import { Headphones, Layers, Trash2 } from "lucide-react";
+import { Headphones, Layers } from "lucide-react";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { isRealAIConfigured } from "@/lib/ai/provider";
 import { podcastSources } from "@/lib/school/podcast-actions";
-import { hasMaterial, formatLength } from "@/lib/school/podcast";
+import { hasMaterial } from "@/lib/school/podcast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PodcastPlayer } from "@/components/school/podcast-player";
+import { PodcastEpisodes } from "@/components/school/podcast-episodes";
 import { MakeEpisodeForm } from "@/components/school/make-episode-form";
-import { deletePodcastEpisode } from "@/lib/school/podcast-actions";
 
 export const metadata = { title: "Podcast" };
 
@@ -50,7 +48,8 @@ export default async function PodcastPage({
             <Headphones size={28} /> Podcast
           </h1>
           <p className="mt-1 text-muted">
-            Your own notes, read out loud — for the bus, the walk, or when there is no time to read.
+            Two voices talking through your own material — for the bus, the walk, the gym, or anywhere reading
+            isn&apos;t an option. Press <strong>Play all</strong> and it keeps going on its own.
           </p>
         </div>
         <Link href="/school/flashcards">
@@ -87,55 +86,7 @@ export default async function PodcastPage({
           Make one above and it stays here — written once, listened to as often as you like.
         </p>
       ) : (
-        <ul className="mt-3 flex flex-col gap-3" data-testid="podcast-episodes">
-          {episodes.map((episode) => (
-            <li
-              key={episode.id}
-              // The anchor the chat's link carries, so the browser scrolls
-              // here by itself — no script, and it works on a cold open.
-              id={`ep-${episode.id}`}
-              className={
-                play === episode.id
-                  ? "scroll-mt-24 rounded-2xl border-2 border-accent bg-surface p-4"
-                  : "scroll-mt-24 rounded-2xl border border-border bg-surface p-4"
-              }
-              data-testid={play === episode.id ? "podcast-episode-new" : undefined}
-            >
-              {play === episode.id && (
-                <p className="mb-2 text-xs font-medium text-accent">
-                  Here it is — press play.
-                </p>
-              )}
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{episode.title}</p>
-                  <p className="text-xs text-muted">
-                    {episode.source} · {formatLength(episode.seconds)} ·{" "}
-                    {format(episode.createdAt, "d MMM yyyy")}
-                  </p>
-                </div>
-                <form action={deletePodcastEpisode.bind(null, episode.id)}>
-                  <button
-                    type="submit"
-                    aria-label={`Delete ${episode.title}`}
-                    className="text-muted transition hover:text-danger"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </form>
-              </div>
-
-              <div className="mt-3">
-                <PodcastPlayer script={episode.script} title={episode.title} />
-              </div>
-
-              <details className="mt-3">
-                <summary className="cursor-pointer text-xs text-muted">Read it instead</summary>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{episode.script}</p>
-              </details>
-            </li>
-          ))}
-        </ul>
+        <PodcastEpisodes episodes={episodes} playId={play} />
       )}
     </div>
   );

@@ -54,9 +54,11 @@ export async function makePodcastEpisode(_prev: PodcastState, formData: FormData
 
   // The work itself lives in podcast-episode.ts, because the tutor can be
   // asked for an episode in the chat and must do exactly the same thing.
+  const about = String(formData.get("about") ?? "").trim().slice(0, 120);
   const result = await writeEpisode(userId, {
     subjectId: String(formData.get("subjectId") ?? ""),
     minutes: episodeLength(formData.get("minutes")),
+    focus: about || null,
   });
   if (!result.ok) return { error: result.error };
 
