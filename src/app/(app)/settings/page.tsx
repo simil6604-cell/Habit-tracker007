@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DeleteAccountButton } from "@/components/settings/danger-zone";
 import { AIConnectionTest } from "@/components/settings/ai-connection-test";
+import { ExpressionPicker } from "@/components/settings/expression-picker";
 import { MicrophoneCheck } from "@/components/settings/microphone-check";
 import { RestoreBackupPanel } from "@/components/settings/restore-backup-panel";
 import { backupStatus } from "@/lib/export/backup-status";
@@ -139,6 +140,17 @@ export default async function SettingsPage({
             <Button type="submit" size="sm" variant="secondary">Save</Button>
           </form>
           <p className="mt-2 text-xs text-muted">{user.email}</p>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>How your AI talks</CardTitle></CardHeader>
+        <CardContent>
+          <p className="mb-3 text-xs text-muted">
+            The same setting for your school AI and the AI Coach — it changes the words they choose, how fast and
+            how brightly they are read out, and, where an ElevenLabs key is set, how much the voice itself performs.
+          </p>
+          <ExpressionPicker current={user.aiExpression} />
         </CardContent>
       </Card>
 

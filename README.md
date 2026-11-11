@@ -103,6 +103,15 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   no argument through which it could reach anyone else's, and each one
   listed under the reply as what was actually done, taken from this app's
   own record of the tools that ran rather than from what the answer claims.
+  **How much life it puts into it is a setting**, under Settings → How your AI talks: Calm, Warm, Motivating or
+  Full throttle. One choice moves three things together — the words both
+  AIs are told to use, how fast and how brightly the browser's voice reads
+  them, and, where an ElevenLabs key is set, that voice's own expression
+  dials — because an assistant where only one of the three changes is what
+  sounds fake. It covers the school AI, the AI Coach and the podcast, and
+  the loud settings still never ask for flattery: the energy has to be
+  about the specific thing in front of you.
+
   An episode is **two voices** — one explaining, one asking what you would
   ask and getting it wrong the way people get it wrong — written to be heard
   with your hands busy: a hook first, the question before the answer, the

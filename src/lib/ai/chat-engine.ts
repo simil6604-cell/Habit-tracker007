@@ -7,6 +7,7 @@ import { runWeeklyBalanceCheck } from "./balance-engine";
 import { getAIProvider, isRealAIConfigured } from "./provider";
 import { buildAcademicSystemPrompt } from "./academic-prompt";
 import { SPOKEN_STYLE } from "./spoken-mode";
+import { speechDirection, writingDirection } from "./expression";
 
 const KEYWORDS = {
   exam: /\b(exam|test|klausur|pr[uü]fung)\b/i,
@@ -201,7 +202,7 @@ async function askCoachAI(userId: string, userMessage: string, spoken = false): 
       prisma.school.findUnique({ where: { userId } }),
       computeDomainScores(userId),
       nearestExam(userId),
-      prisma.user.findUnique({ where: { id: userId }, select: { mainFocus: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { mainFocus: true, aiExpression: true } }),
     ]);
     const daysToExam = exam ? daysUntil(exam.date) : null;
     const system = [
@@ -216,6 +217,9 @@ async function askCoachAI(userId: string, userMessage: string, spoken = false): 
       // in. Everything above stays: who they are and what their week looks
       // like matter just as much out loud.
       spoken ? SPOKEN_STYLE : COACH_DIAGRAM_PROMPT,
+      // How much life to put into it — the student's own setting. Last, so
+      // it is the final word on tone over anything above it.
+      spoken ? speechDirection(user?.aiExpression) : writingDirection(user?.aiExpression),
     ].join("\n");
 
     try {

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth/auth";
+import { prisma } from "@/lib/db/prisma";
 import { HumanVoiceError, isHumanVoiceConfigured, MAX_SPEECH_CHARS, synthesizeSpeech } from "@/lib/ai/voice/human-voice";
 
 /**
@@ -41,7 +42,17 @@ export async function POST(request: NextRequest) {
   if (text.length > MAX_SPEECH_CHARS * 4) return new NextResponse("Too much text to speak", { status: 413 });
 
   try {
-    const upstream = await synthesizeSpeech(text, { signal: request.signal, speaker });
+    // Their own setting, read here rather than sent by the page: the page
+    // could say anything, and this is what decides how the voice sounds.
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { aiExpression: true },
+    });
+    const upstream = await synthesizeSpeech(text, {
+      signal: request.signal,
+      speaker,
+      expression: user?.aiExpression,
+    });
     return new NextResponse(upstream.body, {
       status: 200,
       headers: {

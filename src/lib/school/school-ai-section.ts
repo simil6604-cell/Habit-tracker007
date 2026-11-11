@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { DEFAULT_EXPRESSION } from "@/lib/ai/expression";
 import { getSchoolAIMessages } from "./school-ai-actions";
 import { getPlannableExams } from "./exam-plan-actions";
 import type { StoredLink } from "./revision-links";
@@ -13,6 +14,8 @@ export type SchoolAISectionData = {
   subjects: { id: string; name: string }[];
   /** Who is signed in, so voice mode can greet them by name. */
   userName: string | null;
+  /** How much life the voice puts into it — their own setting. */
+  expression: string;
 };
 
 /**
@@ -48,7 +51,7 @@ export async function getSchoolAISectionData(userId: string): Promise<SchoolAISe
       },
     }),
     prisma.subject.findMany({ where: { userId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true, aiExpression: true } }),
   ]);
   return {
     messages,
@@ -57,5 +60,6 @@ export async function getSchoolAISectionData(userId: string): Promise<SchoolAISe
     links: links.map(({ subject, ...link }) => ({ ...link, subjectName: subject?.name ?? null })),
     subjects,
     userName: user?.name ?? null,
+    expression: user?.aiExpression ?? DEFAULT_EXPRESSION,
   };
 }

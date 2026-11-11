@@ -30,6 +30,10 @@ model User {
   // way when the three areas compete for the same hours.
   mainFocus          String  @default("balanced") // school | gym | football | balanced
   theme              String  @default("system") // light | dark | system
+  // How much life the AI puts into it, chosen in Settings. It changes the
+  // words, the voice's own expression dials and how the browser's voice
+  // reads — see lib/ai/expression.ts.
+  aiExpression       String  @default("WARM") // CALM | WARM | MOTIVATING | HYPE
 
   // When this account last downloaded a backup. Stored so the app can say how
   // old the only copy of your data is — a safety net nobody remembers to use

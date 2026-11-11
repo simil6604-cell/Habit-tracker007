@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 
+import { DEFAULT_EXPRESSION, isExpressionId } from "@/lib/ai/expression";
+
 const VALID_MAIN_FOCUS = ["school", "gym", "football", "balanced"];
 const VALID_EDUCATION_SYSTEMS = ["IGCSE", "AS_LEVEL", "A_LEVEL", "OTHER"];
 
@@ -35,6 +37,25 @@ export async function updateOptimizationDomains(formData: FormData) {
     },
   });
   revalidatePath("/settings");
+}
+
+/**
+ * How much life the AI puts into it.
+ *
+ * Revalidates every page that talks: the setting changes the words and the
+ * delivery, and a page still holding the old one would answer in a voice
+ * the student has just turned off.
+ */
+export async function updateAIExpression(formData: FormData) {
+  const userId = await requireUserId();
+  const chosen = formData.get("aiExpression");
+  await prisma.user.update({
+    where: { id: userId },
+    data: { aiExpression: isExpressionId(chosen) ? chosen : DEFAULT_EXPRESSION },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/school");
+  revalidatePath("/coach");
 }
 
 export async function updateSchoolSettings(formData: FormData) {

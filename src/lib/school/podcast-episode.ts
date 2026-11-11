@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
+import { speechDirection } from "@/lib/ai/expression";
 import {
   describeSource,
   episodeLength,
@@ -186,6 +187,10 @@ export async function writeEpisode(
     lines.join("\n"),
   ].join("\n");
 
+  // The same dial as the chat: someone who set "full throttle" does not
+  // want an episode read to them like the news.
+  const listener = await prisma.user.findUnique({ where: { id: userId }, select: { aiExpression: true } });
+
   let raw: string;
   try {
     // Room for ten minutes of speech and then some: cut off mid-sentence,
@@ -199,7 +204,7 @@ export async function writeEpisode(
      * sentence. It scales with what was asked for.
      */
     raw = await getAIProvider().generate(prompt, {
-      system: SYSTEM,
+      system: `${SYSTEM}\n\n${speechDirection(listener?.aiExpression)}`,
       maxTokens: 4_000 + length * 700,
     });
   } catch (err) {

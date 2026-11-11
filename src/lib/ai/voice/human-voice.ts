@@ -13,6 +13,8 @@
  * it on anything else.
  */
 
+import { expressionFor } from "@/lib/ai/expression";
+
 /** Per request, because this is charged by the character. */
 export const MAX_SPEECH_CHARS = 1_200;
 
@@ -57,11 +59,22 @@ function tuned(raw: string | undefined, fallback: number): number {
   return Number.isFinite(value) && value >= 0 && value <= 1 ? value : fallback;
 }
 
-export function voiceSettings(env: Record<string, string | undefined> = process.env) {
+/**
+ * The dials, for one expression setting.
+ *
+ * The student's choice decides them; the environment still wins where it is
+ * set, because someone tuning this by hand on their own deployment has a
+ * reason and should not be overruled by a dropdown.
+ */
+export function voiceSettings(
+  expression?: unknown,
+  env: Record<string, string | undefined> = process.env
+) {
+  const chosen = expressionFor(expression);
   return {
-    stability: tuned(env.ELEVENLABS_STABILITY, DEFAULT_STABILITY),
+    stability: tuned(env.ELEVENLABS_STABILITY, chosen.voice.stability ?? DEFAULT_STABILITY),
     similarity_boost: tuned(env.ELEVENLABS_SIMILARITY, DEFAULT_SIMILARITY),
-    style: tuned(env.ELEVENLABS_STYLE, DEFAULT_STYLE),
+    style: tuned(env.ELEVENLABS_STYLE, chosen.voice.style ?? DEFAULT_STYLE),
     use_speaker_boost: true,
   };
 }
@@ -162,7 +175,13 @@ export function speakableWithin(text: string, limit: number = MAX_SPEECH_CHARS):
  */
 export async function synthesizeSpeech(
   text: string,
-  options: { fetch?: typeof fetch; signal?: AbortSignal; speaker?: "A" | "B" } = {}
+  options: {
+    fetch?: typeof fetch;
+    signal?: AbortSignal;
+    speaker?: "A" | "B";
+    /** The student's expression setting, which moves the dials below. */
+    expression?: unknown;
+  } = {}
 ): Promise<Response> {
   const key = humanVoiceKey();
   if (!key) throw new HumanVoiceError("NOT_CONFIGURED", VOICE_FAILURE_MESSAGE.NOT_CONFIGURED);
@@ -181,7 +200,7 @@ export async function synthesizeSpeech(
       body: JSON.stringify({
         text: speakableWithin(text),
         model_id: humanVoiceModel(),
-        voice_settings: voiceSettings(),
+        voice_settings: voiceSettings(options.expression),
       }),
     });
   } catch {
