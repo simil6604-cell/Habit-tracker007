@@ -1,6 +1,17 @@
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
-import { describeSource, episodeTitle, parseScript, type PodcastSource } from "./podcast";
+import {
+  describeSource,
+  episodeLength,
+  episodeTitle,
+  parseScript,
+  type PodcastSource,
+} from "./podcast";
+
+// Re-exported because both the form action and the chat tool import them
+// from here, and the lengths are now a pure fact that lives with the rest
+// of them.
+export { EPISODE_LENGTHS, DEFAULT_LENGTH, episodeLength } from "./podcast";
 
 /**
  * Writing one episode, away from the form that used to own it.
@@ -14,24 +25,6 @@ import { describeSource, episodeTitle, parseScript, type PodcastSource } from ".
  * from one.
  */
 
-/** The lengths offered, in minutes. Anything else is read as the middle one. */
-export const EPISODE_LENGTHS = [3, 5, 10] as const;
-export const DEFAULT_LENGTH = 5;
-
-export function episodeLength(raw: unknown): number {
-  const minutes = Number(raw);
-  return (EPISODE_LENGTHS as readonly number[]).includes(minutes) ? minutes : DEFAULT_LENGTH;
-}
-
-/**
- * Written to be heard, not read.
- *
- * The rules are the ones that went wrong by hand: a synthesiser reads an
- * asterisk out as the word, a heading as a sentence fragment, and "1." as
- * "one full stop". And there is nobody to ask a question of, so the
- * conversational closing the voice tutor uses is wrong here — this is a
- * person talking you through something on the bus.
- */
 /**
  * What makes an episode worth finishing.
  *
@@ -197,7 +190,18 @@ export async function writeEpisode(
   try {
     // Room for ten minutes of speech and then some: cut off mid-sentence,
     // an episode ends in the middle of a word.
-    raw = await getAIProvider().generate(prompt, { system: SYSTEM, maxTokens: 6000 });
+    /*
+     * Room to finish.
+     *
+     * Twenty minutes of speech is around 2,800 words, and thinking tokens
+     * come out of this same ceiling — so a fixed limit that was fine for a
+     * five-minute episode ends a twenty-minute one in the middle of a
+     * sentence. It scales with what was asked for.
+     */
+    raw = await getAIProvider().generate(prompt, {
+      system: SYSTEM,
+      maxTokens: 4_000 + length * 700,
+    });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "The episode could not be written." };
   }

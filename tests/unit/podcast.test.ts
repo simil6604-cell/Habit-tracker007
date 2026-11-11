@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  EPISODE_LENGTHS,
+  DEFAULT_LENGTH,
+  episodeLength,
+  MAX_SCRIPT_CHARS,
+  WORDS_PER_MINUTE,
   parseDialogue,
   isDialogue,
   splitIntoSpokenPieces,
@@ -207,5 +212,39 @@ describe("an episode as two voices", () => {
     // the bullet, or the whole episode collapses into one voice.
     expect(cleanScript("- A: one\n- B: two")).toBe("A: one\nB: two");
     expect(cleanScript("- a plain bullet")).toBe("a plain bullet");
+  });
+});
+
+describe("how long an episode may be", () => {
+  it("offers something for a walk and something for a session at the gym", () => {
+    expect(EPISODE_LENGTHS).toContain(3);
+    expect(EPISODE_LENGTHS).toContain(20);
+    expect(Math.max(...EPISODE_LENGTHS)).toBe(20);
+  });
+
+  it("takes one of the offered lengths and nothing else", () => {
+    expect(episodeLength(20)).toBe(20);
+    expect(episodeLength("15")).toBe(15);
+    // Not on the list, so it falls back rather than being sent as-is.
+    expect(episodeLength(7)).toBe(DEFAULT_LENGTH);
+    expect(episodeLength("an hour")).toBe(DEFAULT_LENGTH);
+    expect(episodeLength(undefined)).toBe(DEFAULT_LENGTH);
+    expect(episodeLength(-5)).toBe(DEFAULT_LENGTH);
+  });
+
+  it("keeps the whole of the longest episode", () => {
+    // The cap is a guard against a runaway reply, not a length limit. At
+    // 12,000 characters it quietly cut a twenty-minute episode off after
+    // eight — the episode played, ended mid-thought, and nothing said why.
+    const longest = Math.max(...EPISODE_LENGTHS);
+    const words = longest * WORDS_PER_MINUTE;
+    // Six characters a word is generous for English and German both, and
+    // the speaker tags add a little on top.
+    expect(MAX_SCRIPT_CHARS).toBeGreaterThan(words * 6 * 1.2);
+  });
+
+  it("estimates the length of a script it is given", () => {
+    const twentyMinutes = "word ".repeat(20 * WORDS_PER_MINUTE);
+    expect(Math.round(estimateSeconds(twentyMinutes) / 60)).toBe(20);
   });
 });

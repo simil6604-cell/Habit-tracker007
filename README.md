@@ -110,8 +110,10 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   the end. On the device's own voices the two speakers really are two
   different voices (or the same one shifted, on a phone that has only one);
   with an ElevenLabs key they are two real ones, set with
-  `ELEVENLABS_VOICE_ID` and `ELEVENLABS_VOICE_ID_B`. **Play all** runs the
-  episodes back to back without picking the phone up, and the lock screen
+  `ELEVENLABS_VOICE_ID` and `ELEVENLABS_VOICE_ID_B`. Episodes run
+  3, 5, 10, 15 or 20 minutes — the long ones for a session at the gym or a
+  training, the short ones for a walk. **Play all** runs them back to back
+  without picking the phone up, and the lock screen
   shows what is playing with a pause button on it. A podcast someone else
   made can be saved under **Where you revise from** as a link like any
   other — this app never goes looking for those itself, because a list of
