@@ -501,7 +501,9 @@ export function SchoolAIPanel({
       {lessonRecording && (
         <p className="mb-2 text-xs text-muted" data-testid="mic-busy">
           Recording a lesson — dictation and voice chat are off until it stops, because only one of them can use the
-          microphone at a time.
+          microphone at a time. You can still <strong>type</strong> a question here, and the recording keeps running
+          while you do; anything you say out loud goes into the lesson too, and <strong>Mark this</strong> flags the
+          moment so the notes pick it out afterwards.
         </p>
       )}
 

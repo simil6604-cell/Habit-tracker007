@@ -225,9 +225,11 @@ export async function saveLesson(input: {
       const system = await academicSystemPromptFor(userId, subject ? { name: subject.name } : null);
       notes = await getAIProvider().generate(
         buildNotesPrompt({ transcript, subjectName: subject?.name ?? null, title: input.title ?? null }),
-        // A lesson's notes run far past the default: an hour of teaching has a
-        // lot in it, and notes cut off halfway are worse than short ones.
-        { system, maxTokens: 4000 }
+        // A lesson's notes run far past the default: an hour of teaching has
+        // a lot in it, the notes are now meant to keep the detail rather than
+        // summarise it away, and thinking tokens come out of this same
+        // ceiling. Notes cut off halfway are worse than short ones.
+        { system, maxTokens: 8000 }
       );
       await prisma.classRecording.update({ where: { id: recording.id }, data: { summary: notes } });
     } catch (err) {

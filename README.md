@@ -103,7 +103,16 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   no argument through which it could reach anyone else's, and each one
   listed under the reply as what was actually done, taken from this app's
   own record of the tools that ran rather than from what the answer claims. Kept
-  deliberately separate from the all-domains AI Coach: different
+  It can also **record a whole lesson** while the teacher talks and turn it
+  into notes afterwards: the screen is held awake while it records (a phone
+  that locks suspends the page and the recording stops with it), a level bar
+  shows what is actually reaching the microphone and says so after half a
+  minute of nothing — a phone face down, a phone in a bag and a teacher three
+  rows away all look identical on screen — **Mark this** flags a moment
+  without interrupting the lesson, and the half-sentence the browser was
+  still working on when it ended its own session is kept rather than
+  dropped. The notes are written to keep the detail, including your own
+  questions and what was answered. Deliberately separate from the all-domains AI Coach: different
   conversation, different prompt, no school question competing with training
   load for attention,
   an AI Tutor per topic — a real persistent, multi-turn conversation (not

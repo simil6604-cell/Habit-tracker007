@@ -66,6 +66,18 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
   const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  /*
+   * The words being spoken right now, before the recogniser has committed to
+   * them.
+   *
+   * Kept because a session can end on top of them. The browser ends its own
+   * session constantly — every pause, and whenever it feels like it — and
+   * everything that was still interim at that moment was simply dropped. In
+   * a lesson that is half a sentence gone every couple of minutes, which is
+   * exactly the detail someone means when they say it did not hear
+   * everything. On end it is flushed through as though it had been final.
+   */
+  const interimRef = useRef("");
   const wantListeningRef = useRef(false);
   // Restarting on every pause assumes the session lasted a moment. Where it
   // ends instantly and forever — iOS Safari does not really support continuous
@@ -79,6 +91,21 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
   onFinalRef.current = options?.onFinal;
   const langRef = useRef(options?.lang);
   langRef.current = options?.lang;
+
+  /**
+   * Hands over whatever was still being spoken when the session ended.
+   *
+   * Safe to call whenever a session is over: that session's interim text can
+   * never arrive again as a final result, so this cannot duplicate anything.
+   */
+  const flushInterim = useCallback(() => {
+    const pending = interimRef.current.trim();
+    interimRef.current = "";
+    if (!pending) return;
+    setTranscript((t) => (t ? `${t} ${pending}` : pending).trim());
+    onFinalRef.current?.(pending);
+    setInterim("");
+  }, []);
 
   useEffect(() => setSupported(Boolean(getSpeechRecognitionCtor())), []);
 
@@ -112,6 +139,7 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
         setTranscript((t) => (t ? `${t} ${finalChunk}` : finalChunk).trim());
         onFinalRef.current?.(finalChunk.trim());
       }
+      interimRef.current = interimChunk;
       setInterim(interimChunk);
     };
 
@@ -124,6 +152,8 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
     };
 
     recognition.onend = () => {
+      // Whatever was mid-sentence when this ended is kept rather than lost.
+      flushInterim();
       // Only the recognizer that is still the active one may restart itself:
       // a stop followed quickly by a start creates a second recognizer, and
       // without this check the old one revives alongside it and can no longer
@@ -171,7 +201,7 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
       setListening(false);
       setError("Couldn't start the microphone.");
     }
-  }, []);
+  }, [flushInterim]);
 
   const stop = useCallback(() => {
     wantListeningRef.current = false;
@@ -180,11 +210,15 @@ export function useSpeechRecognition(options?: { lang?: string; onFinal?: (text:
     // the active recognizer even if a restart is already in flight.
     recognitionRef.current = null;
     recognition?.stop();
+    // The last words before Stop was pressed count too — pressing it while
+    // still finishing a sentence is the normal way to use this.
+    flushInterim();
     setListening(false);
     setInterim("");
-  }, []);
+  }, [flushInterim]);
 
   const reset = useCallback(() => {
+    interimRef.current = "";
     setTranscript("");
     setInterim("");
   }, []);
