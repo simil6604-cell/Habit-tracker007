@@ -10,8 +10,34 @@
 /** Spoken at a steady, explaining pace rather than a newsreader's. */
 export const WORDS_PER_MINUTE = 140;
 
+/**
+ * The lengths offered, in minutes.
+ *
+ * The long ones are there because of how this is actually used: a walk to
+ * school is ten minutes, a session at the gym or a training is an hour, and
+ * an episode that stops after five of them means picking the phone back out
+ * with wet hands. Anything else is read as the default.
+ */
+export const EPISODE_LENGTHS = [3, 5, 10, 15, 20] as const;
+export const DEFAULT_LENGTH = 5;
+
+export function episodeLength(raw: unknown): number {
+  const minutes = Number(raw);
+  return (EPISODE_LENGTHS as readonly number[]).includes(minutes) ? minutes : DEFAULT_LENGTH;
+}
+
 export const MIN_SCRIPT_CHARS = 120;
-export const MAX_SCRIPT_CHARS = 12_000;
+
+/**
+ * The longest script that is kept.
+ *
+ * It is a guard against a runaway reply, not a length limit on an episode,
+ * so it has to sit well clear of the longest one that can be asked for:
+ * twenty minutes at a hundred and forty words a minute is about 2,800
+ * words, which is roughly 17,000 characters once the speaker tags are in.
+ * At 12,000 this quietly cut a twenty-minute episode off after eight.
+ */
+export const MAX_SCRIPT_CHARS = 32_000;
 export const MAX_TITLE = 80;
 
 export function wordCount(text: string): number {

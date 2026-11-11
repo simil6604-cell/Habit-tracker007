@@ -41,6 +41,8 @@ export function MakeEpisodeForm({ sources }: { sources: PodcastSource[] }) {
           <option value="3">3 min</option>
           <option value="5">5 min</option>
           <option value="10">10 min</option>
+          <option value="15">15 min</option>
+          <option value="20">20 min</option>
         </select>
         <Button type="submit" size="sm" variant="secondary" disabled={pending}>
           <Sparkles size={14} /> {pending ? "Writing…" : "Make episode"}

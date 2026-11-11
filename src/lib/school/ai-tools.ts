@@ -319,7 +319,7 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
         about: optionalString("The one thing the episode should be about, e.g. 'price elasticity of demand'. Null to cover what they have been working on across the subject."),
         minutes: {
           type: "integer",
-          description: `How long, in minutes: ${EPISODE_LENGTHS.join(", ")}. Pick 3 unless they asked for more or the topic is big.`,
+          description: `How long, in minutes: ${EPISODE_LENGTHS.join(", ")}. Pick 5 unless they said how long they have. Long ones are for a session at the gym or a training; short ones for a walk.`,
         },
       }),
       async run(input) {
