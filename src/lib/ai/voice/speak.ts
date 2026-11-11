@@ -1,6 +1,6 @@
 "use client";
 
-import { speechChunks, voiceFor } from "./browser-voice";
+import { speechChunks, voiceFor, voiceForSpeaker } from "./browser-voice";
 
 /**
  * Saying something with the browser's own voice, set up properly.
@@ -78,4 +78,31 @@ export function speakAloud(text: string, deviceLang?: string | null): void {
     // Each chunk is told to decide its language from the whole reply.
     window.speechSynthesis.speak(utteranceFor(chunk, deviceLang, text));
   }
+}
+
+/**
+ * An utterance for one speaker of a two-voice episode.
+ *
+ * Separate from utteranceFor because the choice is different: that one
+ * picks the single best voice for the language, this one picks this
+ * speaker's half of a contrasting pair.
+ */
+export function utteranceForSpeaker(
+  speaker: "A" | "B",
+  text: string,
+  script: string,
+  deviceLang?: string | null
+): SpeechSynthesisUtterance {
+  const utterance = new SpeechSynthesisUtterance(text);
+  const chosen = voiceForSpeaker(
+    speaker,
+    availableVoices(),
+    script,
+    deviceLang ?? (typeof navigator !== "undefined" ? navigator.language : null)
+  );
+  utterance.lang = chosen.lang;
+  if (chosen.voice) utterance.voice = chosen.voice;
+  utterance.rate = chosen.rate;
+  utterance.pitch = chosen.pitch;
+  return utterance;
 }

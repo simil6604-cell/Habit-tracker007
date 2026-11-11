@@ -70,7 +70,19 @@ export function humanVoiceKey(): string | null {
   return process.env.ELEVENLABS_API_KEY?.trim() || null;
 }
 
-export function humanVoiceId(): string {
+/**
+ * ElevenLabs' other long-standing default ("Adam"), for the second speaker.
+ *
+ * A podcast is two people. With one key and two voice ids it is actually
+ * two people; with one id it is one person doing both halves, which is
+ * worse than the browser's two voices.
+ */
+const DEFAULT_VOICE_B = "pNInz6obpgDQGcFmaJgB";
+
+export function humanVoiceId(speaker: "A" | "B" = "A"): string {
+  if (speaker === "B") {
+    return process.env.ELEVENLABS_VOICE_ID_B?.trim() || DEFAULT_VOICE_B;
+  }
   return process.env.ELEVENLABS_VOICE_ID?.trim() || DEFAULT_VOICE;
 }
 
@@ -150,13 +162,15 @@ export function speakableWithin(text: string, limit: number = MAX_SPEECH_CHARS):
  */
 export async function synthesizeSpeech(
   text: string,
-  options: { fetch?: typeof fetch; signal?: AbortSignal } = {}
+  options: { fetch?: typeof fetch; signal?: AbortSignal; speaker?: "A" | "B" } = {}
 ): Promise<Response> {
   const key = humanVoiceKey();
   if (!key) throw new HumanVoiceError("NOT_CONFIGURED", VOICE_FAILURE_MESSAGE.NOT_CONFIGURED);
 
   const doFetch = options.fetch ?? fetch;
-  const url = `${humanVoiceBaseUrl()}/v1/text-to-speech/${encodeURIComponent(humanVoiceId())}/stream`;
+  const url = `${humanVoiceBaseUrl()}/v1/text-to-speech/${encodeURIComponent(
+    humanVoiceId(options.speaker ?? "A")
+  )}/stream`;
 
   let response: Response;
   try {

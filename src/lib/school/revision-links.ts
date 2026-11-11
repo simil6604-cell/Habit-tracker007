@@ -20,13 +20,17 @@ import { parseRevisionUrl, revisionHost } from "@/lib/utils/revision-url";
  *    "target test" aimed at weak spots, organised by board, subject and topic.
  */
 
-export type RevisionKind = "FLASHCARDS" | "NOTES" | "QUESTIONS" | "PAST_PAPERS" | "OTHER";
+export type RevisionKind = "FLASHCARDS" | "NOTES" | "QUESTIONS" | "PAST_PAPERS" | "PODCAST" | "OTHER";
 
 export const REVISION_KINDS: { value: RevisionKind; label: string; hint: string }[] = [
   { value: "FLASHCARDS", label: "Flashcards", hint: "A deck to test yourself on — a Carousel quiz, for instance" },
   { value: "NOTES", label: "Revision notes", hint: "The page you read from" },
   { value: "QUESTIONS", label: "Topic questions", hint: "Practice questions for one topic" },
   { value: "PAST_PAPERS", label: "Past papers", hint: "Whole papers to sit" },
+  // Somewhere to keep a real podcast someone made — a teacher's, a series,
+  // a revision channel. This app cannot go and find those for you, and a
+  // list of addresses nobody checked would be a list of broken links.
+  { value: "PODCAST", label: "Podcast", hint: "A podcast or audio series you listen to for this subject" },
   { value: "OTHER", label: "Something else", hint: "Anything else you revise from" },
 ];
 
@@ -69,6 +73,7 @@ export function detectKind(url: string): RevisionKind {
   if (path.includes("topic-question") || path.includes("exam-question") || path.includes("questions")) {
     return "QUESTIONS";
   }
+  if (/podcast|\/episode|spotify\.com\/(show|episode)|podcasts\.apple\.com/.test(`${host}${path}`)) return "PODCAST";
   if (path.includes("revision-note") || path.includes("notes")) return "NOTES";
   if (path.includes("flashcard") || path.includes("deck") || path.includes("quiz")) return "FLASHCARDS";
   return "OTHER";
@@ -199,7 +204,7 @@ function scopeTiers(scope: LinkScope, anySubject = false): ((link: StoredLink) =
 }
 
 /** Kinds that answer "I don't know this", best first. */
-const LOOK_UP_ORDER: RevisionKind[] = ["NOTES", "QUESTIONS", "PAST_PAPERS", "OTHER"];
+const LOOK_UP_ORDER: RevisionKind[] = ["NOTES", "QUESTIONS", "PAST_PAPERS", "PODCAST", "OTHER"];
 
 /**
  * The two links worth putting in front of someone who is stuck: somewhere to

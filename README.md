@@ -102,7 +102,20 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   (`src/lib/school/ai-tools.ts`), each one scoped to your own account with
   no argument through which it could reach anyone else's, and each one
   listed under the reply as what was actually done, taken from this app's
-  own record of the tools that ran rather than from what the answer claims. Kept
+  own record of the tools that ran rather than from what the answer claims.
+  An episode is **two voices** — one explaining, one asking what you would
+  ask and getting it wrong the way people get it wrong — written to be heard
+  with your hands busy: a hook first, the question before the answer, the
+  common mistake said out loud, and each idea coming back twice more before
+  the end. On the device's own voices the two speakers really are two
+  different voices (or the same one shifted, on a phone that has only one);
+  with an ElevenLabs key they are two real ones, set with
+  `ELEVENLABS_VOICE_ID` and `ELEVENLABS_VOICE_ID_B`. **Play all** runs the
+  episodes back to back without picking the phone up, and the lock screen
+  shows what is playing with a pause button on it. A podcast someone else
+  made can be saved under **Where you revise from** as a link like any
+  other — this app never goes looking for those itself, because a list of
+  addresses nobody checked is a list of broken links. Kept
   It can also **record a whole lesson** while the teacher talks and turn it
   into notes afterwards: the screen is held awake while it records (a phone
   that locks suspends the page and the recording stops with it), a level bar

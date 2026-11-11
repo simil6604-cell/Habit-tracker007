@@ -345,3 +345,18 @@ describe("parseTopicName", () => {
     expect(parseTopicName("x".repeat(80), true)).toEqual({ ok: true, name: "x".repeat(80) });
   });
 });
+
+describe("a podcast someone else made", () => {
+  it("is recognised from the address", () => {
+    // This app cannot go and find podcasts — a list of addresses nobody
+    // checked is a list of broken links — but it can hold the ones you
+    // already listen to, next to everything else you revise from.
+    expect(detectKind("https://open.spotify.com/show/abc123")).toBe("PODCAST");
+    expect(detectKind("https://podcasts.apple.com/gb/podcast/x/id123")).toBe("PODCAST");
+    expect(detectKind("https://example.com/podcast/economics-elasticity")).toBe("PODCAST");
+  });
+
+  it("does not swallow an ordinary revision page", () => {
+    expect(detectKind("https://www.savemyexams.com/igcse/biology/cie/23/revision-notes/")).toBe("NOTES");
+  });
+});

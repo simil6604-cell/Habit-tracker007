@@ -25,9 +25,13 @@ export async function POST(request: NextRequest) {
   }
 
   let text = "";
+  // Which of the two podcast voices to use. Anything but "B" is the normal
+  // one, so every existing caller is unchanged.
+  let speaker: "A" | "B" = "A";
   try {
-    const body = (await request.json()) as { text?: unknown };
+    const body = (await request.json()) as { text?: unknown; speaker?: unknown };
     text = typeof body.text === "string" ? body.text : "";
+    if (body.speaker === "B") speaker = "B";
   } catch {
     return new NextResponse("Expected JSON", { status: 400 });
   }
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest) {
   if (text.length > MAX_SPEECH_CHARS * 4) return new NextResponse("Too much text to speak", { status: 413 });
 
   try {
-    const upstream = await synthesizeSpeech(text, { signal: request.signal });
+    const upstream = await synthesizeSpeech(text, { signal: request.signal, speaker });
     return new NextResponse(upstream.body, {
       status: 200,
       headers: {

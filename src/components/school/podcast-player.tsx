@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { utteranceFor, speechSupported } from "@/lib/ai/voice/speak";
-import { splitIntoPieces } from "@/lib/school/podcast";
+import { utteranceForSpeaker, speechSupported } from "@/lib/ai/voice/speak";
+import { splitIntoSpokenPieces } from "@/lib/school/podcast";
 
 /**
  * Plays an episode out loud, one piece at a time.
@@ -20,8 +20,23 @@ import { splitIntoPieces } from "@/lib/school/podcast";
  * reason: an episode that goes silent because a third party is down is
  * worse than one that sounds synthetic.
  */
-export function PodcastPlayer({ script, title }: { script: string; title: string }) {
-  const pieces = splitIntoPieces(script);
+export function PodcastPlayer({
+  script,
+  title,
+  subtitle,
+  autoPlay = false,
+  onFinished,
+}: {
+  script: string;
+  title: string;
+  /** What to show under the title on a lock screen. */
+  subtitle?: string;
+  /** Starts by itself when the episode before it in the queue has finished. */
+  autoPlay?: boolean;
+  /** So a list can move on to the next episode without anyone touching the phone. */
+  onFinished?: () => void;
+}) {
+  const pieces = splitIntoSpokenPieces(script);
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const [note, setNote] = useState<string | null>(null);
@@ -32,6 +47,10 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
   const humanVoiceRef = useRef(true);
   const atRef = useRef(0);
   atRef.current = at;
+  // Held in a ref so a re-render with a new callback cannot restart or
+  // interrupt an episode that is already playing.
+  const finishedRef = useRef(onFinished);
+  finishedRef.current = onFinished;
 
   const release = () => {
     const element = audioRef.current;
@@ -46,6 +65,21 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
     }
   };
 
+  /*
+   * Started by the queue rather than by a press.
+   *
+   * Mobile browsers only allow sound that a tap asked for — but the tap
+   * that started the first episode counts for the ones that follow in the
+   * same page, which is what makes a playlist possible at all.
+   */
+  useEffect(() => {
+    if (!autoPlay) return;
+    playFrom(0);
+    // Only when this becomes the playing episode; playFrom is recreated on
+    // every render and would restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay]);
+
   // Leaving the page mid-episode must not leave the browser talking.
   useEffect(
     () => () => {
@@ -55,6 +89,41 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
     },
     []
   );
+
+  /*
+   * The lock screen.
+   *
+   * This is listened to with the phone in a pocket on the way to training.
+   * Without this the audio is anonymous: no title, no pause button on the
+   * lock screen, and the headphone button does nothing. With it, the
+   * episode behaves like anything else you play.
+   *
+   * Only the audio path can be controlled this way — a browser's own
+   * synthesiser is not media and never appears there — but that is the
+   * path that keeps playing with the screen off, so it is the one that
+   * matters here.
+   */
+  const announce = (state: "playing" | "paused") => {
+    if (typeof navigator === "undefined") return;
+    const media = (navigator as unknown as { mediaSession?: MediaSession }).mediaSession;
+    if (!media) return;
+    try {
+      if (typeof MediaMetadata !== "undefined") {
+        media.metadata = new MediaMetadata({
+          title,
+          artist: subtitle ?? "Momentum",
+          album: "Your own revision podcast",
+        });
+      }
+      media.playbackState = state;
+      media.setActionHandler("play", () => playFrom(atRef.current));
+      media.setActionHandler("pause", () => pause());
+      media.setActionHandler("stop", () => stop());
+    } catch {
+      // An older browser, or a handler it does not know. Nothing here is
+      // required for the episode to play.
+    }
+  };
 
   const playFrom = (start: number) => {
     const generation = ++generationRef.current;
@@ -72,12 +141,16 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
 
     setPlaying(true);
     setNote(null);
+    announce("playing");
 
     const sayFrom = (index: number) => {
       if (!current()) return;
       if (index >= pieces.length) {
         setPlaying(false);
         setAt(0);
+        // The point of a queue: at the gym nobody is going to pick up the
+        // phone between episodes.
+        finishedRef.current?.();
         return;
       }
       setAt(index);
@@ -96,9 +169,10 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
           setNote("This browser cannot speak, so there is nothing to play. The script is below.");
           return;
         }
-        // The whole script decides the language: one piece of an English
+        // Two voices, told apart by who is speaking — and the language is
+        // decided from the whole script, because one line of an English
         // episode can easily be four words that look German.
-        const utterance = utteranceFor(pieces[index], null, script);
+        const utterance = utteranceForSpeaker(pieces[index].speaker, pieces[index].text, script);
         utterance.onend = next;
         utterance.onerror = next;
         window.speechSynthesis.speak(utterance);
@@ -111,7 +185,7 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
             const response = await fetch("/api/voice", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: pieces[index] }),
+              body: JSON.stringify({ text: pieces[index].text, speaker: pieces[index].speaker }),
             });
             if (response.status === 503) {
               humanVoiceRef.current = false;
@@ -144,6 +218,7 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
     release();
     if (speechSupported()) window.speechSynthesis.cancel();
     setPlaying(false);
+    announce("paused");
   };
 
   const stop = () => {
@@ -191,7 +266,10 @@ export function PodcastPlayer({ script, title }: { script: string; title: string
         // The line being said, so it can be followed on a page as well as
         // heard — and so a muted phone still shows that it is working.
         <p className="rounded-lg bg-surface-muted px-3 py-2 text-sm" data-testid="podcast-line">
-          {pieces[at]}
+          <span className="mr-1.5 text-xs font-semibold text-accent">
+            {pieces[at].speaker === "A" ? "—" : "·"}
+          </span>
+          {pieces[at].text}
         </p>
       )}
     </div>

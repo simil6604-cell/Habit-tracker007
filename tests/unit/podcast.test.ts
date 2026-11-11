@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  parseDialogue,
+  isDialogue,
+  splitIntoSpokenPieces,
   cleanScript,
   describeSource,
   episodeTitle,
@@ -141,5 +144,68 @@ describe("what an episode can be made from", () => {
 
   it("names the subject alone when there is nothing else to say", () => {
     expect(describeSource(source())).toBe("Biology");
+  });
+});
+
+describe("an episode as two voices", () => {
+  const script = [
+    "A: Right — what happens to total revenue if they cut the price?",
+    "B: It goes down, surely. Less money per unit.",
+    "A: That is the trap. It depends on elasticity.",
+  ].join("\n");
+
+  it("reads who is speaking on each line", () => {
+    expect(parseDialogue(script)).toEqual([
+      { speaker: "A", text: "Right — what happens to total revenue if they cut the price?" },
+      { speaker: "B", text: "It goes down, surely. Less money per unit." },
+      { speaker: "A", text: "That is the trap. It depends on elasticity." },
+    ]);
+  });
+
+  it("takes the tag however the model wrote it", () => {
+    const loose = ["[A]: one", "B - two", " a: three"].join("\n");
+    expect(parseDialogue(loose).map((l) => l.speaker)).toEqual(["A", "B", "A"]);
+  });
+
+  it("keeps a paragraph that ran on under the speaker who started it", () => {
+    const wrapped = "A: first part\nstill the same person\nB: now me";
+    expect(parseDialogue(wrapped)).toEqual([
+      { speaker: "A", text: "first part still the same person" },
+      { speaker: "B", text: "now me" },
+    ]);
+  });
+
+  it("still plays an episode written before there were two voices", () => {
+    // Every episode already saved has no tags at all. It was one voice,
+    // and it comes back as one voice rather than as nothing.
+    const old = "The mole is the amount of substance. It contains Avogadro's number of particles.";
+    expect(parseDialogue(old)).toEqual([{ speaker: "A", text: old }]);
+    expect(isDialogue(old)).toBe(false);
+    expect(isDialogue(script)).toBe(true);
+  });
+
+  it("never puts two speakers in one spoken piece", () => {
+    const pieces = splitIntoSpokenPieces(script);
+    expect(pieces.length).toBeGreaterThanOrEqual(3);
+    for (const piece of pieces) {
+      expect(piece.text).not.toContain("A:");
+      expect(piece.text).not.toContain("B:");
+    }
+    expect(pieces[0].speaker).toBe("A");
+    expect(pieces.some((p) => p.speaker === "B")).toBe(true);
+  });
+
+  it("splits a long turn without changing who is saying it", () => {
+    const long = `A: ${"This is a long explanation that keeps going. ".repeat(20)}`;
+    const pieces = splitIntoSpokenPieces(long);
+    expect(pieces.length).toBeGreaterThan(1);
+    expect(pieces.every((p) => p.speaker === "A")).toBe(true);
+  });
+
+  it("keeps the tags through the cleaner, which eats bullet markers", () => {
+    // A model that writes "- A: ..." must not have the tag stripped with
+    // the bullet, or the whole episode collapses into one voice.
+    expect(cleanScript("- A: one\n- B: two")).toBe("A: one\nB: two");
+    expect(cleanScript("- a plain bullet")).toBe("a plain bullet");
   });
 });
