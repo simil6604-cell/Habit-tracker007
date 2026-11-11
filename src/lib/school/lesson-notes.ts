@@ -35,6 +35,31 @@ export function appendChunk(transcript: string, chunk: string): string {
   return `${before} ${addition}`;
 }
 
+/**
+ * What the student pressing "Mark" leaves behind in the transcript.
+ *
+ * A lesson goes past at the speed it goes past. The moment you realise you
+ * did not follow something is the moment you cannot stop and write it down,
+ * and afterwards a transcript is forty minutes of undifferentiated speech
+ * with no way to find that moment again. One button puts a flag in the
+ * stream, and the notes are told what it means.
+ *
+ * Plain ASCII in square brackets so it survives being read back, stored,
+ * and sent to a model, and so it is obvious in the raw transcript.
+ */
+export const TRANSCRIPT_MARK = "[MARK]";
+
+/** Drops a flag at the point the lesson has reached. */
+export function markTranscript(transcript: string): string {
+  const before = transcript.trimEnd();
+  return before ? `${before} ${TRANSCRIPT_MARK} ` : `${TRANSCRIPT_MARK} `;
+}
+
+/** How many flags are in a transcript — for telling someone it worked. */
+export function countMarks(transcript: string): number {
+  return transcript.split(TRANSCRIPT_MARK).length - 1;
+}
+
 export function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -106,15 +131,18 @@ export function buildNotesPrompt({
 
   return `${header ? `${header}\n\n` : ""}Below is a transcript captured live during a lesson by speech-to-text. It is one undifferentiated stream: the teacher explaining, other students, and whatever else was said in the room. It will contain mishearings, especially of technical words and names.
 
-Turn it into notes this student can revise from.
+Turn it into notes this student can revise from. Be thorough: this transcript is the only record of the lesson, and anything you leave out is gone. Long notes are fine — a full lesson should produce full notes.
 
-- Keep what was taught: the ideas, definitions, methods, worked examples, results, and the reasoning the teacher gave for them.
+- Keep what was taught, in detail: every idea, definition, method, worked example, result, and the reasoning the teacher gave for it. Keep the numbers, the units, the formulas, the names, the dates and the specific examples — those are the first things to disappear from a summary and the first things needed in an exam.
+- Follow the order the lesson went in, so it can be read against the transcript.
+- The student is in that room and talks too. Keep THEIR questions and what was answered, and anything they worked out loud — those are the parts they most need back, and a summary of "the teacher's content" throws them away. Write a question as a question, with the answer under it.
+- ${TRANSCRIPT_MARK} is the student pressing a button during the lesson to flag the moment. Whatever is around each flag matters to them: give every one its own entry under "Flagged in the lesson", quoting enough of what was being said to find it again, and say plainly if what was being said there is too garbled to tell.
 - Keep anything that was SET or ANNOUNCED — homework, deadlines, tests, what to bring or prepare, pages to read. Said out loud in class is often the only place these exist, so they get their own section, with the exact wording where you have it.
 - Leave out what is not school: the register, chat between students, discipline, equipment faff, anything off-topic.
-- Where a passage is too garbled to be sure of, say so and quote the garbled words, rather than guessing what was meant. A confident wrong definition is worse than a gap.
+- Where a passage is too garbled to be sure of, say so and quote the garbled words, rather than guessing what was meant. A confident wrong definition is worse than a gap. Mishearings of technical words are constant — where the real word is obvious from the subject, use it and say which word you corrected.
 - Do not add anything that is not in the transcript. No background knowledge, no filling in what the teacher "probably" said next.
 
-Lay it out as: one line saying what the lesson was about, then the key points, then any worked example, then what was set or announced, then what is worth revising first. Leave out any of those sections that the lesson has nothing for.
+Lay it out as: one line saying what the lesson was about, then the key points, then any worked examples, then the student's own questions and the answers, then anything flagged, then what was set or announced, then what is worth revising first. Leave out any of those sections that the lesson has nothing for.
 
 TRANSCRIPT:
 ${transcript}`;

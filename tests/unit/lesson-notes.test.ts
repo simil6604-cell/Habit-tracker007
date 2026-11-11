@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  TRANSCRIPT_MARK,
+  countMarks,
+  markTranscript,
   appendChunk,
   AUTO_RESUME_DELAY_MS,
   AUTO_RESUME_WINDOW_MS,
@@ -160,5 +163,54 @@ describe("picking a dropped recording back up", () => {
 
   it("waits before trying, rather than hammering", () => {
     expect(AUTO_RESUME_DELAY_MS).toBeGreaterThanOrEqual(2000);
+  });
+});
+
+describe("flagging a moment in a lesson", () => {
+  it("drops a marker where the lesson has got to", () => {
+    expect(markTranscript("the mole is a unit")).toBe(`the mole is a unit ${TRANSCRIPT_MARK} `);
+    // Pressed before anything has been heard, it still records the moment.
+    expect(markTranscript("")).toBe(`${TRANSCRIPT_MARK} `);
+  });
+
+  it("does not leave a double space where it joins", () => {
+    expect(markTranscript("avogadro   ")).toBe(`avogadro ${TRANSCRIPT_MARK} `);
+  });
+
+  it("counts them, so the recorder can say it worked", () => {
+    const twice = markTranscript(markTranscript("a") + "b");
+    expect(countMarks(twice)).toBe(2);
+    expect(countMarks("nothing flagged here")).toBe(0);
+  });
+
+  it("is explained to whoever writes the notes", () => {
+    // A marker the notes do not understand is noise in the transcript.
+    const prompt = buildNotesPrompt({ transcript: `the mole ${TRANSCRIPT_MARK} is a unit` });
+    expect(prompt).toContain(TRANSCRIPT_MARK);
+    expect(prompt).toMatch(/flag/i);
+  });
+});
+
+describe("what the notes are asked to keep", () => {
+  const prompt = buildNotesPrompt({ transcript: "anything", subjectName: "Chemistry" });
+
+  it("keeps the student's own questions, not only the teacher's words", () => {
+    // Asked for in these words: it should note everything, also when I talk
+    // with it. A summary of "the teacher's content" throws those away.
+    expect(prompt).toMatch(/their questions|THEIR questions/i);
+  });
+
+  it("asks for detail rather than a summary", () => {
+    expect(prompt).toMatch(/numbers, the units, the formulas/i);
+    expect(prompt).toMatch(/long notes are fine/i);
+  });
+
+  it("still refuses to guess at a garbled passage", () => {
+    expect(prompt).toMatch(/garbled/i);
+    expect(prompt).toMatch(/do not add anything that is not in the transcript/i);
+  });
+
+  it("still keeps what was set out loud", () => {
+    expect(prompt).toMatch(/homework, deadlines, tests/i);
   });
 });

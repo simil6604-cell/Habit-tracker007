@@ -2,18 +2,30 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
-import { ChevronDown, Mic, Square, Trash2 } from "lucide-react";
+import { ChevronDown, Flag, Mic, Square, Trash2 } from "lucide-react";
 import { AIProse } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
 import { Button } from "@/components/ui/button";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
+import { useWakeLock } from "@/lib/hooks/use-wake-lock";
+import {
+  micStatus,
+  QUIET_ADVICE,
+  shouldWarnSilent,
+  SILENT_ADVICE,
+  SILENT_LEVEL,
+  startMicMeter,
+  type MicMeter,
+} from "@/lib/ai/voice/mic-level";
 import {
   appendChunk,
   AUTO_RESUME_DELAY_MS,
   DRAFT_KEY,
+  countMarks,
   formatClock,
   formatLength,
   lessonLabel,
+  markTranscript,
   MAX_TRANSCRIPT_CHARS,
   shouldAutoResume,
   wordCount,
@@ -98,6 +110,25 @@ export function LessonRecorder({
   const [dropped, setDropped] = useState(false);
   const resumesRef = useRef<number[]>([]);
 
+  /*
+   * How much is actually arriving at the microphone.
+   *
+   * A browser gives no way to turn a microphone up — the gain belongs to the
+   * phone, and the recogniser opens its own stream that nothing here can
+   * configure. What it gives is a way to SEE the input, and seeing is most
+   * of the fix: a phone face down, a phone in a bag and a teacher three
+   * rows away all look identical on screen and are obvious on a meter.
+   */
+  const [level, setLevel] = useState(0);
+  const silentSinceRef = useRef<number | null>(null);
+  const [silentFor, setSilentFor] = useState(0);
+  const meterRef = useRef<MicMeter | null>(null);
+
+  // The screen stays awake while a lesson runs: a phone that locks suspends
+  // the page, and the recording stops with it. This is the single biggest
+  // cause of a lesson that is only half recorded.
+  const wake = useWakeLock(listening);
+
   function beginRecording() {
     // Only one thing may hold the microphone. Dictation and voice chat live
     // in the panel above, and a lesson started while one of them is listening
@@ -108,6 +139,46 @@ export function LessonRecorder({
     setDropped(false);
     mic.start();
   }
+
+  // The meter runs only while recording, and never blocks it: a browser that
+  // refuses the second stream simply gets no meter.
+  useEffect(() => {
+    let cancelled = false;
+    if (!listening) {
+      meterRef.current?.stop();
+      meterRef.current = null;
+      setLevel(0);
+      silentSinceRef.current = null;
+      setSilentFor(0);
+      return;
+    }
+    void startMicMeter((value) => {
+      if (!cancelled) setLevel(value);
+    }).then((meter) => {
+      if (cancelled) meter?.stop();
+      else meterRef.current = meter;
+    });
+    return () => {
+      cancelled = true;
+      meterRef.current?.stop();
+      meterRef.current = null;
+    };
+  }, [listening]);
+
+  // How long nothing has been arriving, which is what the warning is about.
+  useEffect(() => {
+    if (!listening) return;
+    if (level >= SILENT_LEVEL) {
+      silentSinceRef.current = null;
+      setSilentFor(0);
+      return;
+    }
+    if (silentSinceRef.current === null) silentSinceRef.current = Date.now();
+    const timer = setInterval(() => {
+      if (silentSinceRef.current !== null) setSilentFor(Date.now() - silentSinceRef.current);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [level, listening]);
 
   function endRecording() {
     recordingRef.current = false;
@@ -204,6 +275,17 @@ export function LessonRecorder({
     return () => clearTimeout(timer);
   }, [focusLessonId]);
 
+  /**
+   * Flags the moment, without interrupting the lesson.
+   *
+   * The point you realise you did not follow something is the point you
+   * cannot stop and write it down. One press puts a marker in the stream
+   * and the notes are told to give every marked passage its own entry.
+   */
+  function markMoment() {
+    setTranscript((t) => markTranscript(t).slice(0, MAX_TRANSCRIPT_CHARS));
+  }
+
   function stopAndSave() {
     endRecording();
     const text = transcript.trim();
@@ -235,6 +317,8 @@ export function LessonRecorder({
   }
 
   const words = wordCount(transcript);
+  const marks = countMarks(transcript);
+  const status = micStatus(level);
 
   return (
     <div className="rounded-2xl border border-border bg-surface-muted p-3" data-testid="lesson-recorder">
@@ -255,9 +339,13 @@ export function LessonRecorder({
       {open && (
         <div className="mt-3 flex flex-col gap-3">
           <p className="text-xs text-muted">
-            Leave this open while the teacher explains. It keeps listening, writes down what it hears, and afterwards
-            makes notes you can ask about. Your phone has to stay awake and on this page — if the screen locks, the
-            browser stops listening.
+            Leave this open while the teacher explains. It keeps listening, writes down what it hears — your own
+            questions included — and afterwards makes notes you can ask about. Lay the phone screen-up on the desk,
+            as near the front as you can, with nothing over it: the browser always uses whichever microphone the
+            phone itself is set to, and how much it picks up is a matter of distance.
+            {wake.supported
+              ? " This page keeps the screen awake while it records."
+              : " This browser can't keep the screen awake, so stop the screen locking in your phone's settings — if it locks, the browser stops listening."}
           </p>
 
           {recovered && (
@@ -325,10 +413,44 @@ export function LessonRecorder({
                   {pending ? "Making notes…" : "Make study notes"}
                 </Button>
               )}
+              {listening && (
+                <Button size="sm" variant="outline" onClick={markMoment} data-testid="lesson-mark">
+                  <Flag className="mr-1 h-3.5 w-3.5" />
+                  Mark this
+                </Button>
+              )}
               <span className="text-xs text-muted" data-testid="lesson-meter">
                 {formatClock(seconds)} · {words} {words === 1 ? "word" : "words"}
+                {marks > 0 && ` · ${marks} marked`}
               </span>
             </div>
+          )}
+
+          {listening && (
+            <div className="flex items-center gap-2" data-testid="lesson-level">
+              <span className="text-[11px] text-muted">Picking up</span>
+              {/* A bar rather than a number: the only question it answers is
+                  "is the room reaching the phone", and that is a glance. */}
+              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
+                <span
+                  className={`block h-full rounded-full transition-[width] duration-150 ${
+                    status === "good" ? "bg-success" : status === "quiet" ? "bg-warning" : "bg-danger"
+                  }`}
+                  style={{ width: `${Math.round(Math.min(1, level) * 100)}%` }}
+                  data-testid="lesson-level-bar"
+                  data-status={status}
+                />
+              </span>
+            </div>
+          )}
+
+          {listening && shouldWarnSilent(silentFor) && (
+            <p className="rounded-lg border border-danger/50 bg-danger/10 p-3 text-xs" data-testid="lesson-silent">
+              {SILENT_ADVICE}
+            </p>
+          )}
+          {listening && status === "quiet" && !shouldWarnSilent(silentFor) && (
+            <p className="text-xs text-muted" data-testid="lesson-quiet">{QUIET_ADVICE}</p>
           )}
 
           {dropped && (
