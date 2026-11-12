@@ -89,6 +89,16 @@ test.describe.serial("the product scanner", () => {
     await expect(page.getByText(/couldn't reach/i)).toHaveCount(0);
   });
 
+  test("takes the code typed the way the packet prints it", async () => {
+    // An EAN-13 is printed with gaps — "3017 6204 22003" — and that is what
+    // anyone copying it off a packet types. It used to be refused as "not a
+    // barcode", which is true of the string and false of the barcode.
+    await page.goto("/gym/scanner");
+    await page.fill('input[name="barcode"]', "3017 6204 22003");
+    await page.getByRole("button", { name: /^Look up$/ }).click();
+    await expect(page.getByText("Nutella").first()).toBeVisible();
+  });
+
   test("refuses something that is not a barcode without asking anyone", async () => {
     await scan(page, "../../etc/passwd");
     await expect(page.getByText(/is not a barcode/i)).toBeVisible();

@@ -60,3 +60,91 @@ export function ean13Png(code: string, scale = 4, height = 160, quiet = 40): Buf
     chunk("IEND", Buffer.alloc(0)),
   ]);
 }
+
+/**
+ * What a photo of a barcode actually looks like.
+ *
+ * The barcode above is the ideal case: crisp, black on white, filling the
+ * frame. A phone never produces that. It produces a big picture of a packet
+ * on a table, with the barcode somewhere in it, a fraction of the width,
+ * often turned on its side because that is how the label sits.
+ *
+ * So this composes one: a large grey-ish noisy frame with the bars placed
+ * inside it at a given size, position and rotation. It is the picture the
+ * decoder has to cope with, and the one it used to fail on.
+ */
+export function barcodePhotoPng(
+  code: string,
+  options: {
+    width?: number;
+    height?: number;
+    /** How wide the barcode is, as a fraction of the picture. */
+    fraction?: number;
+    /** Turned a quarter turn, the way a label on a shelf often is. */
+    rotated?: boolean;
+    /** Where the middle of the barcode sits, 0..1 of the picture. */
+    at?: { x: number; y: number };
+  } = {}
+): Buffer {
+  const width = options.width ?? 1400;
+  const height = options.height ?? 1000;
+  const fraction = options.fraction ?? 0.3;
+  const at = options.at ?? { x: 0.5, y: 0.5 };
+
+  const bits = ean13Bits(code);
+  // The barcode's own pixel grid, before it is placed.
+  const span = options.rotated ? height * fraction : width * fraction;
+  const scale = Math.max(1, Math.round(span / bits.length));
+  const barsWide = bits.length * scale;
+  const barsTall = Math.max(24, Math.round(barsWide * 0.45));
+  // A real label has white around the bars; without it nothing decodes.
+  const quiet = Math.max(8, scale * 10);
+  const labelW = barsWide + quiet * 2;
+  const labelH = barsTall + quiet;
+
+  const pixel = new Uint8Array(width * height);
+  // A table top: light, uneven, with grain — not a clean white page.
+  for (let i = 0; i < pixel.length; i++) {
+    pixel[i] = 150 + ((i * 2654435761) % 60);
+  }
+
+  const put = (x: number, y: number, value: number) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    pixel[y * width + x] = value;
+  };
+
+  const centreX = Math.round(width * at.x);
+  const centreY = Math.round(height * at.y);
+  // Drawn in the label's own coordinates, then placed — rotated or not.
+  for (let ly = 0; ly < labelH; ly++) {
+    for (let lx = 0; lx < labelW; lx++) {
+      const inBars = lx >= quiet && lx < quiet + barsWide && ly >= quiet / 2 && ly < quiet / 2 + barsTall;
+      const bit = inBars ? bits[Math.floor((lx - quiet) / scale)] : "0";
+      const value = inBars && bit === "1" ? 0x14 : 0xf2;
+      const dx = lx - labelW / 2;
+      const dy = ly - labelH / 2;
+      if (options.rotated) put(centreX + Math.round(dy), centreY + Math.round(-dx), value);
+      else put(centreX + Math.round(dx), centreY + Math.round(dy), value);
+    }
+  }
+
+  const raw = Buffer.alloc(height * (1 + width));
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * (1 + width);
+    raw[rowStart] = 0;
+    for (let x = 0; x < width; x++) raw[rowStart + 1 + x] = pixel[y * width + x];
+  }
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 0;
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw, { level: 6 })),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
