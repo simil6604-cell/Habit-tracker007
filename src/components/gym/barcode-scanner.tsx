@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Button } from "@/components/ui/button";
 import { cameraConstraints, retailBarcodeHints } from "@/lib/gym/barcode-formats";
+import { decodePhoto } from "@/lib/gym/photo-decode";
 
 type ScannerControls = { stop: () => void };
 
@@ -83,20 +84,28 @@ export function BarcodeScanner({ onDetected }: { onDetected: (barcode: string) =
     // mid-scan because of that loses whatever it was about to read.
   }, [active]);
 
-  /** Decode one still photo of the barcode. */
+  /**
+   * Decode one still photo of the barcode.
+   *
+   * Several ways round rather than once as it came off the camera: see
+   * photo-decode.ts. A label turned on its side used to fail outright, and
+   * that is how a label sits on a bottle.
+   */
   async function readPhoto(file: File) {
     setError(null);
     setReading(true);
     const url = URL.createObjectURL(file);
     try {
       const reader = new BrowserMultiFormatReader(retailBarcodeHints());
-      const result = await reader.decodeFromImageUrl(url);
-      onDetected(result.getText());
-    } catch {
-      // zxing throws NotFoundException when the picture holds no code. Said in
-      // terms of what to do differently, not as an error class.
+      const result = await decodePhoto(url, reader);
+      if (result.ok) {
+        onDetected(result.text);
+        return;
+      }
       setError(
-        "No barcode found in that photo. Fill the frame with the barcode, hold the phone steady and straight above it, and make sure the stripes are in focus."
+        result.reason === "unreadable"
+          ? "This browser can't open that picture. On iPhone: Settings → Camera → Formats → Most Compatible, then take it again — or type the digits under the barcode in above."
+          : "No barcode found in that photo. Get closer so the barcode fills more of the picture, hold the phone straight above it and still, and make sure the stripes are sharp. If it still won't read, type the digits printed under it in above."
       );
     } finally {
       setReading(false);

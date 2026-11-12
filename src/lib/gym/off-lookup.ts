@@ -63,6 +63,20 @@ const FIELDS = [
 ].join(",");
 
 /**
+ * A barcode as the packet prints it, turned into the digits it is.
+ *
+ * This is the fix for "typing the code doesn't work". An EAN-13 is printed
+ * with gaps — "4 006381 333931" — and that is what anyone copying it off a
+ * packet types, because it is what they are reading. It was then refused as
+ * "not a barcode", which is true of the string and false of the barcode.
+ * Hyphens and dots go the same way; they turn up in codes copied off a
+ * website.
+ */
+export function normalizeBarcode(raw: string): string {
+  return raw.replace(/[\s\-.\u2010-\u2015_]/g, "");
+}
+
+/**
  * A barcode is digits, and nothing else.
  *
  * It goes into a URL and then into a request to someone else's server, so
@@ -70,7 +84,25 @@ const FIELDS = [
  * ITF-14 is 8 to 14 digits; a few own-brand codes are shorter.
  */
 export function isBarcode(raw: string): boolean {
-  return /^\d{6,14}$/.test(raw.trim());
+  return /^\d{6,14}$/.test(normalizeBarcode(raw.trim()));
+}
+
+/**
+ * The other codes the same product might be filed under.
+ *
+ * A twelve-digit UPC-A, which is what North American products carry, is the
+ * same product as the thirteen-digit EAN that is that code with a zero in
+ * front — and the databases hold some products under one and some under the
+ * other. Asked for only the one printed on the packet, a product that is
+ * definitely in there comes back as "not found".
+ */
+export function barcodeVariants(code: string): string[] {
+  const variants = [code];
+  if (code.length === 12) variants.push(`0${code}`);
+  if (code.length === 13 && code.startsWith("0")) variants.push(code.slice(1));
+  // An EAN-8 is sometimes stored padded out to thirteen.
+  if (code.length === 8) variants.push(code.padStart(13, "0"));
+  return variants;
 }
 
 export class ProductLookupError extends Error {
@@ -158,18 +190,26 @@ export async function lookupProduct(
   barcode: string,
   options: { fetch?: Fetcher } = {}
 ): Promise<OffProduct | null> {
-  const code = barcode.trim();
+  const code = normalizeBarcode(barcode.trim());
   if (!isBarcode(code)) {
     throw new ProductLookupError(
-      `"${barcode}" is not a barcode — it should be the 8 to 13 digits printed under the bars.`
+      `"${barcode.trim()}" is not a barcode — type the 8 to 13 digits printed under the bars. Spaces are fine.`
     );
   }
   const doFetch = options.fetch ?? fetch;
 
-  const food = await askOne(foodBaseUrl(), code, "food", doFetch);
-  if (food) return food;
-
-  return askOne(beautyBaseUrl(), code, "beauty", doFetch);
+  // Food first, then cosmetics, and each under the codes the same product
+  // can be filed as. The common case is still one request: the first
+  // variant is the code as printed.
+  for (const variant of barcodeVariants(code)) {
+    const food = await askOne(foodBaseUrl(), variant, "food", doFetch);
+    if (food) return food;
+  }
+  for (const variant of barcodeVariants(code)) {
+    const beauty = await askOne(beautyBaseUrl(), variant, "beauty", doFetch);
+    if (beauty) return beauty;
+  }
+  return null;
 }
 
 export type ConnectionCheck = {

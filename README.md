@@ -208,7 +208,13 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   (NOVA) and additive count (cosmetics are found and listed but never
   scored: none of those three exists for a shampoo), with a **"test the
   product database" button** that says whether the app can reach them at all
-  — the question people actually mean when a scan fails, the AI Coach's
+  — the question people actually mean when a scan fails. A photo of a
+  barcode is decoded several ways round (upright and turned, whole and
+  zoomed into the middle), because a label on a bottle sits sideways and one
+  attempt on the raw picture failed outright; a code typed the way the
+  packet prints it, with gaps, is read as the barcode it is; and a twelve
+  digit UPC-A is also tried as the thirteen digit code it is filed under.
+  Also: the AI Coach's
   balance/workload engine and chat, calendar (day/week/month), tasks,
   analytics, and settings.
 - **Explicitly interface-only (per the brief)**: official Cambridge syllabus

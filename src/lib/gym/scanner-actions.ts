@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { checkProductDatabase, lookupProduct, type ConnectionCheck, type ProductSource } from "./off-lookup";
+import {
+  checkProductDatabase,
+  lookupProduct,
+  normalizeBarcode,
+  type ConnectionCheck,
+  type ProductSource,
+} from "./off-lookup";
 import { computeHealthScore, type ScoreBreakdown } from "./health-score";
 
 async function requireUserId() {
@@ -35,7 +41,9 @@ export type ScanState =
 
 export async function scanProductAction(_prevState: ScanState, formData: FormData): Promise<ScanState> {
   const userId = await requireUserId();
-  const barcode = String(formData.get("barcode") ?? "").trim();
+  // Normalised here as well as in the lookup, so what is stored and shown
+  // back is the barcode rather than however it was typed.
+  const barcode = normalizeBarcode(String(formData.get("barcode") ?? "").trim());
   if (!barcode) return { error: "Enter or scan a barcode first." };
 
   let product;

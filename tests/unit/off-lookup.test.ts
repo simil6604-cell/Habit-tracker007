@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  barcodeVariants,
+  normalizeBarcode,
   CHECK_BARCODE,
   checkProductDatabase,
   isBarcode,
@@ -173,5 +175,56 @@ describe("the connection test", () => {
 
   it("uses a barcode that really exists", () => {
     expect(isBarcode(CHECK_BARCODE)).toBe(true);
+  });
+});
+
+describe("a barcode as the packet prints it", () => {
+  it("is read with the gaps it is printed with", () => {
+    // This is what "typing the code doesn't work" was. An EAN-13 is printed
+    // "4 006381 333931" and that is what anyone copying it types, because
+    // it is what they are reading.
+    expect(normalizeBarcode("4 006381 333931")).toBe("4006381333931");
+    expect(isBarcode("4 006381 333931")).toBe(true);
+    expect(normalizeBarcode("40-06381-333931")).toBe("4006381333931");
+    expect(normalizeBarcode("4.006381.333931")).toBe("4006381333931");
+  });
+
+  it("still refuses something that is not a barcode at all", () => {
+    expect(isBarcode("not a barcode")).toBe(false);
+    expect(isBarcode("12 34")).toBe(false);
+    expect(isBarcode("../../etc/passwd")).toBe(false);
+  });
+
+  it("is looked up with its gaps taken out", async () => {
+    const product = await lookupProduct("3017 6204 22003", {
+      fetch: server({ openfoodfacts: { status: 200, body: nutella } }),
+    });
+    expect(product?.name).toBe("Nutella");
+    expect(asked[0]).toContain("3017620422003");
+  });
+});
+
+describe("the other code the same product might be under", () => {
+  it("knows a UPC-A is an EAN with a zero in front", () => {
+    expect(barcodeVariants("012345678905")).toContain("0012345678905");
+    expect(barcodeVariants("0012345678905")).toContain("012345678905");
+    // The code as printed is always tried first, so the ordinary case is
+    // still one request.
+    expect(barcodeVariants("4006381333931")[0]).toBe("4006381333931");
+    expect(barcodeVariants("4006381333931")).toHaveLength(1);
+  });
+
+  it("finds a product filed under the padded code", async () => {
+    // Asked for only the twelve digits on the packet, this came back as
+    // "no product found" for something that is definitely in there.
+    const product = await lookupProduct("012345678905", {
+      fetch: vi.fn(async (url: string | URL | Request) => {
+        const href = String(url);
+        asked.push(href);
+        const known = href.includes("0012345678905");
+        return new Response(JSON.stringify(known ? nutella : { status: 0 }), { status: known ? 200 : 404 });
+      }) as unknown as typeof fetch,
+    });
+    expect(product?.name).toBe("Nutella");
   });
 });

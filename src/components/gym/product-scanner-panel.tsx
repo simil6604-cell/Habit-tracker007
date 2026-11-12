@@ -49,6 +49,11 @@ export function ProductScannerPanel({ history }: { history: ScannedProduct[] }) 
             ref={barcodeRef}
             name="barcode"
             required
+            // A barcode is digits, so a phone should offer the number pad —
+            // and the pattern allows the spaces the packet prints, which are
+            // taken out before anything is looked up.
+            inputMode="numeric"
+            autoComplete="off"
             placeholder="e.g. 3017620422003"
             className="w-48 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
           />
