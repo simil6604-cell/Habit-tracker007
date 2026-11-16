@@ -14,8 +14,12 @@ import { DICTATION_LANGS, mismatchedLang } from "@/lib/ai/voice/dictation-lang";
 import {
   sendCoachMessageLive,
   clearCoachChat,
+  deleteCoachMessage,
+  editCoachMessage,
   type CoachMessage,
 } from "@/lib/ai/coach-actions";
+import { MessageActions } from "@/components/shared/message-actions";
+import { MAX_EDIT_CHARS } from "@/lib/ai/chat-limits";
 
 /** Strips the diagram blocks before speaking — nobody wants SVG read aloud. */
 function speakableText(content: string): string {
@@ -42,6 +46,10 @@ export function VoiceChatPanel({
   const [speakReplies, setSpeakReplies] = useState(false);
   const [canSpeak, setCanSpeak] = useState(false);
   const [pending, startTransition] = useTransition();
+  // Editing one of your own messages: which one, and what it now says.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [editPending, startEdit] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
   // Which reply we've already read out, so a re-render doesn't repeat it.
   const spokenRef = useRef<string | null>(null);
@@ -317,22 +325,78 @@ export function VoiceChatPanel({
           </p>
         </div>
       ) : (
-        <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto py-2">
+        <div
+          ref={scrollRef}
+          data-testid="coach-messages"
+          className="flex flex-1 flex-col gap-3 overflow-y-auto py-2"
+        >
           {messages.map((m) => (
-            <div key={m.id} className={`flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                  m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
-                }`}
-              >
-                <SafeRender>
-                  <AIMessageContent content={m.content} />
-                </SafeRender>
-              </div>
-              <span className="text-[10px] text-muted">{format(m.createdAt, "HH:mm")}</span>
+            <div key={m.id} className={`group flex flex-col gap-1 ${m.role === "USER" ? "items-end" : "items-start"}`}>
+              {editing === m.id ? (
+                <form
+                  className="flex w-full max-w-[85%] flex-col gap-2 rounded-2xl border border-accent bg-surface p-2"
+                  data-testid={`edit-form-${m.id}`}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const next = draft.trim();
+                    if (!next) return;
+                    setEditing(null);
+                    startEdit(async () => setMessages(await editCoachMessage(m.id, next)));
+                  }}
+                >
+                  <textarea
+                    value={draft}
+                    autoFocus
+                    rows={3}
+                    maxLength={MAX_EDIT_CHARS}
+                    aria-label="Edit your message"
+                    onChange={(event) => setDraft(event.target.value)}
+                    className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  />
+                  <p className="text-[11px] text-muted">
+                    The reply below, and anything after it, is replaced — it was a reply to the old wording.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="submit" size="sm" variant="secondary">Ask again</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                    m.role === "USER" ? "bg-accent text-accent-foreground" : "bg-surface-muted text-foreground"
+                  }`}
+                >
+                  <SafeRender>
+                    <AIMessageContent content={m.content} />
+                  </SafeRender>
+                </div>
+              )}
+              <span className="flex items-center gap-2 text-[10px] text-muted">
+                {format(m.createdAt, "HH:mm")}
+                {editing !== m.id && !m.id.startsWith("pending-") && (
+                  <MessageActions
+                    idSuffix={m.id}
+                    disabled={pending || editPending}
+                    onEdit={
+                      m.role === "USER"
+                        ? () => {
+                            setDraft(m.content);
+                            setEditing(m.id);
+                          }
+                        : undefined
+                    }
+                    onDelete={() => startEdit(async () => setMessages(await deleteCoachMessage(m.id)))}
+                  />
+                )}
+              </span>
             </div>
           ))}
-          {pending && <p className="text-xs text-muted">Coach is thinking…</p>}
+          {(pending || editPending) && (
+            <p className="text-xs text-muted">{editPending ? "Asking again…" : "Coach is thinking…"}</p>
+          )}
         </div>
       )}
 

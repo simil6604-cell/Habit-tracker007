@@ -294,11 +294,11 @@ export type SchoolAITurn = { role: "USER" | "ASSISTANT"; content: string; photoC
 /**
  * How much an edited question may hold.
  *
- * Here rather than beside the action that uses it: a "use server" file may
- * export nothing but async functions, and a constant there fails the build
- * with an error that names the line and not the rule.
+ * Shared with the AI Coach, which lets a message be edited the same way —
+ * see lib/ai/chat-limits.ts. Re-exported here because the school panel and
+ * its tests have always imported it from this module.
  */
-export const MAX_EDIT_CHARS = 4_000;
+export { MAX_EDIT_CHARS } from "@/lib/ai/chat-limits";
 
 export function buildSchoolAITurns(history: SchoolAITurn[]): { role: "user" | "assistant"; content: string }[] {
   return history
