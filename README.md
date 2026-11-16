@@ -112,6 +112,18 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   the loud settings still never ask for flattery: the energy has to be
   about the specific thing in front of you.
 
+  **A chat is not a transcript you are stuck with.** Both the school AI and
+  the AI Coach let you fix or remove what is already on screen: the pencil on
+  a message you sent reopens it for editing and asks again, and the bin takes
+  a message out (two taps, because a mis-tap in a thread you cannot undo is
+  worse than one extra tap). Deleting a question takes the answer it got with
+  it — a reply to something that is no longer there reads as nonsense on
+  screen, and worse in the history the AI is handed back — while deleting an
+  answer leaves the question, so a bad answer can go without losing what you
+  asked. Nothing beyond your next message is touched. Editing is for your own
+  messages only: an editable reply would be the app putting words in the AI's
+  mouth and then reading them back to it as its own.
+
   An episode is **two voices** — one explaining, one asking what you would
   ask and getting it wrong the way people get it wrong — written to be heard
   with your hands busy: a hook first, the question before the answer, the

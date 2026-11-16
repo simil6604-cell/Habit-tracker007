@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { AudioLines, FileText, ImagePlus, Mic, MicOff, Pencil, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, FileText, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { MessageActions } from "@/components/shared/message-actions";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
 import { SafeRender } from "@/components/shared/safe-render";
@@ -30,6 +31,7 @@ import {
   createSchoolAIChat,
   currentSchoolAIChatId,
   deleteSchoolAIChat,
+  deleteSchoolAIMessage,
   getSchoolAIMessages,
   listSchoolAIChats,
   renameSchoolAIChat,
@@ -665,24 +667,27 @@ export function SchoolAIPanel({
               )}
               <span className="flex items-center gap-2 text-[10px] text-muted">
                 {format(m.createdAt, "HH:mm")}
-                {m.role === "USER" && editing !== m.id && (
-                  // Your own questions only. An edited answer would be this
-                  // app putting words in Claude's mouth and then reading
-                  // them back to it as its own.
-                  <button
-                    type="button"
-                    data-testid={`edit-message-${m.id}`}
-                    aria-label="Edit this question and ask again"
-                    title="Edit and ask again"
+                {editing !== m.id && !m.id.startsWith("pending-") && (
+                  <MessageActions
+                    idSuffix={m.id}
                     disabled={pending || editPending}
-                    onClick={() => {
-                      setDraft(m.content);
-                      setEditing(m.id);
-                    }}
-                    className="opacity-60 transition hover:text-accent hover:opacity-100 disabled:opacity-30"
-                  >
-                    <Pencil size={11} />
-                  </button>
+                    // Your own questions only. An edited answer would be
+                    // this app putting words in Claude's mouth and then
+                    // reading them back to it as its own.
+                    onEdit={
+                      m.role === "USER"
+                        ? () => {
+                            setDraft(m.content);
+                            setEditing(m.id);
+                          }
+                        : undefined
+                    }
+                    onDelete={() =>
+                      startEdit(async () => {
+                        setMessages(await deleteSchoolAIMessage(m.id));
+                      })
+                    }
+                  />
                 )}
               </span>
             </div>

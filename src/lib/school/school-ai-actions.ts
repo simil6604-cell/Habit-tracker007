@@ -459,6 +459,62 @@ export async function editSchoolAIMessage(
   return getSchoolAIMessages(message.chatId);
 }
 
+/**
+ * Takes one message out of the conversation.
+ *
+ * The rule is the narrow one, because a chat is a record and deleting more
+ * than was asked for is how a record stops being trusted:
+ *
+ *   - a question goes with the answers that followed it, because an answer
+ *     to a question that is no longer there is nonsense on the screen and
+ *     worse in the history the tutor is given back
+ *   - an answer goes on its own, and the question stays, so a bad answer can
+ *     be removed without losing what was asked
+ *
+ * Anything that came after the next question is untouched: those were other
+ * exchanges and they still make sense.
+ */
+export async function deleteSchoolAIMessage(messageId: string): Promise<SchoolAIMessageEntry[]> {
+  const userId = await requireUserId();
+
+  // Only your own: an id on its own is never enough to delete a row.
+  const message = await prisma.schoolAIMessage.findFirst({
+    where: { id: messageId, userId },
+    select: { id: true, chatId: true, role: true, createdAt: true, imagePaths: true },
+  });
+  if (!message) return getSchoolAIMessages();
+
+  const doomed = [message];
+  if (message.role === "USER" && message.chatId) {
+    const after = await prisma.schoolAIMessage.findMany({
+      where: {
+        userId,
+        chatId: message.chatId,
+        OR: [
+          { createdAt: { gt: message.createdAt } },
+          // Same millisecond: the id breaks the tie the way the list does.
+          { createdAt: message.createdAt, id: { gt: message.id } },
+        ],
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, role: true, imagePaths: true, chatId: true, createdAt: true },
+    });
+    for (const row of after) {
+      if (row.role === "USER") break;
+      doomed.push(row);
+    }
+  }
+
+  await prisma.schoolAIMessage.deleteMany({ where: { userId, id: { in: doomed.map((row) => row.id) } } });
+  // The photos belonged to those messages and nothing else points at them.
+  for (const row of doomed) {
+    for (const path of parseImagePaths(row.imagePaths)) await deleteUploadedImage(path);
+  }
+
+  revalidatePath("/school/ai");
+  return getSchoolAIMessages(message.chatId ?? undefined);
+}
+
 export async function clearSchoolAIChat(chatId?: string): Promise<SchoolAIMessageEntry[]> {
   const userId = await requireUserId();
   // Empties the conversation in front of them, not every conversation they
