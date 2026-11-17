@@ -10,7 +10,7 @@ Einstellungen (Umgebungsvariablen, z.B. in config.env):
 """
 import collections, datetime, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import edit, instagram, score, spikes, telegram, tiktok, youtube
+import edit, fx, instagram, score, spikes, telegram, tiktok, youtube
 
 PLATFORMS = {"YouTube": (youtube, "#shorts"), "TikTok": (tiktok, "#fyp #viral"),
              "Instagram": (instagram, "#reels #viral")}
@@ -75,12 +75,15 @@ def main(run):
         layout_file = os.path.join(run, "layout.txt")
         layout = open(layout_file).read().strip() if os.path.exists(layout_file) else os.environ.get("LAYOUT", "crop")
         credit = link.replace("https://", "").replace("www.", "")
-        short = edit.edit(clip, hook, clip.rsplit(".", 1)[0] + ".short.mp4", layout, peak, credit)
+        reactions = [m[2] for m in msgs if start + sec - 5 <= m[0] < start + sec + 25]
+        emoji = fx.peak_emoji(reactions)
+        short = edit.edit(clip, hook, clip.rsplit(".", 1)[0] + ".short.mp4", layout, peak, credit,
+                          peak_emoji=emoji, hook_emoji=emoji)
         tag = re.sub(r"\W", "", name.lower())
-        has_emoji = any(ord(ch) > 0x2600 for ch in hook)
-        title = f"{hook.title()}{'' if has_emoji else ' 💀'} | {name}"
-        desc = (f"{name} live: {link}\nAlle Rechte und Credits an {name}. Folgt {name}!\n\n"
-                f"#{tag} #{platform} #clips")
+        hook = "".join(ch for ch in hook if ord(ch) < 0x2600).strip() or "WAIT FOR IT"
+        title = f"{hook.title()} {emoji} | {name}"
+        desc = (f"🎥 {name} live: {link}\n🙏 All credit to {name}, go follow them!\n\n"
+                f"#{tag} #{platform} #clips #funny")
         tags = [name, tag, platform, "clips", "shorts"]
 
         results = []

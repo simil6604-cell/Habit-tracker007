@@ -2,3 +2,4 @@ runs/
 *.bin
 config.env
 __pycache__/
+assets/

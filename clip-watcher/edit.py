@@ -8,9 +8,13 @@ Usage: edit.py CLIP.mp4 "HOOK" [OUT.mp4] [--layout crop|blur] [--peak SEK] [--cr
   - Untertitel Wort für Wort (3 Wörter pro Zeile, aktuelles Wort gelb + größer).
   - Zoom-Punch beim Höhepunkt (--peak), Credit unter den Untertiteln.
   - Alle Texte außerhalb der Bereiche, die TikTok / Reels / Shorts überdecken.
+  - Farbige Emojis: im Hook, über Untertiteln bei passenden Wörtern, groß beim Höhepunkt.
+  - Höhepunkt: Zoom, Wackeln, Blitz, Whoosh + Boom; Pop-Sound bei Emojis (eigene Sounds).
   - Ton auf -14 LUFS normalisiert (Plattform-Standard).
 """
-import argparse, os, re, subprocess, tempfile
+import argparse, os, re, shutil, subprocess, sys, tempfile
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fx
 
 W, H, FPS = 1080, 1920, 30
 # Positionen so gewählt, dass TikTok / Reels / Shorts nichts davon verdecken (check.py prüft das):
@@ -65,6 +69,17 @@ def ts(t):
     t = max(t, 0)
     return f"{int(t // 3600)}:{int(t % 3600 // 60):02d}:{t % 60:05.2f}"
 
+def word_groups(words):
+    """Wörter in Gruppen von max. 3 (neue Gruppe auch bei Sprechpause > 0.6 s)."""
+    groups, cur = [], []
+    for w in words:
+        if cur and (len(cur) == 3 or w[0] - cur[-1][1] > 0.6):
+            groups.append(cur); cur = []
+        cur.append(w)
+    if cur:
+        groups.append(cur)
+    return groups
+
 def build_ass(path, hook, words, credit, dur, font):
     hook = clean(hook).upper()
     lines = [
@@ -86,15 +101,7 @@ def build_ass(path, hook, words, credit, dur, font):
         # kurzes Reinzoomen am Anfang
         lines.append(f"Dialogue: 1,{ts(0)},{ts(dur)},Hook,,0,0,0,,"
                      r"{\fscx80\fscy80\t(0,180,\fscx100\fscy100)}" + hook)
-    # Wörter in Gruppen von max. 3 (neue Gruppe auch bei Sprechpause > 0.6 s)
-    groups, cur = [], []
-    for w in words:
-        if cur and (len(cur) == 3 or w[0] - cur[-1][1] > 0.6):
-            groups.append(cur); cur = []
-        cur.append(w)
-    if cur:
-        groups.append(cur)
-    for g in groups:
+    for g in word_groups(words):
         for i, (a, e, _) in enumerate(g):
             end = g[i + 1][0] if i + 1 < len(g) else e + 0.15
             parts = []
@@ -112,12 +119,28 @@ def build_ass(path, hook, words, credit, dur, font):
 def esc(p):
     return p.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
 
-def edit(clip, hook, out, layout="crop", peak=None, credit=""):
+def has_audio(path):
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index",
+                          "-of", "csv=p=0", path], capture_output=True, text=True).stdout
+    return bool(out.strip())
+
+def edit(clip, hook, out, layout="crop", peak=None, credit="", peak_emoji=None, hook_emoji=None, effects=True):
     dur = duration(clip)
     font = pick_font()
-    ass = tempfile.NamedTemporaryFile("w", suffix=".ass", delete=False).name
-    build_ass(ass, hook, read_words(clip.rsplit(".", 1)[0] + ".srt"), credit, dur, font)
+    words = read_words(clip.rsplit(".", 1)[0] + ".srt")
+    tmp = tempfile.mkdtemp()
+    use_fx = effects and fx.available()
+    hook_img = fx.hook_png(clean(hook).upper(), hook_emoji, font, os.path.join(tmp, "hook.png")) if use_fx and clean(hook) else None
+    ass = os.path.join(tmp, "subs.ass")
+    build_ass(ass, "" if hook_img else hook, words, credit, dur, font)
+    has_peak = peak is not None and 0 < peak < dur - 1
 
+    inputs = ["-i", clip]
+    def add(path, loop=True):
+        inputs.extend((["-loop", "1", "-t", f"{dur:.2f}"] if loop else []) + ["-i", path])
+        return sum(1 for x in inputs if x == "-i") - 1
+
+    # ---- Bild ----
     if layout == "blur":
         f = (f"[0:v]fps={FPS},split[a][b];"
              "[a]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=8:2,"
@@ -126,22 +149,85 @@ def edit(clip, hook, out, layout="crop", peak=None, credit=""):
     else:  # crop: Bild füllt den Screen, Mitte bleibt
         f = f"[0:v]fps={FPS},scale=-2:{H},crop={W}:{H}"
     f += ",eq=contrast=1.06:saturation=1.15"
-    if peak is not None and 0 < peak < dur:
-        # Zoom-Punch: in 0.2 s auf 115 %, 1.5 s halten, in 0.4 s zurück
+    if has_peak:
         a = peak
+        # Zoom-Punch: in 0.2 s auf 115 %, 1.5 s halten, in 0.4 s zurück
         z = (f"if(between(in/{FPS},{a},{a+0.2}),1+0.15*(in/{FPS}-{a})/0.2,"
              f"if(between(in/{FPS},{a+0.2},{a+1.7}),1.15,"
              f"if(between(in/{FPS},{a+1.7},{a+2.1}),1.15-0.15*(in/{FPS}-{a+1.7})/0.4,1)))")
-        f += (f",zoompan=z='{z}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS}")
-    f += f",subtitles='{esc(ass)}'[v]"
-    cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", clip, "-filter_complex", f,
-           "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
-           "-profile:v", "high", "-pix_fmt", "yuv420p", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-           "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", out]
+        f += f",zoompan=z='{z}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS}"
+        if use_fx:
+            # Wackeln (0.45 s) + kurzer weißer Blitz beim Höhepunkt
+            f += (f",crop=w=iw-48:h=ih-48:x='24+20*sin(n*3.1)*between(t,{a},{a+0.45})'"
+                  f":y='24+20*cos(n*2.3)*between(t,{a},{a+0.45})',scale={W}:{H}"
+                  f",drawbox=x=0:y=0:w=iw:h=ih:color=white@0.55:t=fill:enable='between(t,{a},{a+0.07})'")
+    f += f",subtitles='{esc(ass)}'[v0]"
+    last, k = "v0", 0
+
+    def overlay(idx, x, y, start, end, fade=False):
+        nonlocal f, last, k
+        k += 1
+        src = f"[{idx}:v]"
+        if fade:
+            f += f";{src}format=rgba,fade=t=in:st={start}:d=0.2:alpha=1[o{k}]"; src = f"[o{k}]"
+        f += f";[{last}]{src}overlay=x={x}:y={y}:enable='between(t,{start:.2f},{end:.2f})'[v{k}]"
+        last = f"v{k}"
+
+    pops = []
+    if hook_img:
+        overlay(add(hook_img), "(W-w)/2", HOOK_TOP, 0, dur, fade=True)
+        pops.append(0.0)
+    if use_fx:
+        # Emoji über den Untertiteln, wenn ein passendes Wort gesagt wird (max. 6 pro Clip)
+        used = 0
+        for g in word_groups(words):
+            e = fx.word_emoji([w for _, _, w in g])
+            if not e or used >= 6:
+                continue
+            if has_peak and peak_emoji and g[0][0] < peak + 1.6 and g[-1][1] > peak:
+                continue
+            p = fx.emoji_png(e, 150, os.path.join(tmp, f"w{used}.png"))
+            if p:
+                start, end = g[0][0], g[-1][1] + 0.15
+                overlay(add(p), "(W-w)/2", H - CAP_BOTTOM - 420, start, end)
+                pops.append(start); used += 1
+        # Großes Emoji beim Höhepunkt mit "Pop" (klein -> groß -> normal)
+        if has_peak and peak_emoji:
+            a = peak
+            for size, s0, s1 in ((260, a, a + 0.06), (470, a + 0.06, a + 0.13), (410, a + 0.13, a + 1.6)):
+                p = fx.emoji_png(peak_emoji, size, os.path.join(tmp, f"peak{size}.png"))
+                if p:
+                    overlay(add(p), "(W-w)/2", f"{H - CAP_BOTTOM - 310}-h/2", s0, s1)
+
+    # ---- Ton: Original + Soundeffekte ----
+    audio = has_audio(clip)
+    af, mix = "", []
+    if use_fx and audio:
+        snd = fx.sfx()
+        events = [("pop", t, 0.6) for t in pops[:8]]
+        if has_peak:
+            events += [("whoosh", max(peak - 0.35, 0), 0.8), ("boom", peak, 1.0)]
+        for i, (name, t, vol) in enumerate(events):
+            idx = add(snd[name], loop=False)
+            ms = int(t * 1000)
+            af += f"[{idx}:a]adelay={ms}|{ms},volume={vol}[s{i}];"
+            mix.append(f"[s{i}]")
+    if mix:
+        af += f"[0:a]{''.join(mix)}amix=inputs={len(mix)+1}:normalize=0:duration=first,"
+    elif audio:
+        af += "[0:a]"
+    if audio:
+        af += "loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+        f += ";" + af
+
+    cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", *inputs, "-filter_complex", f,
+           "-map", f"[{last}]", *(["-map", "[a]"] if audio else []), "-t", f"{dur:.2f}",
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-profile:v", "high",
+           "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", out]
     try:
         subprocess.run(cmd, check=True)
     finally:
-        os.unlink(ass)
+        shutil.rmtree(tmp, ignore_errors=True)
     return out
 
 if __name__ == "__main__":
@@ -149,5 +235,8 @@ if __name__ == "__main__":
     ap.add_argument("clip"); ap.add_argument("hook"); ap.add_argument("out", nargs="?")
     ap.add_argument("--layout", default=os.environ.get("LAYOUT", "crop"), choices=["crop", "blur"])
     ap.add_argument("--peak", type=float); ap.add_argument("--credit", default="")
+    ap.add_argument("--emoji", help="Emoji beim Höhepunkt, z.B. 😂"); ap.add_argument("--hook-emoji")
+    ap.add_argument("--no-effects", action="store_true")
     a = ap.parse_args()
-    print(edit(a.clip, a.hook, a.out or a.clip.rsplit(".", 1)[0] + ".short.mp4", a.layout, a.peak, a.credit))
+    print(edit(a.clip, a.hook, a.out or a.clip.rsplit(".", 1)[0] + ".short.mp4", a.layout, a.peak, a.credit,
+               a.emoji, a.hook_emoji or a.emoji, not a.no_effects))

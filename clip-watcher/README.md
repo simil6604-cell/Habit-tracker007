@@ -3,6 +3,7 @@
 Records a Twitch stream from the first second, logs chat anonymously, then clips every moment where chat explodes, with burned-in captions.
 
 ## Needs
+For emojis: `pip install pillow` and the font `fonts-noto-color-emoji` (without them clips are made without emojis).
 `streamlink`, `ffmpeg` (with libass), `python3`, and optionally `whisper-cli` (whisper.cpp) plus a model such as `ggml-medium.en.bin`.
 
 ## Use
@@ -24,7 +25,7 @@ Output: `runs/<run>/clips/NN-t<seconds>.mp4` and a `.credit.txt` with the channe
 
 4. `score.py` gives each clip a 0-100 virality estimate (chat spike, number of distinct chatters, reaction emotes, volume, speech in the first 3 s) and writes `scores.tsv`. Clips at or above `THRESHOLD` (default 75) are marked for posting. This is a heuristic, not a guarantee.
 
-5. `publish.py` (runs automatically after `clip.sh`) takes every clip at or above `THRESHOLD`, edits it to 9:16 (`edit.py`: layout `crop` fills the screen for IRL/Just Chatting, `blur` keeps the whole frame for gameplay; hook text in a box at the top; word-by-word captions with the current word highlighted; zoom punch at the peak; progress bar; credit; loudness normalised to -14 LUFS), uploads it to YouTube Shorts, TikTok and Instagram Reels (`PLATFORMS`) and sends you a Telegram message with the video. No confirmation needed. `MAX_PER_DAY` caps posts per day. `handled.txt` per run prevents double posts.
+5. `publish.py` (runs automatically after `clip.sh`) takes every clip at or above `THRESHOLD`, edits it to 9:16 (`edit.py`: layout `crop` fills the screen for IRL/Just Chatting, `blur` keeps the whole frame for gameplay; hook text in a box at the top; word-by-word captions with the current word highlighted; zoom punch, shake and white flash at the peak; colour emojis in the hook, above captions when a matching word is said, and a big pop-up emoji at the peak chosen from the chat reaction (KEKW → 😂, NO WAY → 😱, W → 🔥 ...); own synthesized whoosh/boom/pop sound effects; credit; loudness normalised to -14 LUFS), uploads it to YouTube Shorts, TikTok and Instagram Reels (`PLATFORMS`) and sends you a Telegram message with the video. No confirmation needed. `MAX_PER_DAY` caps posts per day. `handled.txt` per run prevents double posts.
 
 Tune `BIN`, `WINDOW`, `RATIO`, `MIN_MSGS` and `COOLDOWN` at the top of `spikes.py`.
 
