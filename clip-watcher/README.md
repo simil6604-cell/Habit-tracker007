@@ -17,6 +17,8 @@ Output: `runs/<run>/clips/NN-t<seconds>.mp4` and a `.credit.txt` with the channe
 2. `spikes.py` counts messages per 10 s and flags bins that are at least 3x the previous 5 minutes' average, with at least 8 messages. Spikes within 60 s are merged.
 3. `clip.sh` cuts 45 s starting 30 s before each spike (chat reacts after the moment), converts the audio to 16 kHz WAV for whisper, writes the `.srt`, and burns it in (this re-encodes; `-c copy` can't burn subtitles).
 
+4. `score.py` gives each clip a 0-100 virality estimate (chat spike, number of distinct chatters, reaction emotes, volume, speech in the first 3 s) and writes `scores.tsv`. Clips at or above `THRESHOLD` (default 60) are marked for posting. This is a heuristic, not a guarantee.
+
 Tune `BIN`, `WINDOW`, `RATIO`, `MIN_MSGS` and `COOLDOWN` at the top of `spikes.py`.
 
 ## Rule

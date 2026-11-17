@@ -24,7 +24,7 @@ while IFS=$'\t' read -r sec count _; do
     ffmpeg -nostdin -loglevel error -y -i "$base.raw.mp4" \
       -vf "subtitles=$base.srt:force_style='FontSize=22,Outline=2'" \
       -c:v libx264 -preset veryfast -crf 20 -c:a copy "$base.mp4"
-    rm -f "$base.wav" "$base.raw.mp4"
+    rm -f "$base.wav" "$base.raw.mp4"  # .srt bleibt für score.py
   else
     echo "   (whisper-cli or model missing: keeping uncaptioned clip)"
     mv "$base.raw.mp4" "$base.mp4"
@@ -32,3 +32,5 @@ while IFS=$'\t' read -r sec count _; do
   printf 'Clip from https://twitch.tv/%s (all credit to %s)\n' "$CH" "$CH" > "$base.credit.txt"
 done < spikes.txt
 echo "Done: $n clips in $RUN/clips"
+echo "== Viral-Prognose"
+python3 "$HERE/score.py" . "${THRESHOLD:-60}"
