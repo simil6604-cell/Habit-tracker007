@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: ./clip.sh runs/<run-dir> [model]
-# Finds spikes, cuts 45 s clips (30 s before each spike), transcribes, scores,
+# Finds spikes, cuts 30-90 s clips (length follows the chat reaction), transcribes, scores,
 # then publish.py edits the best ones to 9:16 and posts them.
 set -euo pipefail
 RUN="${1:?usage: ./clip.sh RUN_DIR [whisper-model]}"
@@ -14,8 +14,8 @@ CH="$(cat channel.txt 2>/dev/null || echo unknown)"
 LINK="$(cat link.txt 2>/dev/null || echo "https://twitch.tv/$CH")"
 
 python3 "$HERE/spikes.py" chat.log "$(cat start.txt)" | tee spikes.txt
-while IFS=$'\t' read -r sec count _; do
-  "$HERE/cut_one.sh" "$PWD" "$sec"
+while IFS=$'\t' read -r sec count _ len; do
+  "$HERE/cut_one.sh" "$PWD" "$sec" "${len:-45}"
 done < spikes.txt
 echo "Fertig: Clips in $RUN/clips"
 echo "== Viral-Prognose"

@@ -6,10 +6,14 @@ Einstellungen (Umgebungsvariablen, z.B. in config.env):
   THRESHOLD=75      nur Clips mit mindestens dieser Prognose posten
   MAX_PER_DAY=5     höchstens so viele Posts pro Tag (Spam-Schutz, YouTube-Kontingent)
   DRY_RUN=1         nichts hochladen, nur anzeigen (Standard, bis du DRY_RUN=0 setzt)
+  PLATFORMS=YouTube,TikTok,Instagram   wohin gepostet wird
 """
 import collections, datetime, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import edit, score, telegram, youtube
+import edit, instagram, score, telegram, tiktok, youtube
+
+PLATFORMS = {"YouTube": (youtube, "#shorts"), "TikTok": (tiktok, "#fyp #viral"),
+             "Instagram": (instagram, "#reels #viral")}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 POSTED = os.path.join(HERE, "runs", "posted.log")
@@ -68,22 +72,25 @@ def main(run):
         hook = hook_from_chat(msgs, start + sec)
         short = edit.edit(clip, hook, clip.rsplit(".", 1)[0] + ".short.mp4")
         tag = re.sub(r"\W", "", name.lower())
-        title = f"{hook.title()} 💀 | {name}"
+        title = f"{hook.title()}{'' if '💀' in hook else ' 💀'} | {name}"
         desc = (f"{name} live: {link}\nAlle Rechte und Credits an {name}. Folgt {name}!\n\n"
-                f"#{tag} #{platform} #clips #shorts")
+                f"#{tag} #{platform} #clips")
         tags = [name, tag, platform, "clips", "shorts"]
 
         results = []
-        if dry:
-            results.append("Testmodus (DRY_RUN=1): nichts hochgeladen")
-        else:
-            if youtube.configured():
-                try: results.append("YouTube: " + youtube.upload(short, title, desc, tags))
-                except Exception as e: results.append(f"YouTube: Fehler {e}")
-            else:
-                results.append("YouTube: nicht eingerichtet")
-            results.append("Instagram: kommt als Nächstes")
-            results.append("TikTok: kommt als Nächstes")
+        wanted = [p.strip() for p in os.environ.get("PLATFORMS", "YouTube,TikTok,Instagram").split(",") if p.strip()]
+        for pname in wanted:
+            mod, extra = PLATFORMS.get(pname, (None, ""))
+            if mod is None:
+                results.append(f"{pname}: unbekannt"); continue
+            if dry:
+                results.append(f"{pname}: Testmodus, nicht hochgeladen"); continue
+            if not mod.configured():
+                results.append(f"{pname}: nicht eingerichtet"); continue
+            try:
+                results.append(f"{pname}: " + mod.upload(short, title, f"{desc} {extra}", tags))
+            except Exception as e:
+                results.append(f"{pname}: Fehler {e}")
 
         telegram.send(f"🔥 {name}: {s}/100 ({label})\n„{title}“\n" + "\n".join(results), short)
         mark_handled(run, key)

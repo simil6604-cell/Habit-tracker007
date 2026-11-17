@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Live-Modus: schneidet, bewertet und postet jeden Moment, während der Stream noch läuft.
 Usage: live.py RUN_DIR      (startet watch.sh automatisch)
-Ablauf alle 10 s: neue Chat-Ausschläge suchen -> sobald die 15 s nach dem Moment
-aufgenommen sind, Clip schneiden -> transkribieren -> Prognose -> Hochformat -> posten.
+Ablauf alle 10 s: neue Chat-Ausschläge suchen -> sobald die
+Chat-Reaktion vorbei ist, Clip (30-90 s) schneiden -> transkribieren -> Prognose -> Hochformat -> posten.
 Endet, wenn watch.sh die Datei RUN_DIR/ended anlegt (nach einem letzten Durchgang).
 """
 import os, subprocess, sys, time
@@ -10,7 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import spikes
 
-AFTER = 15 + 10      # Clip endet 15 s nach dem Moment, plus 10 s Puffer für die Aufnahme
+BUFFER = 10          # Sekunden Puffer, bis das Clip-Ende sicher aufgenommen ist
 
 def step(run, start, final=False):
     path = os.path.join(run, "chat.log")
@@ -21,12 +21,15 @@ def step(run, start, final=False):
     done_file = os.path.join(run, "spikes.txt")
     done = {int(l.split("\t")[0]) for l in open(done_file)} if os.path.exists(done_file) else set()
     new = False
-    for sec, c, avg in found:
-        if sec in done or (not final and start + sec + AFTER > now):
+    for sec, c, avg, length in found:
+        if sec in done or length is None:      # length None: Chat reagiert noch
             continue
-        subprocess.run([os.path.join(HERE, "cut_one.sh"), run, str(sec)], check=False)
+        clip_end = start + max(sec - spikes.LEAD, 0) + length
+        if not final and clip_end + BUFFER > now:
+            continue
+        subprocess.run([os.path.join(HERE, "cut_one.sh"), run, str(sec), str(length)], check=False)
         with open(done_file, "a") as f:
-            f.write(f"{sec}\t{c}\t(avg {avg:.1f})\n")
+            f.write(f"{sec}\t{c}\t(avg {avg:.1f})\t{length}\n")
         done.add(sec); new = True
     if new:
         subprocess.run([sys.executable, os.path.join(HERE, "score.py"), run,
