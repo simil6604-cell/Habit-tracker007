@@ -30,6 +30,9 @@ Tune `BIN`, `WINDOW`, `RATIO`, `MIN_MSGS` and `COOLDOWN` at the top of `spikes.p
 
 Set the layout per channel in `streamers.txt` (`kaicenat crop`). Captions use the first installed font of Montserrat Black, Anton, Inter Black, Arial Black; install Montserrat on the server for the best look, or set `FONT=`.
 
+## Check a clip
+`python3 check.py clips/01-t120.short.mp4 --srt clips/01-t120.srt --hook "..." --png zones.png` checks it against the YouTube Shorts, TikTok and Reels specs (resolution, length, size, codec, loudness), checks that no text sits under the apps' buttons/caption area (approximate safe zones), prints a format score and saves a preview with the covered areas in red.
+
 ## Setup (once)
 1. `cp config.env.example config.env`. Leave `DRY_RUN=1` until everything works.
 2. **Telegram:** in Telegram open @BotFather, `/newbot`, put the token in `TELEGRAM_TOKEN`. Send your bot any message, then open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `"chat":{"id":...}` into `TELEGRAM_CHAT_ID`.

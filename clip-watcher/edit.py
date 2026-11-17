@@ -6,12 +6,18 @@ Usage: edit.py CLIP.mp4 "HOOK" [OUT.mp4] [--layout crop|blur] [--peak SEK] [--cr
     Layout "blur": ganzes Bild in der Mitte, unscharfer Hintergrund (Gameplay).
   - Hook-Text oben in einer Box, die ganze Zeit sichtbar.
   - Untertitel Wort für Wort (3 Wörter pro Zeile, aktuelles Wort gelb + größer).
-  - Zoom-Punch beim Höhepunkt (--peak), Fortschrittsbalken, Credit unten.
+  - Zoom-Punch beim Höhepunkt (--peak), Credit unter den Untertiteln.
+  - Alle Texte außerhalb der Bereiche, die TikTok / Reels / Shorts überdecken.
   - Ton auf -14 LUFS normalisiert (Plattform-Standard).
 """
 import argparse, os, re, subprocess, tempfile
 
 W, H, FPS = 1080, 1920, 30
+# Positionen so gewählt, dass TikTok / Reels / Shorts nichts davon verdecken (check.py prüft das):
+HOOK_TOP = 240          # Hook-Box oben, unter "Für dich / Folge ich" bzw. Reels-Kopfzeile
+CAP_BOTTOM = 600        # Untertitel: Abstand vom unteren Rand (unten liegen Name + Beschreibung)
+CREDIT_BOTTOM = 520     # Credit direkt unter den Untertiteln
+SIDE = 150              # links/rechts frei (rechts sind Like-/Kommentar-Buttons)
 FONTS = ["Montserrat Black", "Montserrat ExtraBold", "Anton", "Inter Display Black",
          "Inter Black", "Arial Black", "DejaVu Sans"]
 
@@ -69,10 +75,10 @@ def build_ass(path, hook, words, credit, dur, font):
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding",
         # Hook: weiße Schrift in schwarzer Box oben
-        f"Style: Hook,{font},86,&H00FFFFFF,&H00FFFFFF,&H1A000000,&H1A000000,1,0,0,0,100,100,0,0,3,22,0,8,90,90,250,1",
+        f"Style: Hook,{font},80,&H00FFFFFF,&H00FFFFFF,&H1A000000,&H1A000000,1,0,0,0,100,100,0,0,3,22,0,8,{SIDE},{SIDE},{HOOK_TOP},1",
         # Untertitel: dicker schwarzer Rand + Schatten, unteres Drittel
-        f"Style: Cap,{font},104,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,7,4,2,70,70,560,1",
-        f"Style: Credit,{font},34,&H40FFFFFF,&H40FFFFFF,&H80000000,&H00000000,1,0,0,0,100,100,0,0,1,3,0,2,40,40,70,1",
+        f"Style: Cap,{font},96,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,7,4,2,{SIDE},{SIDE},{CAP_BOTTOM},1",
+        f"Style: Credit,{font},34,&H30FFFFFF,&H30FFFFFF,&H80000000,&H00000000,1,0,0,0,100,100,0,0,1,3,0,2,{SIDE},{SIDE},{CREDIT_BOTTOM},1",
         "", "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
@@ -127,8 +133,6 @@ def edit(clip, hook, out, layout="crop", peak=None, credit=""):
              f"if(between(in/{FPS},{a+0.2},{a+1.7}),1.15,"
              f"if(between(in/{FPS},{a+1.7},{a+2.1}),1.15-0.15*(in/{FPS}-{a+1.7})/0.4,1)))")
         f += (f",zoompan=z='{z}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS}")
-    # Fortschrittsbalken unten
-    f += f",drawbox=x=0:y=ih-14:w='iw*t/{dur:.2f}':h=14:color=0xFFE500@0.95:t=fill"
     f += f",subtitles='{esc(ass)}'[v]"
     cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", clip, "-filter_complex", f,
            "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",

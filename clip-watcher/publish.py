@@ -27,7 +27,7 @@ def hook_from_chat(msgs, t):
             k = re.sub(r"\s+", " ", text.strip())
             if 2 <= len(k) <= 28 and k.lower() not in STOP and "http" not in k:
                 c[k.upper()] += 1
-    return c.most_common(1)[0][0] if c else "CHAT IST AUSGERASTET"
+    return c.most_common(1)[0][0] if c else "WAIT FOR IT"
 
 def posted_today():
     today = datetime.date.today().isoformat()
