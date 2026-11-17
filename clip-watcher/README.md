@@ -21,7 +21,15 @@ Output: `runs/<run>/clips/NN-t<seconds>.mp4` and a `.credit.txt` with the channe
 
 4. `score.py` gives each clip a 0-100 virality estimate (chat spike, number of distinct chatters, reaction emotes, volume, speech in the first 3 s) and writes `scores.tsv`. Clips at or above `THRESHOLD` (default 60) are marked for posting. This is a heuristic, not a guarantee.
 
+5. `publish.py` (runs automatically after `clip.sh`) takes every clip at or above `THRESHOLD`, edits it to 9:16 (`edit.py`: blurred background, hook text from the most common chat reaction, big captions), uploads it and sends you a Telegram message with the video. No confirmation needed. `MAX_PER_DAY` caps posts per day. `runs/posted.log` prevents double posts.
+
 Tune `BIN`, `WINDOW`, `RATIO`, `MIN_MSGS` and `COOLDOWN` at the top of `spikes.py`.
+
+## Setup (once)
+1. `cp config.env.example config.env`. Leave `DRY_RUN=1` until everything works.
+2. **Telegram:** in Telegram open @BotFather, `/newbot`, put the token in `TELEGRAM_TOKEN`. Send your bot any message, then open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `"chat":{"id":...}` into `TELEGRAM_CHAT_ID`.
+3. **YouTube:** console.cloud.google.com, new project, enable *YouTube Data API v3*, OAuth consent screen (add yourself as test user), create OAuth client of type *Desktop app*. Put ID/secret in `config.env`, then on your own computer run `YT_CLIENT_ID=... YT_CLIENT_SECRET=... python3 yt_auth.py` and copy the printed `YT_REFRESH_TOKEN`. Default quota allows about 6 uploads per day.
+4. Set `DRY_RUN=0` and start `./watch-all.sh` on a server that runs 24/7.
 
 ## Rule
 Clip, credit and link the streamer. Every clip gets a `.credit.txt`. Put it in your post.
