@@ -30,7 +30,7 @@ def edit(clip, hook, out):
     hookfile.write(wrap(hook.upper())); hookfile.close()
     srt = clip.rsplit(".", 1)[0] + ".srt"
 
-    f = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:3,eq=brightness=-0.15[bg];"
+    f = ("[0:v]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=8:2,eq=brightness=-0.15,scale=1080:1920[bg];"
          "[0:v]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2")
     if hook.strip():
         f += (f",drawtext=textfile='{esc(hookfile.name)}'" + (f":fontfile='{esc(font)}'" if font else "") +
@@ -42,7 +42,7 @@ def edit(clip, hook, out):
               "Alignment=2,MarginV=55'")
     f += "[v]"
     cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", clip, "-filter_complex", f,
-           "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+           "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out]
     try:
         subprocess.run(cmd, check=True)

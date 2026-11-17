@@ -31,6 +31,14 @@ def posted_today():
     lines = [l.rstrip("\n").split("\t") for l in open(POSTED, encoding="utf-8")]
     return {l[1] for l in lines if len(l) > 1}, sum(1 for l in lines if l[0].startswith(today))
 
+def read_handled(run):
+    p = os.path.join(run, "handled.txt")
+    return set(open(p).read().split()) if os.path.exists(p) else set()
+
+def mark_handled(run, key):
+    with open(os.path.join(run, "handled.txt"), "a") as f:
+        f.write(key + "\n")
+
 def main(run):
     threshold = int(os.environ.get("THRESHOLD", 75))
     max_day = int(os.environ.get("MAX_PER_DAY", 5))
@@ -41,13 +49,17 @@ def main(run):
     msgs = score.load_chat(os.path.join(run, "chat.log"))
     start = float(open(os.path.join(run, "start.txt")).read())
     done, today = posted_today()
+    handled = read_handled(run)
 
     rows = [l.rstrip("\n").split("\t") for l in open(os.path.join(run, "scores.tsv"), encoding="utf-8")][1:]
     for r in rows:
         s, label, clipname, sec = int(r[0]), r[1], r[2], int(r[3])
         clip = os.path.join(run, "clips", clipname)
-        key = os.path.abspath(clip)
-        if s < threshold or key in done or not os.path.exists(clip):
+        key = f"{os.path.abspath(run)}:{sec}"
+        if key in handled or not os.path.exists(clip):
+            continue
+        if s < threshold:
+            mark_handled(run, key)
             continue
         if today >= max_day:
             telegram.send(f"⏸ Tageslimit ({max_day}) erreicht, {name} {clipname} ({s}/100) nicht gepostet.")
@@ -74,6 +86,7 @@ def main(run):
             results.append("TikTok: kommt als Nächstes")
 
         telegram.send(f"🔥 {name}: {s}/100 ({label})\n„{title}“\n" + "\n".join(results), short)
+        mark_handled(run, key)
         if not dry:
             with open(POSTED, "a", encoding="utf-8") as f:
                 f.write(f"{datetime.datetime.now().isoformat(timespec='seconds')}\t{key}\t{s}\n")

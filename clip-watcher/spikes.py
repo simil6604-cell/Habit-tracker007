@@ -13,7 +13,9 @@ RATIO = 3.0       # spike = RATIO x trailing average
 MIN_MSGS = 8      # ignore tiny spikes (0 -> 2 messages is not a moment)
 COOLDOWN = 60     # seconds; merge spikes closer than this into one
 
-def main(path, start=None):
+def find_spikes(path, start=None, until=None):
+    """Liste von (sekunde_oder_unixzeit, anzahl, schnitt). until: nur fertige Zeitfenster vor dieser Unix-Zeit."""
+    out = []
     times = []
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -21,8 +23,10 @@ def main(path, start=None):
                 times.append(float(line.split("\t", 1)[0]))
             except ValueError:
                 pass
+    if until is not None:
+        times = [t for t in times if t < until // BIN * BIN]
     if not times:
-        return
+        return out
     t0 = int(min(times)) // BIN * BIN
     counts = [0] * ((int(max(times)) - t0) // BIN + 1)
     for t in times:
@@ -40,7 +44,12 @@ def main(path, start=None):
             when = t - start if start is not None else t
             if when < 0:
                 continue  # chat before recording began
-            print(f"{when:.0f}\t{c}\t(avg {avg:.1f})")
+            out.append((int(when), c, avg))
+    return out
+
+def main(path, start=None):
+    for when, c, avg in find_spikes(path, start):
+        print(f"{when}\t{c}\t(avg {avg:.1f})")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

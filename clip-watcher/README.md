@@ -7,12 +7,15 @@ Records a Twitch stream from the first second, logs chat anonymously, then clips
 
 ## Use
 ```bash
-./watch.sh kaicenat         # Twitch channel; waits until they go live
+./watch.sh kaicenat         # Twitch channel; waits until they go live, clips + posts LIVE
 ./watch.sh @IShowSpeed      # YouTube handle (needs: pip install chat-downloader)
-./clip.sh runs/NAME-...     # after the stream ends (or any time during it)
+./clip.sh runs/NAME-...     # optional: re-process a finished run
 ./watch-all.sh              # watch every channel in streamers.txt, clip after each stream
 ```
 Output: `runs/<run>/clips/NN-t<seconds>.mp4` and a `.credit.txt` with the channel link.
+
+## Live mode
+`watch.sh` starts `live.py` next to the recording. Every 10 s it looks for new chat spikes. As soon as the 15 s after a spike are recorded, it cuts the clip (`cut_one.sh`), transcribes, scores, edits to 9:16 and posts it, while the stream keeps running. In a test, a moment was posted about 45 s after it happened, plus whisper time (depends on the server).
 
 ## How it works
 1. `watch.sh` starts `chat.py` (IRC `irc.chat.twitch.tv:6667`, nick `justinfanNNNNN`, read-only, no token) and `streamlink ... --retry-streams 30`. It writes `start.txt` the moment the first video bytes arrive, so chat wall-clock times can be mapped to video offsets.
