@@ -95,9 +95,10 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   mark allocations and its diagrams. **It can also act in the app, not just
   answer**: tell it about a test with a date, work that has been set, or
   something you did not understand, and it adds the exam, the homework, the
-  flashcards or the logged gap itself. Ask for **something to listen to**
-  and it writes a podcast episode from your own material and hands back a
-  link in the chat that opens it, cued up on the podcast page — through six
+  flashcards or the logged gap itself. Ask it to **read you your notes**, or for
+  something to listen to, and it makes a podcast episode from your own
+  material and hands back a link in the chat that opens it, cued up on the
+  podcast page — through six
   tools it is given
   (`src/lib/school/ai-tools.ts`), each one scoped to your own account with
   no argument through which it could reach anyone else's, and each one
@@ -124,11 +125,26 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   messages only: an editable reply would be the app putting words in the AI's
   mouth and then reading them back to it as its own.
 
-  An episode is **two voices** — one explaining, one asking what you would
-  ask and getting it wrong the way people get it wrong — written to be heard
-  with your hands busy: a hook first, the question before the answer, the
+  An episode comes in **two kinds**, and the one it starts on is
+  **Read to me**: your own notes, read out by a single voice, topic by topic,
+  leaving nothing meaningful out — so listening really does replace reading
+  them. Your shorthand becomes sentences ("mito = ATP" is read as a
+  sentence, not as three words); anything you flagged as not understood is
+  answered rather than read back at you; your flashcards come as a question,
+  a beat, then the answer, so you can have a go while you walk. Type
+  something in the box — what you still want to know, or want to learn — and
+  it reads you that instead, filling in from its own knowledge where your
+  notes have nothing on it and saying plainly which part was not yours. It
+  reads your **recorded lessons** too, including the ones the school AI
+  recorded under a subject without a topic, which is where the longest notes
+  in this app live.
+
+  The other kind is **two voices** — one explaining, one asking what you would
+  ask and getting it wrong the way people get it wrong — for when the material
+  has not gone in yet: a hook first, the question before the answer, the
   common mistake said out loud, and each idea coming back twice more before
-  the end. On the device's own voices the two speakers really are two
+  the end. That one picks the two or three things that matter most and digs,
+  where the reading covers everything. On the device's own voices the two speakers really are two
   different voices (or the same one shifted, on a phone that has only one);
   with an ElevenLabs key they are two real ones, set with
   `ELEVENLABS_VOICE_ID` and `ELEVENLABS_VOICE_ID_B`. Episodes run

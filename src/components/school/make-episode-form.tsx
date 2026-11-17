@@ -1,13 +1,27 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { makePodcastEpisode, type PodcastState } from "@/lib/school/podcast-actions";
-import { describeSource, type PodcastSource } from "@/lib/school/podcast";
+import { describeSource, NEW_EPISODE_STYLE, type EpisodeStyle, type PodcastSource } from "@/lib/school/podcast";
+
+/**
+ * What each kind of episode is for, said in the words someone would use
+ * when deciding which one they want right now.
+ */
+const BLURB: Record<EpisodeStyle, string> = {
+  READING:
+    "Your own notes, read out to you by one voice — topic by topic, nothing left out, so listening to it replaces reading them. Anything you marked as not understood gets answered rather than read back at you, and your flashcards come as a question, a beat, then the answer. Type something in the box above and it reads you that instead: what you still want to know, or want to learn.",
+  CONVERSATION:
+    "Two voices, one explaining and one asking what you would ask — for when the material has not gone in yet. It picks the two or three things that matter most and digs, rather than touching everything. Name a topic and it stays on that one thing, and teaches it properly where your notes have nothing on it yet.",
+};
 
 export function MakeEpisodeForm({ sources }: { sources: PodcastSource[] }) {
   const [state, action, pending] = useActionState<PodcastState, FormData>(makePodcastEpisode, undefined);
+  // Which kind is selected, so the text under the form describes the thing
+  // that is actually about to be made rather than both at once.
+  const [style, setStyle] = useState<EpisodeStyle>(NEW_EPISODE_STYLE);
 
   return (
     <form action={action} className="flex flex-col gap-3" data-testid="make-episode">
@@ -26,12 +40,23 @@ export function MakeEpisodeForm({ sources }: { sources: PodcastSource[] }) {
         <input
           name="about"
           maxLength={120}
-          placeholder="About what? (optional — e.g. elasticity)"
+          placeholder="What do you want to hear? (optional — a topic, or what you still want to know)"
           aria-label="What the episode is about"
           // Its own line on a phone: three controls and a button in one row
           // squeezes the subject down to "Ec…".
           className="min-w-0 basis-full rounded-lg border border-border bg-surface px-3 py-2 text-sm sm:basis-auto sm:flex-1"
         />
+        <select
+          name="style"
+          value={style}
+          onChange={(event) => setStyle(event.target.value as EpisodeStyle)}
+          aria-label="What kind of episode"
+          data-testid="episode-style"
+          className="rounded-lg border border-border bg-surface px-2 py-2 text-sm"
+        >
+          <option value="READING">Read to me</option>
+          <option value="CONVERSATION">Two voices</option>
+        </select>
         <select
           name="minutes"
           defaultValue="5"
@@ -54,11 +79,8 @@ export function MakeEpisodeForm({ sources }: { sources: PodcastSource[] }) {
           <li key={source.subjectId}>{describeSource(source)}</li>
         ))}
       </ul>
-      <p className="text-xs text-muted">
-        Two voices, one explaining and one asking what you would ask — made to be listened to on the way somewhere,
-        not read. Built from the material listed above: your topics, your flashcards, and whatever you marked as not
-        understood, which is where it spends the most time. Name a topic and it stays on that one thing, and teaches
-        it properly where your notes have nothing on it yet.
+      <p className="text-xs text-muted" data-testid="episode-style-blurb">
+        {BLURB[style]} Built from the material listed above.
       </p>
 
       {state?.error && (

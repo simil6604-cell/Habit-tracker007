@@ -48,8 +48,9 @@ export default async function PodcastPage({
             <Headphones size={28} /> Podcast
           </h1>
           <p className="mt-1 text-muted">
-            Two voices talking through your own material — for the bus, the walk, the gym, or anywhere reading
-            isn&apos;t an option. Press <strong>Play all</strong> and it keeps going on its own.
+            Your own notes, read out to you — for the bus, the walk, the gym, or anywhere reading isn&apos;t an
+            option. Ask instead for <strong>two voices</strong> and it teaches the material rather than reading
+            it. Press <strong>Play all</strong> and it keeps going on its own.
           </p>
         </div>
         <Link href="/school/flashcards">
@@ -68,8 +69,8 @@ export default async function PodcastPage({
           ) : usable.length === 0 ? (
             <p className="text-sm text-muted">
               Nothing to make one from yet. Add a subject with a topic or two under School, photograph some
-              notes or make a few flashcards — an episode is written from your own material, never from
-              nothing.
+              notes, record a lesson or make a few flashcards — an episode is read from your own material,
+              never from nothing.
             </p>
           ) : (
             <MakeEpisodeForm sources={usable} />

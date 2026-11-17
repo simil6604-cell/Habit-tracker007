@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { EPISODE_LENGTHS, writeEpisode } from "./podcast-episode";
-import { formatLength } from "./podcast";
+import { formatLength, NEW_EPISODE_STYLE } from "./podcast";
 import {
   objectSchema,
   optionalString,
@@ -313,7 +313,7 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
     {
       name: "make_podcast",
       description:
-        `Write an audio episode from this student's own material and put it in their podcast page, where it can be played out loud. Use it whenever they ask for a podcast, for something to listen to, or for a way to revise without reading — on the bus, on a walk, when they are tired of looking at a screen. One subject per episode, and a topic if they named one. Lengths: ${EPISODE_LENGTHS.join(", ")} minutes. It takes a moment to write, so say in your reply that it is ready and that the link below plays it.`,
+        `Write an audio episode from this student's own material and put it in their podcast page, where it can be played out loud. Use it whenever they ask for a podcast, for something to listen to, for their notes to be read to them, or for any way to revise without reading — on the bus, on a walk, when they are tired of looking at a screen. One subject per episode, and a topic if they named one. Lengths: ${EPISODE_LENGTHS.join(", ")} minutes. It takes a moment to write, so say in your reply that it is ready and that the link below plays it.`,
       schema: objectSchema({
         subject: requiredString("The subject the episode is about, as the student calls it."),
         about: optionalString("The one thing the episode should be about, e.g. 'price elasticity of demand'. Null to cover what they have been working on across the subject."),
@@ -321,6 +321,9 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
           type: "integer",
           description: `How long, in minutes: ${EPISODE_LENGTHS.join(", ")}. Pick 5 unless they said how long they have. Long ones are for a session at the gym or a training; short ones for a walk.`,
         },
+        style: optionalString(
+          "Which kind. READING: one voice reading their own notes back to them, topic by topic, leaving nothing out — this is the default, and what they mean by 'read me my notes', 'summarise my notes', 'I want to listen instead of reading', or naming something they still want to know. CONVERSATION: two voices teaching it, one explaining and one asking what they would ask — only when they ask to have something explained, taught or made interesting rather than read. Null means READING."
+        ),
       }),
       async run(input) {
         const named = readString(input, "subject", 80);
@@ -335,6 +338,7 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
           subjectId: subject.id,
           minutes: Number(input.minutes),
           focus: readString(input, "about", 200),
+          style: readString(input, "style", 20) ?? NEW_EPISODE_STYLE,
         });
         if (!result.ok) return failed(result.error);
 
@@ -346,7 +350,9 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
           `[▶ Listen: ${episode.title} (${formatLength(episode.seconds)})](/school/podcast?play=${episode.id}#ep-${episode.id})`
         );
         return ok(
-          `Written. "${episode.title}" is ${formatLength(episode.seconds)} long and is on their podcast page — the link under your reply plays it. Tell them it is ready; do not write the script out in the chat.`
+          `Written. "${episode.title}" is ${formatLength(episode.seconds)} long, ${
+            episode.style === "READING" ? "their own notes read out by one voice" : "two voices talking it through"
+          }, and is on their podcast page — the link under your reply plays it. Tell them it is ready; do not write the script out in the chat.`
         );
       },
     },
