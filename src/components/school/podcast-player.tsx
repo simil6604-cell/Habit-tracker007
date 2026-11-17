@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Pause, Play, Square } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pause, Play, RotateCcw, RotateCw, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { utteranceForSpeaker, speechSupported } from "@/lib/ai/voice/speak";
-import { splitIntoSpokenPieces } from "@/lib/school/podcast";
+import { useWakeLock } from "@/lib/hooks/use-wake-lock";
+import {
+  formatClock,
+  pieceAtSecond,
+  pieceTimeline,
+  resumeIndex,
+  skipTo,
+  splitIntoSpokenPieces,
+  totalSpokenSeconds,
+} from "@/lib/school/podcast";
 
 /**
  * Plays an episode out loud, one piece at a time.
@@ -19,11 +28,29 @@ import { splitIntoSpokenPieces } from "@/lib/school/podcast";
  * not reachable — the same order the voice tutor uses, and for the same
  * reason: an episode that goes silent because a third party is down is
  * worse than one that sounds synthetic.
+ *
+ * It behaves like a voice recording, which is the thing it was asked to
+ * be. That is not cosmetic: speaking a piece at a time is an implementation
+ * detail, and a player that shows "7/41" and can only start at the
+ * beginning makes you live with that detail. So there is a clock, a bar you
+ * can drag to the middle of the episode, thirty seconds back and forward
+ * for the sentence you missed on a noisy bus, and it carries on where you
+ * stopped rather than starting again. Underneath it is still pieces: the
+ * bar is drawn from how long the words take to say, and the voice saying it
+ * has stopped is still what moves it on.
  */
+
+/** Thirty seconds, which is about the length of a thought gone past. */
+const SKIP_SECONDS = 30;
+
+/** Where the place you stopped is kept, per episode, on this device. */
+const resumeStore = (id: string) => `momentum.podcast.at.${id}`;
+
 export function PodcastPlayer({
   script,
   title,
   subtitle,
+  episodeId,
   autoPlay = false,
   onFinished,
 }: {
@@ -31,15 +58,24 @@ export function PodcastPlayer({
   title: string;
   /** What to show under the title on a lock screen. */
   subtitle?: string;
+  /** Which episode this is, so where you stopped can be kept for it. */
+  episodeId?: string;
   /** Starts by itself when the episode before it in the queue has finished. */
   autoPlay?: boolean;
   /** So a list can move on to the next episode without anyone touching the phone. */
   onFinished?: () => void;
 }) {
-  const pieces = splitIntoSpokenPieces(script);
+  const pieces = useMemo(() => splitIntoSpokenPieces(script), [script]);
+  const timeline = useMemo(() => pieceTimeline(pieces), [pieces]);
+  const total = totalSpokenSeconds(timeline);
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const [note, setNote] = useState<string | null>(null);
+  // Whether the browser's own voice is what is speaking. It is the one that
+  // a phone locking its screen silences, so that is when the screen is held
+  // awake — an audio file keeps playing in a pocket by itself.
+  const [browserVoiceInUse, setBrowserVoiceInUse] = useState(false);
+  useWakeLock(playing && browserVoiceInUse);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef<string | null>(null);
@@ -66,6 +102,43 @@ export function PodcastPlayer({
   };
 
   /*
+   * Where you stopped last time.
+   *
+   * Read after the first render rather than into the initial state: the
+   * server renders this page too and has no idea what is in a browser's
+   * storage, and a value that differs between the two is a hydration error
+   * rather than a convenience.
+   *
+   * Stored per episode and per device. It is a convenience, so every way it
+   * can fail — private mode, storage turned off, a value left over from a
+   * longer episode — ends up at the beginning rather than in an error.
+   */
+  useEffect(() => {
+    if (!episodeId) return;
+    try {
+      const stored = window.localStorage.getItem(resumeStore(episodeId));
+      const index = resumeIndex(stored, pieces.length);
+      if (index > 0) {
+        atRef.current = index;
+        setAt(index);
+      }
+    } catch {
+      // No storage here. It simply starts at the beginning.
+    }
+  }, [episodeId, pieces.length]);
+
+  /** Remembers the spot, or forgets it once the episode has been heard out. */
+  const remember = (index: number | null) => {
+    if (!episodeId) return;
+    try {
+      if (index === null || index <= 0) window.localStorage.removeItem(resumeStore(episodeId));
+      else window.localStorage.setItem(resumeStore(episodeId), String(index));
+    } catch {
+      // Storage refused. Nothing about playing depends on this.
+    }
+  };
+
+  /*
    * Started by the queue rather than by a press.
    *
    * Mobile browsers only allow sound that a tap asked for — but the tap
@@ -74,7 +147,7 @@ export function PodcastPlayer({
    */
   useEffect(() => {
     if (!autoPlay) return;
-    playFrom(0);
+    playFrom(atRef.current);
     // Only when this becomes the playing episode; playFrom is recreated on
     // every render and would restart it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,6 +192,11 @@ export function PodcastPlayer({
       media.setActionHandler("play", () => playFrom(atRef.current));
       media.setActionHandler("pause", () => pause());
       media.setActionHandler("stop", () => stop());
+      // The same thirty seconds as the buttons on the page, on the lock
+      // screen and on a headphone remote — which is where they are wanted,
+      // since the phone is in a pocket.
+      media.setActionHandler("seekbackward", () => skip(-SKIP_SECONDS));
+      media.setActionHandler("seekforward", () => skip(SKIP_SECONDS));
     } catch {
       // An older browser, or a handler it does not know. Nothing here is
       // required for the episode to play.
@@ -148,12 +226,20 @@ export function PodcastPlayer({
       if (index >= pieces.length) {
         setPlaying(false);
         setAt(0);
+        // Heard out, so there is no longer a place to carry on from.
+        remember(null);
         // The point of a queue: at the gym nobody is going to pick up the
         // phone between episodes.
         finishedRef.current?.();
         return;
       }
       setAt(index);
+      atRef.current = index;
+      // Written as it goes rather than only on pause: a tab closed on the
+      // bus, a phone that runs out of battery, and a browser that discards
+      // a backgrounded page all end an episode without anything being
+      // pressed.
+      remember(index);
 
       let moved = false;
       const next = () => {
@@ -175,6 +261,9 @@ export function PodcastPlayer({
         const utterance = utteranceForSpeaker(pieces[index].speaker, pieces[index].text, script);
         utterance.onend = next;
         utterance.onerror = next;
+        // This is the voice a locked phone silences, so from here on the
+        // screen is held awake while it plays.
+        setBrowserVoiceInUse(true);
         window.speechSynthesis.speak(utterance);
       };
 
@@ -198,6 +287,9 @@ export function PodcastPlayer({
               urlRef.current = url;
               element.onended = next;
               element.onerror = () => browserVoice();
+              // A real audio file: it keeps playing in a pocket with the
+              // screen off, so nothing has to be held awake for it.
+              setBrowserVoiceInUse(false);
               element.src = url;
               await element.play();
               return;
@@ -224,9 +316,30 @@ export function PodcastPlayer({
   const stop = () => {
     pause();
     setAt(0);
+    atRef.current = 0;
+    remember(null);
   };
 
-  const pct = pieces.length === 0 ? 0 : Math.round((at / pieces.length) * 100);
+  /**
+   * Moves to a point in the episode.
+   *
+   * Playing, it starts speaking from there, because a bar you drag while
+   * nothing happens is a bar that does not work. Paused, it only moves the
+   * mark — dragging must not start sound nobody asked for.
+   */
+  const goTo = (index: number) => {
+    const bounded = Math.max(0, Math.min(index, pieces.length - 1));
+    atRef.current = bounded;
+    setAt(bounded);
+    remember(bounded);
+    if (playing) playFrom(bounded);
+  };
+
+  /** Thirty seconds back or on, from wherever the voice has got to. */
+  const skip = (seconds: number) => goTo(skipTo(timeline, atRef.current, seconds));
+
+  const elapsed = timeline[at]?.start ?? 0;
+  const pct = total === 0 ? 0 : Math.round((elapsed / total) * 100);
 
   return (
     <div className="flex flex-col gap-2" data-testid="podcast-player">
@@ -245,6 +358,26 @@ export function PodcastPlayer({
         </button>
         <button
           type="button"
+          onClick={() => skip(-SKIP_SECONDS)}
+          disabled={at === 0}
+          aria-label={`Back ${SKIP_SECONDS} seconds in ${title}`}
+          data-testid="podcast-back"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-foreground disabled:opacity-40"
+        >
+          <RotateCcw size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={() => skip(SKIP_SECONDS)}
+          disabled={at >= pieces.length - 1}
+          aria-label={`Forward ${SKIP_SECONDS} seconds in ${title}`}
+          data-testid="podcast-forward"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-foreground disabled:opacity-40"
+        >
+          <RotateCw size={15} />
+        </button>
+        <button
+          type="button"
           onClick={stop}
           disabled={!playing && at === 0}
           aria-label={`Stop ${title}`}
@@ -252,13 +385,28 @@ export function PodcastPlayer({
         >
           <Square size={13} />
         </button>
-        <span className="min-w-0 flex-1">
-          <span className="block h-1.5 overflow-hidden rounded-full bg-surface-muted">
-            <span className="block h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-          </span>
-        </span>
+        {/* A real slider rather than a bar with a click handler: dragging,
+            arrow keys and a screen reader all come with it, and on a phone
+            the thumb is something you can actually catch. */}
+        <input
+          type="range"
+          min={0}
+          max={Math.max(0, total - 1)}
+          value={elapsed}
+          step={1}
+          onChange={(event) => goTo(pieceAtSecond(timeline, Number(event.target.value)))}
+          aria-label={`Position in ${title}`}
+          aria-valuetext={`${formatClock(elapsed)} of ${formatClock(total)}`}
+          data-testid="podcast-seek"
+          className="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-surface-muted accent-accent"
+          style={{
+            background: `linear-gradient(to right, var(--color-accent) ${pct}%, var(--color-surface-muted) ${pct}%)`,
+          }}
+        />
+        {/* A clock, like any voice recording: how far in, and how long it
+            is. "7/41" is this player's own plumbing showing through. */}
         <span className="shrink-0 text-xs tabular-nums text-muted" data-testid="podcast-progress">
-          {at + (playing ? 1 : 0)}/{pieces.length}
+          {formatClock(elapsed)} / {formatClock(total)}
         </span>
       </div>
       {note && <p className="text-xs text-muted">{note}</p>}

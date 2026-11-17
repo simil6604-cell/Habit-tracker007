@@ -104,6 +104,7 @@ export function PodcastEpisodes({ episodes, playId }: { episodes: Episode[]; pla
                 script={episode.script}
                 title={episode.title}
                 subtitle={episode.source}
+                episodeId={episode.id}
                 autoPlay={queueAt === index}
                 onFinished={() => {
                   // The end of the list is the end of the queue, not a loop

@@ -149,9 +149,17 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   with an ElevenLabs key they are two real ones, set with
   `ELEVENLABS_VOICE_ID` and `ELEVENLABS_VOICE_ID_B`. Episodes run
   3, 5, 10, 15 or 20 minutes — the long ones for a session at the gym or a
-  training, the short ones for a walk. **Play all** runs them back to back
-  without picking the phone up, and the lock screen
-  shows what is playing with a pause button on it. A podcast someone else
+  training, the short ones for a walk.
+
+  It plays **like a voice recording**, which is the point: a clock rather
+  than a piece count, a bar you drag to the middle of an episode, thirty
+  seconds back for the sentence a bus drowned out, and it carries on where
+  you stopped instead of starting again — on this device, per episode,
+  forgotten once you have heard the episode out. **Play all** runs them back
+  to back without picking the phone up, the lock screen shows what is
+  playing with pause and skip on it, and while the browser's own voice is
+  reading (the one a locking phone silences) the screen is held awake so an
+  episode does not stop in your pocket. A podcast someone else
   made can be saved under **Where you revise from** as a link like any
   other — this app never goes looking for those itself, because a list of
   addresses nobody checked is a list of broken links. Kept
