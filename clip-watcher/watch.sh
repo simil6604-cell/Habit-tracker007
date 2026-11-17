@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Usage: ./watch.sh CHANNEL        Twitch, z.B. ./watch.sh kaicenat
+# Usage: ./watch.sh CHANNEL [crop|blur]   Twitch, z.B. ./watch.sh kaicenat
+#        crop = Bild füllt Hochformat (IRL/Just Chatting), blur = ganzes Bild + unscharfer Rand (Gameplay)
 #        ./watch.sh @HANDLE        YouTube, z.B. ./watch.sh @IShowSpeed
 # Wartet, bis der Kanal live geht, nimmt auf, loggt den Chat und clippt + postet
 # jeden Moment schon während des Streams (live.py). Alles in runs/<name>-<datum>/.
 set -euo pipefail
-CH="${1:?usage: ./watch.sh CHANNEL | @YOUTUBE_HANDLE}"
+CH="${1:?usage: ./watch.sh CHANNEL | @YOUTUBE_HANDLE [crop|blur]}"
+LAYOUT_ARG="${2:-${LAYOUT:-crop}}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$HERE/config.env" ] && { set -a; . "$HERE/config.env"; set +a; }
 
@@ -20,7 +22,7 @@ fi
 
 RUN="$HERE/runs/$NAME-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$RUN"; cd "$RUN"
-echo "$NAME" > channel.txt; echo "$LINK" > link.txt
+echo "$NAME" > channel.txt; echo "$LINK" > link.txt; echo "$LAYOUT_ARG" > layout.txt
 
 "${CHAT_CMD[@]}" 2> chat.err &
 CHAT=$!

@@ -11,10 +11,10 @@ BIN = 10          # seconds per bin
 WINDOW = 30       # bins of history (30 x 10 s = 5 min)
 RATIO = 3.0       # spike = RATIO x trailing average
 MIN_MSGS = 8      # ignore tiny spikes (0 -> 2 messages is not a moment)
-LEAD = 25         # Sekunden vor dem Ausschlag (Chat reagiert verzögert)
-TAIL = 5          # Sekunden nach dem Ende der Chat-Reaktion
+LEAD = 15         # Sekunden vor dem Ausschlag (Chat reagiert ~5 s verzögert, kurzer Aufbau)
+TAIL = 3          # Sekunden nach dem Ende der Chat-Reaktion
 MIN_LEN = 30      # Clip mindestens so lang
-MAX_LEN = 90      # und höchstens so lang
+MAX_LEN = 60      # und höchstens so lang (30-60 s schneiden auf allen 3 Plattformen am besten ab)
 
 def find_spikes(path, start=None, until=None):
     """Liste von (sekunde, anzahl, schnitt, länge). sekunde = Beginn des Ausschlags

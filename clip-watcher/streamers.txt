@@ -1,3 +1,5 @@
 # Ein Kanal pro Zeile. Twitch: Name. YouTube: @Handle.
-kaicenat
-@IShowSpeed
+# Optional dahinter das Layout: crop (Bild füllt den Screen, für IRL/Just Chatting)
+#                              blur (ganzes Bild + unscharfer Rand, für Gameplay)
+kaicenat crop
+@IShowSpeed crop

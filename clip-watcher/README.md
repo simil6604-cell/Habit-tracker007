@@ -20,13 +20,15 @@ Output: `runs/<run>/clips/NN-t<seconds>.mp4` and a `.credit.txt` with the channe
 ## How it works
 1. `watch.sh` starts `chat.py` (IRC `irc.chat.twitch.tv:6667`, nick `justinfanNNNNN`, read-only, no token) and `streamlink ... --retry-streams 30`. It writes `start.txt` the moment the first video bytes arrive, so chat wall-clock times can be mapped to video offsets.
 2. `spikes.py` counts messages per 10 s and flags bins that are at least 3x the previous 5 minutes' average, with at least 8 messages. A spike while chat is still going wild counts as the same moment.
-3. Clip length follows the chat: from 25 s before the spike until 5 s after chat calms down, at least 30 s, at most 90 s (`MIN_LEN`/`MAX_LEN` in `spikes.py`). `cut_one.sh` cuts it, converts the audio to 16 kHz WAV for whisper and writes the `.srt` (burned in by `edit.py`).
+3. Clip length follows the chat: from 15 s before the spike until 3 s after chat calms down, at least 30 s, at most 60 s (30-60 s performs best on Shorts, TikTok and Reels) (`MIN_LEN`/`MAX_LEN` in `spikes.py`). `cut_one.sh` cuts it, converts the audio to 16 kHz WAV for whisper and writes the `.srt` (burned in by `edit.py`).
 
 4. `score.py` gives each clip a 0-100 virality estimate (chat spike, number of distinct chatters, reaction emotes, volume, speech in the first 3 s) and writes `scores.tsv`. Clips at or above `THRESHOLD` (default 75) are marked for posting. This is a heuristic, not a guarantee.
 
-5. `publish.py` (runs automatically after `clip.sh`) takes every clip at or above `THRESHOLD`, edits it to 9:16 (`edit.py`: blurred background, hook text from the most common chat reaction, big captions), uploads it to YouTube Shorts, TikTok and Instagram Reels (`PLATFORMS`) and sends you a Telegram message with the video. No confirmation needed. `MAX_PER_DAY` caps posts per day. `handled.txt` per run prevents double posts.
+5. `publish.py` (runs automatically after `clip.sh`) takes every clip at or above `THRESHOLD`, edits it to 9:16 (`edit.py`: layout `crop` fills the screen for IRL/Just Chatting, `blur` keeps the whole frame for gameplay; hook text in a box at the top; word-by-word captions with the current word highlighted; zoom punch at the peak; progress bar; credit; loudness normalised to -14 LUFS), uploads it to YouTube Shorts, TikTok and Instagram Reels (`PLATFORMS`) and sends you a Telegram message with the video. No confirmation needed. `MAX_PER_DAY` caps posts per day. `handled.txt` per run prevents double posts.
 
 Tune `BIN`, `WINDOW`, `RATIO`, `MIN_MSGS` and `COOLDOWN` at the top of `spikes.py`.
+
+Set the layout per channel in `streamers.txt` (`kaicenat crop`). Captions use the first installed font of Montserrat Black, Anton, Inter Black, Arial Black; install Montserrat on the server for the best look, or set `FONT=`.
 
 ## Setup (once)
 1. `cp config.env.example config.env`. Leave `DRY_RUN=1` until everything works.
