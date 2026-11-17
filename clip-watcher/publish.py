@@ -8,7 +8,7 @@ Einstellungen (Umgebungsvariablen, z.B. in config.env):
   DRY_RUN=1         nichts hochladen, nur anzeigen (Standard, bis du DRY_RUN=0 setzt)
   PLATFORMS=YouTube,TikTok,Instagram   wohin gepostet wird
 """
-import collections, datetime, os, re, sys
+import collections, datetime, os, random, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import edit, fx, instagram, score, spikes, telegram, tiktok, youtube
 
@@ -34,6 +34,15 @@ def posted_today():
     if not os.path.exists(POSTED): return set(), 0
     lines = [l.rstrip("\n").split("\t") for l in open(POSTED, encoding="utf-8")]
     return {l[1] for l in lines if len(l) > 1}, sum(1 for l in lines if l[0].startswith(today))
+
+def pick_music(platform):
+    """Zufälliger Track aus music/<Plattform>/ (z.B. music/YouTube/ mit Tracks aus der
+    YouTube-Audiomediathek). Ordner leer oder nicht da: keine Musik."""
+    d = os.path.join(os.environ.get("MUSIC_DIR", os.path.join(HERE, "music")), platform)
+    if not os.path.isdir(d):
+        return None
+    tracks = [os.path.join(d, f) for f in os.listdir(d) if f.lower().endswith((".mp3", ".wav", ".m4a", ".ogg"))]
+    return random.choice(tracks) if tracks else None
 
 def read_handled(run):
     p = os.path.join(run, "handled.txt")
@@ -77,8 +86,16 @@ def main(run):
         credit = link.replace("https://", "").replace("www.", "")
         reactions = [m[2] for m in msgs if start + sec - 5 <= m[0] < start + sec + 25]
         emoji = fx.peak_emoji(reactions)
-        short = edit.edit(clip, hook, clip.rsplit(".", 1)[0] + ".short.mp4", layout, peak, credit,
+        base = clip.rsplit(".", 1)[0]
+        short = edit.edit(clip, hook, base + ".short.mp4", layout, peak, credit,
                           peak_emoji=emoji, hook_emoji=emoji)
+        # Optional: eigene Version mit Hintergrundmusik pro Plattform, wenn in music/<Plattform>/ Tracks liegen
+        versions = {}
+        for pname in PLATFORMS:
+            track = pick_music(pname)
+            if track:
+                versions[pname] = edit.edit(clip, hook, f"{base}.{pname.lower()}.mp4", layout, peak, credit,
+                                            peak_emoji=emoji, hook_emoji=emoji, music=track)
         tag = re.sub(r"\W", "", name.lower())
         hook = "".join(ch for ch in hook if ord(ch) < 0x2600).strip() or "WAIT FOR IT"
         title = f"{hook.title()} {emoji} | {name}"
@@ -97,7 +114,7 @@ def main(run):
             if not mod.configured():
                 results.append(f"{pname}: nicht eingerichtet"); continue
             try:
-                results.append(f"{pname}: " + mod.upload(short, title, f"{desc} {extra}", tags))
+                results.append(f"{pname}: " + mod.upload(versions.get(pname, short), title, f"{desc} {extra}", tags))
             except Exception as e:
                 results.append(f"{pname}: Fehler {e}")
 

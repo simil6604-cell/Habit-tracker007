@@ -8,8 +8,9 @@ Usage: edit.py CLIP.mp4 "HOOK" [OUT.mp4] [--layout crop|blur] [--peak SEK] [--cr
   - Untertitel Wort für Wort (3 Wörter pro Zeile, aktuelles Wort gelb + größer).
   - Zoom-Punch beim Höhepunkt (--peak), Credit unter den Untertiteln.
   - Alle Texte außerhalb der Bereiche, die TikTok / Reels / Shorts überdecken.
-  - Farbige Emojis: im Hook, über Untertiteln bei passenden Wörtern, groß beim Höhepunkt.
+  - Farbige Emojis: im Hook und über den Untertiteln bei passenden Wörtern (nicht beim Höhepunkt).
   - Höhepunkt: Zoom, Wackeln, Blitz, Whoosh + Boom; Pop-Sound bei Emojis (eigene Sounds).
+  - Optional leise Hintergrundmusik (--music), die unter der Stimme wegduckt.
   - Ton auf -14 LUFS normalisiert (Plattform-Standard).
 """
 import argparse, os, re, shutil, subprocess, sys, tempfile
@@ -21,6 +22,7 @@ W, H, FPS = 1080, 1920, 30
 HOOK_TOP = 240          # Hook-Box oben, unter "Für dich / Folge ich" bzw. Reels-Kopfzeile
 CAP_BOTTOM = 600        # Untertitel: Abstand vom unteren Rand (unten liegen Name + Beschreibung)
 CREDIT_BOTTOM = 520     # Credit direkt unter den Untertiteln
+MUSIC_VOL = float(os.environ.get("MUSIC_VOLUME", 0.15))   # Hintergrundmusik relativ zur Stimme
 SIDE = 150              # links/rechts frei (rechts sind Like-/Kommentar-Buttons)
 FONTS = ["Montserrat Black", "Montserrat ExtraBold", "Anton", "Inter Display Black",
          "Inter Black", "Arial Black", "DejaVu Sans"]
@@ -124,7 +126,8 @@ def has_audio(path):
                           "-of", "csv=p=0", path], capture_output=True, text=True).stdout
     return bool(out.strip())
 
-def edit(clip, hook, out, layout="crop", peak=None, credit="", peak_emoji=None, hook_emoji=None, effects=True):
+def edit(clip, hook, out, layout="crop", peak=None, credit="", peak_emoji=None, hook_emoji=None, effects=True,
+         music=None):
     dur = duration(clip)
     font = pick_font()
     words = read_words(clip.rsplit(".", 1)[0] + ".srt")
@@ -184,24 +187,26 @@ def edit(clip, hook, out, layout="crop", peak=None, credit="", peak_emoji=None, 
             e = fx.word_emoji([w for _, _, w in g])
             if not e or used >= 6:
                 continue
-            if has_peak and peak_emoji and g[0][0] < peak + 1.6 and g[-1][1] > peak:
-                continue
+            if has_peak and g[0][0] < peak + 1.6 and g[-1][1] > peak:
+                continue   # beim Höhepunkt kein Emoji im Bild, da zählt die Reaktion
             p = fx.emoji_png(e, 150, os.path.join(tmp, f"w{used}.png"))
             if p:
                 start, end = g[0][0], g[-1][1] + 0.15
                 overlay(add(p), "(W-w)/2", H - CAP_BOTTOM - 420, start, end)
                 pops.append(start); used += 1
-        # Großes Emoji beim Höhepunkt mit "Pop" (klein -> groß -> normal)
-        if has_peak and peak_emoji:
-            a = peak
-            for size, s0, s1 in ((260, a, a + 0.06), (470, a + 0.06, a + 0.13), (410, a + 0.13, a + 1.6)):
-                p = fx.emoji_png(peak_emoji, size, os.path.join(tmp, f"peak{size}.png"))
-                if p:
-                    overlay(add(p), "(W-w)/2", f"{H - CAP_BOTTOM - 310}-h/2", s0, s1)
 
-    # ---- Ton: Original + Soundeffekte ----
+    # ---- Ton: Original + Soundeffekte (+ optional leise Hintergrundmusik) ----
     audio = has_audio(clip)
     af, mix = "", []
+    voice = "[0:a]"
+    if audio and music:
+        inputs.extend(["-stream_loop", "-1", "-i", music])
+        m = sum(1 for x in inputs if x == "-i") - 1
+        # Musik leise (ca. 15 % der Stimme) und duckt automatisch weg, sobald jemand spricht
+        af += (f"[0:a]asplit=2[vo][vs];[{m}:a]aresample=48000,aformat=channel_layouts=stereo,"
+               f"volume={MUSIC_VOL},afade=t=in:d=0.5,afade=t=out:st={max(dur-1.2,0):.2f}:d=1.2[mu];"
+               "[mu][vs]sidechaincompress=threshold=0.02:ratio=12:attack=10:release=450[md];")
+        voice = "[vo]"; mix.append("[md]")
     if use_fx and audio:
         snd = fx.sfx()
         events = [("pop", t, 0.6) for t in pops[:8]]
@@ -213,7 +218,7 @@ def edit(clip, hook, out, layout="crop", peak=None, credit="", peak_emoji=None, 
             af += f"[{idx}:a]adelay={ms}|{ms},volume={vol}[s{i}];"
             mix.append(f"[s{i}]")
     if mix:
-        af += f"[0:a]{''.join(mix)}amix=inputs={len(mix)+1}:normalize=0:duration=first,"
+        af += f"{voice}{''.join(mix)}amix=inputs={len(mix)+1}:normalize=0:duration=first,"
     elif audio:
         af += "[0:a]"
     if audio:
@@ -236,7 +241,7 @@ if __name__ == "__main__":
     ap.add_argument("--layout", default=os.environ.get("LAYOUT", "crop"), choices=["crop", "blur"])
     ap.add_argument("--peak", type=float); ap.add_argument("--credit", default="")
     ap.add_argument("--emoji", help="Emoji beim Höhepunkt, z.B. 😂"); ap.add_argument("--hook-emoji")
-    ap.add_argument("--no-effects", action="store_true")
+    ap.add_argument("--no-effects", action="store_true"); ap.add_argument("--music")
     a = ap.parse_args()
     print(edit(a.clip, a.hook, a.out or a.clip.rsplit(".", 1)[0] + ".short.mp4", a.layout, a.peak, a.credit,
-               a.emoji, a.hook_emoji or a.emoji, not a.no_effects))
+               a.emoji, a.hook_emoji or a.emoji, not a.no_effects, a.music))
