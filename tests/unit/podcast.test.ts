@@ -22,6 +22,12 @@ import {
   MAX_PIECE_CHARS,
   parseScript,
   splitIntoPieces,
+  pieceTimeline,
+  totalSpokenSeconds,
+  pieceAtSecond,
+  skipTo,
+  formatClock,
+  resumeIndex,
   type PodcastSource,
 } from "@/lib/school/podcast";
 
@@ -297,5 +303,82 @@ describe("which kind of episode", () => {
   it("has a name for each that says what you will hear", () => {
     expect(styleLabel("READING")).toBe("Read to me");
     expect(styleLabel("CONVERSATION")).toBe("Two voices");
+  });
+});
+
+describe("playing an episode like a recording", () => {
+  // A minute of speech, split so the arithmetic is checkable by eye.
+  const minute = (count: number) => ({ text: "word ".repeat(count).trim() });
+
+  it("lays the pieces out on a clock", () => {
+    const timeline = pieceTimeline([minute(WORDS_PER_MINUTE), minute(WORDS_PER_MINUTE / 2)]);
+    expect(timeline[0]).toEqual({ start: 0, seconds: 60 });
+    expect(timeline[1]).toEqual({ start: 60, seconds: 30 });
+    expect(totalSpokenSeconds(timeline)).toBe(90);
+    expect(totalSpokenSeconds([])).toBe(0);
+  });
+
+  it("gives even the shortest piece a second of its own", () => {
+    // Otherwise it rounds to zero: a point on the bar you can never land
+    // on, and two pieces that start at the same moment.
+    const timeline = pieceTimeline([{ text: "Right." }, { text: "So." }]);
+    expect(timeline[0].seconds).toBeGreaterThanOrEqual(1);
+    expect(timeline[1].start).toBeGreaterThan(timeline[0].start);
+  });
+
+  it("finds the piece under the point you dragged to", () => {
+    const timeline = pieceTimeline([minute(WORDS_PER_MINUTE), minute(WORDS_PER_MINUTE), minute(WORDS_PER_MINUTE)]);
+    expect(pieceAtSecond(timeline, 0)).toBe(0);
+    expect(pieceAtSecond(timeline, 59)).toBe(0);
+    expect(pieceAtSecond(timeline, 60)).toBe(1);
+    expect(pieceAtSecond(timeline, 150)).toBe(2);
+    // Dragged past the end, or to somewhere before the start.
+    expect(pieceAtSecond(timeline, 9_999)).toBe(2);
+    expect(pieceAtSecond(timeline, -20)).toBe(0);
+    expect(pieceAtSecond([], 30)).toBe(0);
+  });
+
+  it("always lands somewhere else when you press skip", () => {
+    // Each piece here takes about thirty seconds to say, which is also
+    // what the skip button jumps. Measured from the start of the piece
+    // that is playing, thirty seconds on is still inside it — so the
+    // button does nothing, twice, and reads as broken.
+    const halfMinute = minute(WORDS_PER_MINUTE / 2);
+    const timeline = pieceTimeline([halfMinute, halfMinute, halfMinute, halfMinute]);
+    expect(skipTo(timeline, 0, 30)).toBe(1);
+    expect(skipTo(timeline, 1, 30)).toBe(2);
+    expect(skipTo(timeline, 2, -30)).toBe(1);
+
+    // A bigger jump still goes as far as it was asked to.
+    expect(skipTo(timeline, 0, 90)).toBe(3);
+    expect(skipTo(timeline, 3, -90)).toBe(0);
+
+    // And it stops at the ends rather than running off them.
+    expect(skipTo(timeline, 3, 30)).toBe(3);
+    expect(skipTo(timeline, 0, -30)).toBe(0);
+    expect(skipTo([], 0, 30)).toBe(0);
+  });
+
+  it("shows a clock, not a rounded number of minutes", () => {
+    // formatLength says "4 min", which is right on a card and useless on a
+    // bar you are dragging.
+    expect(formatClock(0)).toBe("0:00");
+    expect(formatClock(7)).toBe("0:07");
+    expect(formatClock(272)).toBe("4:32");
+    expect(formatClock(1_085)).toBe("18:05");
+    expect(formatClock(-5)).toBe("0:00");
+  });
+
+  it("only carries on from a place this episode actually has", () => {
+    expect(resumeIndex("12", 41)).toBe(12);
+    expect(resumeIndex(0, 41)).toBe(0);
+    // Left over from an episode that was longer, or was deleted and the
+    // key reused — start again rather than jump to nowhere.
+    expect(resumeIndex("99", 41)).toBe(0);
+    expect(resumeIndex("-1", 41)).toBe(0);
+    expect(resumeIndex("3.5", 41)).toBe(0);
+    expect(resumeIndex("half way", 41)).toBe(0);
+    expect(resumeIndex(null, 41)).toBe(0);
+    expect(resumeIndex("0", 0)).toBe(0);
   });
 });

@@ -182,6 +182,98 @@ export function splitIntoSpokenPieces(script: string, limit: number = MAX_PIECE_
   );
 }
 
+/**
+ * Where each piece sits on a clock, so an episode can be scrubbed.
+ *
+ * Nothing here is a real audio file — the pieces are spoken one at a time
+ * as they come round — so there is no duration to read off anything. It is
+ * worked out from the words, at the same pace the length on the card is
+ * worked out from.
+ *
+ * That makes it an estimate, and an estimate is the right thing for what it
+ * is for: a bar you drag to somewhere in the middle, and a clock that says
+ * roughly how much is left while you walk. It is never used to decide when
+ * a piece has finished — that is the voice telling us it has stopped
+ * speaking.
+ */
+export type PieceTime = { start: number; seconds: number };
+
+export function pieceTimeline(pieces: { text: string }[]): PieceTime[] {
+  const timeline: PieceTime[] = [];
+  let start = 0;
+  for (const piece of pieces) {
+    // At least a second: a three-word piece that rounds to zero would be a
+    // point on the bar you can never land on.
+    const seconds = Math.max(1, Math.round((wordCount(piece.text) / WORDS_PER_MINUTE) * 60));
+    timeline.push({ start, seconds });
+    start += seconds;
+  }
+  return timeline;
+}
+
+export function totalSpokenSeconds(timeline: PieceTime[]): number {
+  const last = timeline[timeline.length - 1];
+  return last ? last.start + last.seconds : 0;
+}
+
+/** Which piece a point on the bar lands in. */
+export function pieceAtSecond(timeline: PieceTime[], second: number): number {
+  if (timeline.length === 0) return 0;
+  if (second <= 0) return 0;
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    if (second >= timeline[i].start) return i;
+  }
+  return 0;
+}
+
+/**
+ * A clock, the way a voice recording shows one: 0:07, 4:32, 18:05.
+ *
+ * Not formatLength, which says "4 min" — right on a card listing episodes,
+ * useless on a bar you are dragging, where the difference between 4:02 and
+ * 4:48 is the whole point.
+ */
+export function formatClock(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(whole / 60);
+  return `${minutes}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+/**
+ * Thirty seconds back, or on — landing somewhere you were not.
+ *
+ * The clock only knows where each piece starts, not how far into one the
+ * voice has got, so "thirty seconds on" from the start of a piece that
+ * takes thirty seconds to say lands in that same piece: you press it and
+ * nothing happens, twice, and conclude the button is broken.
+ *
+ * So a skip always moves at least one piece. That makes it approximate —
+ * it is a jump to roughly there, which is what a skip button is for — but
+ * never a no-op.
+ */
+export function skipTo(timeline: PieceTime[], index: number, seconds: number): number {
+  if (timeline.length === 0) return 0;
+  const last = timeline.length - 1;
+  const here = timeline[index]?.start ?? 0;
+  const target = pieceAtSecond(timeline, here + seconds);
+  if (seconds > 0) return Math.min(last, Math.max(target, index + 1));
+  if (seconds < 0) return Math.max(0, Math.min(target, index - 1));
+  return Math.max(0, Math.min(index, last));
+}
+
+/**
+ * Where to carry on from, out of whatever was left in the browser.
+ *
+ * Anything that is not a piece this episode actually has starts it again
+ * from the beginning: the stored value outlives the episode it was stored
+ * for, and a half-remembered position is worse than none.
+ */
+export function resumeIndex(raw: unknown, count: number): number {
+  const value = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : NaN;
+  if (!Number.isInteger(value) || value < 0 || value >= count) return 0;
+  return value;
+}
+
 export function splitIntoPieces(script: string, limit: number = MAX_PIECE_CHARS): string[] {
   // Split after . ! ? — and after a line break, which is how a paragraph
   // break arrives and is a real pause.
