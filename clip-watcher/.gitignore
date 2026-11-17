@@ -1,3 +1,4 @@
 runs/
 *.bin
 config.env
+__pycache__/
