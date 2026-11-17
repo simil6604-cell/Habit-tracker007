@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { ListMusic, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PodcastPlayer } from "./podcast-player";
-import { formatLength } from "@/lib/school/podcast";
+import { episodeStyle, formatLength, styleLabel } from "@/lib/school/podcast";
 import { deletePodcastEpisode } from "@/lib/school/podcast-actions";
 
 export type Episode = {
@@ -15,6 +15,8 @@ export type Episode = {
   script: string;
   seconds: number;
   createdAt: Date;
+  /** CONVERSATION or READING; anything else reads as a conversation. */
+  style: string;
 };
 
 /**
@@ -70,11 +72,15 @@ export function PodcastEpisodes({ episodes, playId }: { episodes: Episode[]; pla
             {playId === episode.id && queueAt === null && (
               <p className="mb-2 text-xs font-medium text-accent">Here it is — press play.</p>
             )}
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
+            {/* No wrapping: the bin belongs beside the title, not on a line
+                of its own under it, which is where it lands as soon as the
+                line under the title runs to two lines. */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{episode.title}</p>
                 <p className="text-xs text-muted">
-                  {episode.source} · {formatLength(episode.seconds)} · {format(episode.createdAt, "d MMM yyyy")}
+                  {styleLabel(episodeStyle(episode.style))} · {episode.source} · {formatLength(episode.seconds)} ·{" "}
+                  {format(episode.createdAt, "d MMM yyyy")}
                 </p>
               </div>
               <button
@@ -87,7 +93,7 @@ export function PodcastEpisodes({ episodes, playId }: { episodes: Episode[]; pla
                     setQueueAt(null);
                   })
                 }
-                className="text-muted transition hover:text-danger disabled:opacity-40"
+                className="shrink-0 text-muted transition hover:text-danger disabled:opacity-40"
               >
                 <Trash2 size={14} />
               </button>

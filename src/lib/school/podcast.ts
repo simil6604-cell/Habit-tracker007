@@ -26,6 +26,54 @@ export function episodeLength(raw: unknown): number {
   return (EPISODE_LENGTHS as readonly number[]).includes(minutes) ? minutes : DEFAULT_LENGTH;
 }
 
+/**
+ * What kind of episode this is.
+ *
+ * Two kinds, because they answer two different asks.
+ *
+ * CONVERSATION is the teaching one: two voices, a question before every
+ * answer, the common mistake said out loud. It is what you want when the
+ * material has not gone in yet.
+ *
+ * READING is the one asked for later and is simpler than it sounds — read
+ * me my own notes, so I can listen instead of reading them. One voice,
+ * going through what is actually written down, in order, said rather than
+ * performed. No second speaker asking what you would ask, because there is
+ * nothing to teach: you wrote this, you just have not got time to sit and
+ * read it.
+ *
+ * Stored on the row as a plain string so an episode written before this
+ * existed reads back as what it was — a conversation.
+ */
+export const EPISODE_STYLES = ["CONVERSATION", "READING"] as const;
+export type EpisodeStyle = (typeof EPISODE_STYLES)[number];
+export const DEFAULT_STYLE: EpisodeStyle = "CONVERSATION";
+
+/**
+ * What a NEW episode is, unless someone says otherwise — which is not the
+ * same fact as DEFAULT_STYLE above, and the difference matters.
+ *
+ * DEFAULT_STYLE is what an unknown stored value means when an episode is
+ * read back: every episode written before the second kind existed was a
+ * conversation, so that is what a missing style has to say.
+ *
+ * This is what the form and the chat start on when nobody has chosen, and
+ * it is the reading one, because that is the one that was asked for: read
+ * me my notes so I only have to listen. The two-voice episode is still
+ * there and is now the one you pick on purpose.
+ */
+export const NEW_EPISODE_STYLE: EpisodeStyle = "READING";
+
+export function episodeStyle(raw: unknown): EpisodeStyle {
+  const value = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+  return (EPISODE_STYLES as readonly string[]).includes(value) ? (value as EpisodeStyle) : DEFAULT_STYLE;
+}
+
+/** What to call it on screen. */
+export function styleLabel(style: EpisodeStyle): string {
+  return style === "READING" ? "Read to me" : "Two voices";
+}
+
 export const MIN_SCRIPT_CHARS = 120;
 
 /**
@@ -217,10 +265,23 @@ export type PodcastSource = {
   flashcards: number;
   notes: number;
   confusions: number;
+  /**
+   * Lessons recorded under this subject but not filed under a topic — the
+   * ones the school AI's recorder makes. The longest notes this app holds,
+   * and until they were counted here a subject could have hours of them and
+   * still be told there was nothing to make an episode from.
+   */
+  lessons: number;
 };
 
 export function hasMaterial(source: PodcastSource): boolean {
-  return source.topics.length > 0 || source.flashcards > 0 || source.notes > 0 || source.confusions > 0;
+  return (
+    source.topics.length > 0 ||
+    source.flashcards > 0 ||
+    source.notes > 0 ||
+    source.confusions > 0 ||
+    source.lessons > 0
+  );
 }
 
 export function describeSource(source: PodcastSource): string {
@@ -228,6 +289,7 @@ export function describeSource(source: PodcastSource): string {
   if (source.topics.length > 0) parts.push(source.topics.slice(0, 4).join(", "));
   if (source.flashcards > 0) parts.push(`${source.flashcards} flashcard${source.flashcards === 1 ? "" : "s"}`);
   if (source.notes > 0) parts.push(`${source.notes} note${source.notes === 1 ? "" : "s"}`);
+  if (source.lessons > 0) parts.push(`${source.lessons} lesson${source.lessons === 1 ? "" : "s"}`);
   if (source.confusions > 0) parts.push(`${source.confusions} thing${source.confusions === 1 ? "" : "s"} you flagged`);
   return parts.length > 0 ? `${source.subjectName} · ${parts.join(" · ")}` : source.subjectName;
 }

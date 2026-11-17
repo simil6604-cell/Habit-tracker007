@@ -3,6 +3,11 @@ import {
   EPISODE_LENGTHS,
   DEFAULT_LENGTH,
   episodeLength,
+  EPISODE_STYLES,
+  DEFAULT_STYLE,
+  NEW_EPISODE_STYLE,
+  episodeStyle,
+  styleLabel,
   MAX_SCRIPT_CHARS,
   WORDS_PER_MINUTE,
   parseDialogue,
@@ -27,6 +32,7 @@ const source = (over: Partial<PodcastSource> = {}): PodcastSource => ({
   flashcards: 0,
   notes: 0,
   confusions: 0,
+  lessons: 0,
   ...over,
 });
 
@@ -135,6 +141,16 @@ describe("what an episode can be made from", () => {
     expect(hasMaterial(source())).toBe(false);
     expect(hasMaterial(source({ flashcards: 3 }))).toBe(true);
     expect(hasMaterial(source({ topics: ["Cells"] }))).toBe(true);
+  });
+
+  it("counts a recorded lesson as material", () => {
+    // A lesson recorded from the school AI is filed under the subject and
+    // no topic. Before it was counted here, someone could have an hour of
+    // their own lesson notes in a subject and be told on the podcast page
+    // that there was nothing to make an episode from.
+    expect(hasMaterial(source({ lessons: 1 }))).toBe(true);
+    expect(describeSource(source({ lessons: 2 }))).toContain("2 lessons");
+    expect(describeSource(source({ lessons: 1 }))).toContain("1 lesson");
   });
 
   it("says what it will use, in words", () => {
@@ -246,5 +262,40 @@ describe("how long an episode may be", () => {
   it("estimates the length of a script it is given", () => {
     const twentyMinutes = "word ".repeat(20 * WORDS_PER_MINUTE);
     expect(Math.round(estimateSeconds(twentyMinutes) / 60)).toBe(20);
+  });
+});
+
+describe("which kind of episode", () => {
+  it("offers the one that reads your notes and the one that teaches them", () => {
+    expect(EPISODE_STYLES).toContain("READING");
+    expect(EPISODE_STYLES).toContain("CONVERSATION");
+  });
+
+  it("reads back anything it does not know as the two-voice kind", () => {
+    // An episode written before the reading kind existed has no style
+    // stored at all, and it was a conversation — so that, and not a crash
+    // or a blank label, is what an unknown value has to mean.
+    expect(episodeStyle("READING")).toBe("READING");
+    expect(episodeStyle("reading")).toBe("READING");
+    expect(episodeStyle(" Reading ")).toBe("READING");
+    expect(episodeStyle(undefined)).toBe(DEFAULT_STYLE);
+    expect(episodeStyle("")).toBe(DEFAULT_STYLE);
+    expect(episodeStyle("PODCAST")).toBe(DEFAULT_STYLE);
+    expect(episodeStyle(7)).toBe(DEFAULT_STYLE);
+    expect(DEFAULT_STYLE).toBe("CONVERSATION");
+  });
+
+  it("starts a new one on the reading kind, and reads an old one as a conversation", () => {
+    // Two different facts that look like one. What a new episode is when
+    // nobody chose: the reading, because that is what was asked for. What
+    // a missing style on a stored row means: a conversation, because every
+    // episode written before this existed was one.
+    expect(NEW_EPISODE_STYLE).toBe("READING");
+    expect(DEFAULT_STYLE).toBe("CONVERSATION");
+  });
+
+  it("has a name for each that says what you will hear", () => {
+    expect(styleLabel("READING")).toBe("Read to me");
+    expect(styleLabel("CONVERSATION")).toBe("Two voices");
   });
 });

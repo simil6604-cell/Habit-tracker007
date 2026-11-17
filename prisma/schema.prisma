@@ -985,6 +985,10 @@ model PodcastEpisode {
   script    String
   // Roughly how long it takes to say, from the word count.
   seconds   Int
+  // CONVERSATION (two voices, the teaching kind) | READING (one voice,
+  // their own notes read back to them). Defaulted so every episode written
+  // before the second kind existed still reads as what it was.
+  style     String   @default("CONVERSATION")
   subjectId String?
   subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())

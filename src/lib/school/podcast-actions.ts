@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { isRealAIConfigured } from "@/lib/ai/provider";
-import { writeEpisode, episodeLength } from "./podcast-episode";
+import { writeEpisode, episodeLength, episodeStyle } from "./podcast-episode";
 import { type PodcastSource } from "./podcast";
 
 async function requireUserId() {
@@ -29,7 +29,10 @@ export async function podcastSources(): Promise<PodcastSource[]> {
           _count: { select: { learningLog: true, notePhotos: true } },
         },
       },
-      _count: { select: { flashcards: true } },
+      // Lessons recorded against the subject with no topic — see
+      // PodcastSource.lessons. Counted here so a subject whose whole record
+      // is recorded lessons is not reported as having nothing.
+      _count: { select: { flashcards: true, classRecordings: true } },
     },
   });
 
@@ -40,6 +43,7 @@ export async function podcastSources(): Promise<PodcastSource[]> {
     flashcards: subject._count.flashcards,
     notes: subject.topics.reduce((sum, topic) => sum + topic._count.notePhotos, 0),
     confusions: subject.topics.reduce((sum, topic) => sum + topic._count.learningLog, 0),
+    lessons: subject._count.classRecordings,
   }));
 }
 
@@ -59,6 +63,7 @@ export async function makePodcastEpisode(_prev: PodcastState, formData: FormData
     subjectId: String(formData.get("subjectId") ?? ""),
     minutes: episodeLength(formData.get("minutes")),
     focus: about || null,
+    style: episodeStyle(formData.get("style")),
   });
   if (!result.ok) return { error: result.error };
 

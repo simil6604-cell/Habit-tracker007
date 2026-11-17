@@ -41,7 +41,7 @@ function creator(model: string) {
 const written: { userId: string; options: Record<string, unknown> }[] = [];
 let episodeResult: unknown = {
   ok: true,
-  episode: { id: "ep-1", title: "Economics: elasticity", seconds: 185, subjectName: "Economics" },
+  episode: { id: "ep-1", title: "Economics: elasticity", seconds: 185, subjectName: "Economics", style: "READING" },
 };
 
 vi.mock("@/lib/school/podcast-episode", async (importOriginal) => {
@@ -304,7 +304,7 @@ describe("making a podcast", () => {
     written.length = 0;
     episodeResult = {
       ok: true,
-      episode: { id: "ep-1", title: "Economics: elasticity", seconds: 185, subjectName: "Economics" },
+      episode: { id: "ep-1", title: "Economics: elasticity", seconds: 185, subjectName: "Economics", style: "READING" },
     };
     subjects = [{ id: "sub-eco", name: "Economics" }];
   });
@@ -315,6 +315,7 @@ describe("making a podcast", () => {
       subject: "economics",
       about: "price elasticity of demand",
       minutes: 3,
+      style: null,
     });
 
     expect(outcome.ok).toBe(true);
@@ -325,6 +326,19 @@ describe("making a podcast", () => {
       minutes: 3,
       focus: "price elasticity of demand",
     });
+  });
+
+  it("reads their notes out unless they asked to be taught", async () => {
+    // Asked for in the chat the way it is actually asked for — "lies mir
+    // meine Notizen vor" — the kind that gets made has to be the reading
+    // one. Left unsaid, that is also what they get: the two-voice episode
+    // is the one you ask for on purpose.
+    const { byName } = toolSet();
+    await byName("make_podcast").run({ subject: "Economics", about: null, minutes: 5, style: null });
+    expect(written[0].options.style).toBe("READING");
+
+    await byName("make_podcast").run({ subject: "Economics", about: null, minutes: 5, style: "CONVERSATION" });
+    expect(written[1].options.style).toBe("CONVERSATION");
   });
 
   it("hands back a link that plays it, not directions to go and find it", async () => {
