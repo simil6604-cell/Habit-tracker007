@@ -7,8 +7,10 @@ Records a Twitch stream from the first second, logs chat anonymously, then clips
 
 ## Use
 ```bash
-./watch.sh CHANNEL          # leave running overnight; waits until they go live
-./clip.sh runs/CHANNEL-...  # after the stream ends (or any time during it)
+./watch.sh kaicenat         # Twitch channel; waits until they go live
+./watch.sh @IShowSpeed      # YouTube handle (needs: pip install chat-downloader)
+./clip.sh runs/NAME-...     # after the stream ends (or any time during it)
+./watch-all.sh              # watch every channel in streamers.txt, clip after each stream
 ```
 Output: `runs/<run>/clips/NN-t<seconds>.mp4` and a `.credit.txt` with the channel link.
 

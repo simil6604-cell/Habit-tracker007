@@ -9,6 +9,7 @@ cd "$RUN"
 [ -f start.txt ] || { echo "no start.txt: stream never went live?"; exit 1; }
 mkdir -p clips
 CH="$(cat channel.txt 2>/dev/null || echo unknown)"
+LINK="$(cat link.txt 2>/dev/null || echo "https://twitch.tv/$CH")"
 
 python3 "$HERE/spikes.py" chat.log "$(cat start.txt)" | tee spikes.txt
 n=0
@@ -29,7 +30,7 @@ while IFS=$'\t' read -r sec count _; do
     echo "   (whisper-cli or model missing: keeping uncaptioned clip)"
     mv "$base.raw.mp4" "$base.mp4"
   fi
-  printf 'Clip from https://twitch.tv/%s (all credit to %s)\n' "$CH" "$CH" > "$base.credit.txt"
+  printf 'Clip from %s (all credit to %s)\n' "$LINK" "$CH" > "$base.credit.txt"
 done < spikes.txt
 echo "Done: $n clips in $RUN/clips"
 echo "== Viral-Prognose"
