@@ -1,9 +1,0 @@
-runs/
-*.bin
-config.env
-__pycache__/
-assets/
-music/**/*.mp3
-music/**/*.wav
-music/**/*.m4a
-music/**/*.ogg
