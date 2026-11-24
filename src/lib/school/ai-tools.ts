@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { EPISODE_LENGTHS, writeEpisode } from "./podcast-episode";
 import { formatLength, NEW_EPISODE_STYLE } from "./podcast";
+import { buildExamPlan } from "./exam-plan-build";
 import {
   objectSchema,
   optionalString,
@@ -65,8 +66,44 @@ async function findSubject(userId: string, name: string | null) {
     subjects.find((s) => s.name.toLowerCase() === wanted) ??
     subjects.find((s) => s.name.toLowerCase().startsWith(wanted)) ??
     subjects.find((s) => s.name.toLowerCase().includes(wanted) || wanted.includes(s.name.toLowerCase())) ??
-    null;
+    byStem(subjects, wanted);
   return { subject, subjects };
+}
+
+/** Letters and digits only: "Mathematics (HL)" and "mathematics" differ by punctuation, not by subject. */
+function stem(name: string): string {
+  return name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function sharedPrefix(a: string, b: string): number {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+}
+
+/**
+ * The last resort: two names that start the same way.
+ *
+ * The comment above has always claimed that "maths", "Maths" and
+ * "Mathematics" are the same subject to the person typing. They were not:
+ * "maths" is not a prefix of "mathematics" and does not contain it, so
+ * every tool answered "No subject called maths" to a student who has one.
+ * German makes it worse — "Mathe", "Bio", "Franz" are what anyone here
+ * actually types.
+ *
+ * So four shared letters, and most of the shorter name, counts. Only when
+ * exactly one subject qualifies: two that both start "Phys" is a question,
+ * not a guess, and the caller already answers it by listing the subjects
+ * this student takes.
+ */
+function byStem(subjects: { id: string; name: string }[], wanted: string): { id: string; name: string } | null {
+  const target = stem(wanted);
+  if (target.length < 4) return null;
+  const close = subjects.filter((s) => {
+    const shared = sharedPrefix(stem(s.name), target);
+    return shared >= 4 && shared >= Math.min(stem(s.name).length, target.length) * 0.6;
+  });
+  return close.length === 1 ? close[0] : null;
 }
 
 function subjectList(subjects: { name: string }[]): string {
@@ -308,6 +345,77 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
         });
         record(`${subject.name} · ${topic.name}: ${topic.progressPct}% → ${percent}%`);
         return ok(`Updated. ${subject.name} · ${topic.name} now reads ${percent}% (it was ${topic.progressPct}%).`);
+      },
+    },
+    {
+      name: "make_study_plan",
+      description:
+        "Build the day-by-day run-up to one of the student's exams and put it in their app, where each day can be ticked off and how ready they feel can be tracked. Use it whenever they ask for a study plan, a revision plan, a Lernplan, or help working out what to do between now and a test. It plans from their own topics, weakest first, with rest days and a review-only last day. The exam has to be on their list first: if the one they mean is not there, call add_exam and then this. One plan per exam — asked again for the same one, it hands back the plan they already have rather than a second.",
+      schema: objectSchema({
+        exam: optionalString("Which exam, as the student calls it, e.g. 'Biology Paper 2' or 'the maths mock'. Null to use the soonest one coming up, or the soonest in the subject below."),
+        subject: optionalString("The subject, as the student calls it. Narrows which exam is meant, and on its own picks the soonest exam in that subject. Null if they did not say."),
+        brief: optionalString("What they said about it in their own words — what they are weakest at, how much time they have in the evenings, what the teacher said it covers. This is what makes the plan theirs rather than generic, so pass it through whenever they gave you anything. Null if they said nothing."),
+      }),
+      async run(input) {
+        const named = readString(input, "subject", 80);
+        const { subject, subjects } = await findSubject(userId, named);
+        if (named && !subject) {
+          return failed(`No subject called "${named}". This student takes: ${subjectList(subjects)}. Try one of those, or send null.`);
+        }
+
+        // Only exams still ahead: a plan is the days between now and the
+        // paper, and there are none for one that has been sat.
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const exams = await prisma.exam.findMany({
+          where: { userId, date: { gt: today }, ...(subject ? { subjectId: subject.id } : {}) },
+          orderBy: { date: "asc" },
+          take: 20,
+          select: { id: true, title: true, date: true, subject: { select: { name: true } } },
+        });
+        if (exams.length === 0) {
+          return failed(
+            subject
+              ? `No exam coming up in ${subject.name}. Add it with add_exam first — a plan is the days between now and the paper, so it needs the date.`
+              : "No exams coming up at all. Add the one they mean with add_exam first — a plan is the days between now and the paper, so it needs the date."
+          );
+        }
+
+        // Named or not: a name narrows, and the soonest wins otherwise,
+        // which is almost always the one they are worried about.
+        const wantedName = readString(input, "exam", 120);
+        let exam = exams[0];
+        if (wantedName) {
+          const wanted = wantedName.toLowerCase();
+          const match =
+            exams.find((e) => e.title.toLowerCase() === wanted) ??
+            exams.find((e) => e.title.toLowerCase().includes(wanted) || wanted.includes(e.title.toLowerCase())) ??
+            exams.find((e) => (e.subject?.name ?? "").toLowerCase().includes(wanted)) ??
+            null;
+          if (!match) {
+            const list = exams.map((e) => `${e.title} (${dayLabel(e.date)})`).join(", ");
+            return failed(`No exam called "${wantedName}" coming up. They have: ${list}. Use one of those names, or add it with add_exam.`);
+          }
+          exam = match;
+        }
+
+        const result = await buildExamPlan(userId, { examId: exam.id, brief: readString(input, "brief", 500) });
+        if (!result.ok) return failed(result.error);
+
+        const { plan } = result;
+        const where = plan.subjectName ? ` (${plan.subjectName})` : "";
+        // A link, not directions: the plan is a page with a day to tick off
+        // on it, and a plan nobody opens is a plan nobody follows.
+        record(
+          `[📅 ${plan.alreadyExisted ? "Your plan" : "New plan"}: ${plan.title} — ${plan.dayCount} day${plan.dayCount === 1 ? "" : "s"} to ${dayLabel(plan.examDate)}](/school/plan/${plan.planId})`
+        );
+        return plan.alreadyExisted
+          ? ok(
+              `There was already a plan for "${plan.title}"${where} — ${plan.dayCount} days up to ${dayLabel(plan.examDate)} — so that one is unchanged and the link under your reply opens it. Tell them it is already there; if they want a different one they can archive it on that page first.`
+            )
+          : ok(
+              `Built. "${plan.title}"${where} now has a ${plan.dayCount}-day run-up to ${dayLabel(plan.examDate)}, weakest topics first, with rest days and a review-only last day. The link under your reply opens it. Tell them it is ready and say what the first day or two is; do not write the whole plan out in the chat.`
+            );
       },
     },
     {

@@ -4,16 +4,7 @@ import { revalidatePath } from "next/cache";
 import { format, startOfDay } from "date-fns";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
-import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
-import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
-import {
-  fallbackPlan,
-  parsePlan,
-  planDates,
-  planPrompt,
-  type PlanDay,
-  type WeakTopic,
-} from "./exam-plan";
+import { buildExamPlan } from "./exam-plan-build";
 
 async function requireUserId() {
   const session = await auth();
@@ -24,77 +15,19 @@ async function requireUserId() {
 export type CreatePlanResult = { planId?: string; error?: string };
 
 /**
- * Builds the run-up to one exam and stores it.
+ * The planner's button, over the same builder the school AI uses.
  *
- * The AI writes the days when a key is configured; without one, the rule-based
- * plan runs on the student's own topics and weakest-first ordering. Either way
- * a full plan comes back — "no AI, no plan" would make the feature a wrapper
- * around a key rather than a thing the app does.
+ * The work itself lives in exam-plan-build.ts, because the tutor can be
+ * asked for a plan in the chat and must do exactly the same thing.
  */
 export async function createExamPlan(examId: string, brief?: string): Promise<CreatePlanResult> {
   const userId = await requireUserId();
-
-  const exam = await prisma.exam.findFirst({
-    where: { id: examId, userId },
-    include: { subject: { include: { topics: true } } },
-  });
-  if (!exam) return { error: "That exam isn't on your list." };
-
-  const dates = planDates(new Date(), exam.date);
-  if (dates.length === 0) {
-    return { error: "That exam is today or in the past — there are no days left to plan." };
-  }
-
-  const existing = await prisma.examPlan.findFirst({ where: { userId, examId, archivedAt: null } });
-  if (existing) return { planId: existing.id };
-
-  const subjectName = exam.subject?.name ?? "This subject";
-  const topics: WeakTopic[] = (exam.subject?.topics ?? [])
-    .map((t) => ({ name: t.name, progressPct: t.progressPct }))
-    .sort((a, b) => a.progressPct - b.progressPct)
-    .slice(0, 20);
-
-  const trimmedBrief = (brief ?? "").trim().slice(0, 500) || null;
-  const base = fallbackPlan(dates, topics, subjectName);
-  let days: PlanDay[] = base;
-
-  if (isRealAIConfigured) {
-    try {
-      const school = await prisma.school.findUnique({ where: { userId } });
-      const system = buildAcademicSystemPrompt(school?.educationSystem, exam.subject);
-      const reply = await getAIProvider().generate(
-        planPrompt(subjectName, exam.title, exam.date, dates, topics, trimmedBrief),
-        { system, maxTokens: 4000 }
-      );
-      days = parsePlan(reply, dates, base);
-    } catch {
-      // A plan built from their own topics beats no plan and an error message.
-      days = base;
-    }
-  }
-
-  const plan = await prisma.examPlan.create({
-    data: {
-      userId,
-      examId: exam.id,
-      subjectId: exam.subjectId,
-      title: exam.title,
-      examDate: exam.date,
-      brief: trimmedBrief,
-      days: {
-        create: days.map((day) => ({
-          date: startOfDay(day.date),
-          focus: day.focus,
-          detail: day.detail ?? null,
-          minutes: day.minutes,
-        })),
-      },
-    },
-  });
+  const result = await buildExamPlan(userId, { examId, brief });
+  if (!result.ok) return { error: result.error };
 
   revalidatePath("/school");
-  revalidatePath("/school");
-  return { planId: plan.id };
+  revalidatePath("/school/planner");
+  return { planId: result.plan.planId };
 }
 
 export async function toggleExamPlanDay(planId: string, dayId: string): Promise<void> {

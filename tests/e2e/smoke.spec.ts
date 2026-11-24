@@ -2238,8 +2238,26 @@ test.describe.serial("full app walkthrough", () => {
     await expect(workout).toContainText("4 × 8");
     await expect(workout).toContainText("60 kg");
 
-    // A weekly plan is on every one of its weekdays this month, not once.
-    expect(await page.locator('[data-testid^="plan-item-workout:"]').count()).toBeGreaterThan(1);
+    // A weekly plan is on every one of its weekdays this month, not once —
+    // and not on the ones before it was written down, which would score as
+    // days you failed to train.
+    //
+    // Counted, rather than asserted as "more than one". A plan made on the
+    // 24th of a thirty-day month has exactly one of its weekday left in
+    // that month, so "more than one" was a test that went red for the last
+    // week of every month while saying nothing about the rule it is here
+    // to protect.
+    const sameWeekdaysIn = (year: number, monthIndex: number, fromDay: number) => {
+      const last = new Date(year, monthIndex + 1, 0).getDate();
+      let count = 0;
+      for (let d = fromDay; d <= last; d++) {
+        if (new Date(year, monthIndex, d).getDay() === todayLocal.getDay()) count++;
+      }
+      return count;
+    };
+    expect(await page.locator('[data-testid^="plan-item-workout:"]').count()).toBe(
+      sameWeekdaysIn(todayLocal.getFullYear(), todayLocal.getMonth(), todayLocal.getDate())
+    );
 
     // Football brings the match along with where to be.
     const matchRow = page.locator('[data-testid^="plan-item-match:"]').first();
@@ -2286,10 +2304,21 @@ test.describe.serial("full app walkthrough", () => {
     await expect(page.getByTestId("plan-counts")).toContainText("1 done");
     await expect(page.getByTestId("plan-counts")).toContainText("1 missed");
 
-    // Marking the FIRST of the weekly workouts must not mark the rest: the
+    // Marking one day of the weekly workout must not mark the rest: the
     // mark belongs to the day, not to the plan.
+    //
+    // Checked on next month, where that weekday always comes round four or
+    // five times. In the current month it may not come round again at all —
+    // on the 24th of a thirty-day month there is one left, the one just
+    // marked — and "the other weeks" would be a claim about nothing.
+    const next = new Date(todayLocal.getFullYear(), todayLocal.getMonth() + 1, 1);
+    const nextParam = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+    await page.goto(`/tasks?month=${nextParam}`);
     const laterWorkouts = page.locator('[data-testid^="plan-item-workout:"][data-state="OPEN"]');
-    expect(await laterWorkouts.count(), "the other weeks are untouched").toBeGreaterThan(0);
+    expect(await laterWorkouts.count(), "the other weeks are untouched").toBe(
+      sameWeekdaysIn(next.getFullYear(), next.getMonth(), 1)
+    );
+    await page.goto("/tasks");
 
     // A mis-tap can be taken back.
     await missed.getByRole("button", { name: /^Undo/ }).click();

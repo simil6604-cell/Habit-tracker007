@@ -21,6 +21,8 @@ const created: Record<string, Row[]> = {};
 const updated: { model: string; where: Row; data: Row }[] = [];
 
 let subjects: { id: string; name: string }[] = [];
+type ExamRow = { id: string; title: string; date: Date; subjectId: string | null; subject: { name: string } | null };
+let exams: ExamRow[] = [];
 let topics: { id: string; name: string; progressPct: number }[] = [];
 const seen: { model: string; where: unknown }[] = [];
 
@@ -55,6 +57,33 @@ vi.mock("@/lib/school/podcast-episode", async (importOriginal) => {
   };
 });
 
+/**
+ * The plan builder, stubbed.
+ *
+ * What the tool is responsible for is working out WHICH exam is meant and
+ * passing the student's own words through — not building the run-up, which
+ * has its own module and is shared with the planner's own button.
+ */
+const planned: { userId: string; options: Record<string, unknown> }[] = [];
+let planResult: unknown = {
+  ok: true,
+  plan: {
+    planId: "plan-1",
+    title: "Biology Paper 2",
+    examDate: new Date("2026-03-12T00:00:00Z"),
+    dayCount: 9,
+    subjectName: "Biology",
+    alreadyExisted: false,
+  },
+};
+
+vi.mock("@/lib/school/exam-plan-build", () => ({
+  buildExamPlan: vi.fn(async (userId: string, options: Record<string, unknown>) => {
+    planned.push({ userId, options });
+    return planResult;
+  }),
+}));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     subject: {
@@ -74,7 +103,14 @@ vi.mock("@/lib/db/prisma", () => ({
       }),
     },
     homework: { create: creator("homework") },
-    exam: { create: creator("exam") },
+    exam: {
+      create: creator("exam"),
+      findMany: vi.fn(async ({ where }: { where: Row }) => {
+        seen.push({ model: "exam", where });
+        const subjectId = where.subjectId;
+        return typeof subjectId === "string" ? exams.filter((e) => e.subjectId === subjectId) : exams;
+      }),
+    },
     flashcard: { create: creator("flashcard") },
     learningLogEntry: { create: creator("learningLogEntry") },
   },
@@ -97,6 +133,7 @@ beforeEach(() => {
     { id: "sub-math", name: "Mathematics" },
   ];
   topics = [{ id: "top-osm", name: "Osmosis", progressPct: 30 }];
+  exams = [];
 });
 
 describe("adding homework", () => {
@@ -296,6 +333,179 @@ describe("rating a topic", () => {
     const { byName } = toolSet();
     await byName("rate_topic").run({ subject: "Biology", topic: "Osmosis", percent: 64.6, why: null });
     expect(updated[0].data.progressPct).toBe(65);
+  });
+});
+
+describe("which subject they meant", () => {
+  beforeEach(() => {
+    subjects = [
+      { id: "sub-bio", name: "Biology" },
+      { id: "sub-math", name: "Mathematics" },
+      { id: "sub-eng", name: "English Language" },
+    ];
+  });
+
+  const addFor = async (named: string) => {
+    const { byName } = toolSet();
+    const outcome = await byName("add_homework").run({
+      title: "Past paper",
+      subject: named,
+      due_date: "2026-12-01",
+      detail: null,
+    });
+    return { outcome, row: created.homework?.[0] };
+  };
+
+  it("takes the short name everybody actually types", async () => {
+    // These all used to come back "No subject called maths" — not a prefix
+    // of "mathematics" and not contained in it — while the comment over
+    // the matcher promised the opposite. German is where it bites: Mathe,
+    // Bio, Franz are what gets typed here.
+    for (const named of ["maths", "Maths", "mathe", "Mathematik"]) {
+      for (const key of Object.keys(created)) delete created[key];
+      const { outcome, row } = await addFor(named);
+      expect(outcome.ok, named).toBe(true);
+      expect(row?.subjectId, named).toBe("sub-math");
+    }
+  });
+
+  it("still takes the full name and the exact one", async () => {
+    for (const named of ["Mathematics", "mathematics"]) {
+      for (const key of Object.keys(created)) delete created[key];
+      const { row } = await addFor(named);
+      expect(row?.subjectId, named).toBe("sub-math");
+    }
+  });
+
+  it("asks rather than guesses when two subjects start the same way", async () => {
+    subjects = [
+      { id: "sub-phy", name: "Physics" },
+      { id: "sub-pe", name: "Physical Education" },
+    ];
+    // "Physik" is neither of them and the start of both. A guess here puts
+    // the work on the wrong subject silently; the list comes back instead
+    // and the model asks.
+    const { outcome } = await addFor("Physik");
+    expect(outcome.ok).toBe(false);
+    expect(outcome.message).toContain("Physics");
+    expect(outcome.message).toContain("Physical Education");
+  });
+
+  it("does not stretch to a subject that merely shares a letter or two", async () => {
+    const { outcome } = await addFor("Economics");
+    expect(outcome.ok).toBe(false);
+    expect(created.homework).toBeUndefined();
+  });
+});
+
+describe("building a study plan", () => {
+  const soon = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);
+  const later = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000);
+
+  beforeEach(() => {
+    planned.length = 0;
+    planResult = {
+      ok: true,
+      plan: {
+        planId: "plan-1",
+        title: "Biology Paper 2",
+        examDate: soon,
+        dayCount: 9,
+        subjectName: "Biology",
+        alreadyExisted: false,
+      },
+    };
+    subjects = [
+      { id: "sub-bio", name: "Biology" },
+      { id: "sub-math", name: "Mathematics" },
+    ];
+    exams = [
+      { id: "ex-bio", title: "Biology Paper 2", date: soon, subjectId: "sub-bio", subject: { name: "Biology" } },
+      { id: "ex-math", title: "Maths mock", date: later, subjectId: "sub-math", subject: { name: "Mathematics" } },
+    ];
+  });
+
+  it("plans the soonest exam when they did not say which, in their own words", async () => {
+    const { byName, done } = toolSet();
+    const outcome = await byName("make_study_plan").run({
+      exam: null,
+      subject: null,
+      brief: "I am weakest at titrations and I only have the evenings",
+    });
+
+    expect(outcome.ok).toBe(true);
+    expect(planned).toHaveLength(1);
+    expect(planned[0].userId).toBe("user-1");
+    expect(planned[0].options.examId).toBe("ex-bio");
+    // The brief is the whole difference between their plan and a generic
+    // one, so it has to survive the trip.
+    expect(planned[0].options.brief).toBe("I am weakest at titrations and I only have the evenings");
+    expect(done[0]).toContain("/school/plan/plan-1");
+  });
+
+  it("plans the exam they named, not the next one along", async () => {
+    const { byName } = toolSet();
+    await byName("make_study_plan").run({ exam: "maths mock", subject: null, brief: null });
+    expect(planned[0].options.examId).toBe("ex-math");
+  });
+
+  it("takes the subject as the narrowing when that is all they said", async () => {
+    const { byName } = toolSet();
+    await byName("make_study_plan").run({ exam: null, subject: "maths", brief: null });
+    expect(planned[0].options.examId).toBe("ex-math");
+    // Narrowed in the query, under this account.
+    const query = seen.find((q) => q.model === "exam")!.where as Record<string, unknown>;
+    expect(query.userId).toBe("user-1");
+    expect(query.subjectId).toBe("sub-math");
+  });
+
+  it("asks for the exam to be added rather than planning a date it made up", async () => {
+    exams = [];
+    const { byName, done } = toolSet();
+    const outcome = await byName("make_study_plan").run({ exam: "Physics", subject: null, brief: null });
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.message).toContain("add_exam");
+    expect(planned).toHaveLength(0);
+    expect(done).toEqual([]);
+  });
+
+  it("says which exams there are when the name matches none of them", async () => {
+    const { byName } = toolSet();
+    const outcome = await byName("make_study_plan").run({ exam: "Astrophysics", subject: null, brief: null });
+    expect(outcome.ok).toBe(false);
+    // Correctable: the model is told what it could have said instead.
+    expect(outcome.message).toContain("Biology Paper 2");
+    expect(outcome.message).toContain("Maths mock");
+    expect(planned).toHaveLength(0);
+  });
+
+  it("hands back the plan they already have instead of a second one", async () => {
+    planResult = {
+      ok: true,
+      plan: {
+        planId: "plan-old",
+        title: "Biology Paper 2",
+        examDate: soon,
+        dayCount: 9,
+        subjectName: "Biology",
+        alreadyExisted: true,
+      },
+    };
+    const { byName, done } = toolSet();
+    const outcome = await byName("make_study_plan").run({ exam: null, subject: null, brief: null });
+
+    expect(outcome.ok).toBe(true);
+    expect(outcome.message).toContain("already");
+    expect(done[0]).toContain("/school/plan/plan-old");
+  });
+
+  it("passes a failure back as a failure, not as a link to nothing", async () => {
+    planResult = { ok: false, error: "That exam is today or in the past — there are no days left to plan." };
+    const { byName, done } = toolSet();
+    const outcome = await byName("make_study_plan").run({ exam: null, subject: null, brief: null });
+    expect(outcome.ok).toBe(false);
+    expect(done).toEqual([]);
   });
 });
 

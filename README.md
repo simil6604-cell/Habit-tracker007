@@ -98,7 +98,15 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   flashcards or the logged gap itself. Ask it to **read you your notes**, or for
   something to listen to, and it makes a podcast episode from your own
   material and hands back a link in the chat that opens it, cued up on the
-  podcast page — through six
+  podcast page. **Ask it for a study plan** — a Lernplan, a revision
+  timetable, or just tell it you are behind — and it builds the real
+  day-by-day run-up to that exam in the app rather than typing one into the
+  chat: every day from now to the paper, weakest topics first, rest days in
+  it, the last day review only, each day there to tick off, with your own
+  words about what you are weak at and how much time you have as the brief.
+  It is the same plan the button on the School page builds, so there is one
+  of them per exam and asking twice hands back the one you have. All of it
+  through seven
   tools it is given
   (`src/lib/school/ai-tools.ts`), each one scoped to your own account with
   no argument through which it could reach anyone else's, and each one
