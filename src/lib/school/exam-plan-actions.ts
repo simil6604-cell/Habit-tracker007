@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { format, startOfDay } from "date-fns";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { serverFailureMessage } from "@/lib/utils/action-error";
 import { buildExamPlan } from "./exam-plan-build";
 
 async function requireUserId() {
@@ -19,15 +20,26 @@ export type CreatePlanResult = { planId?: string; error?: string };
  *
  * The work itself lives in exam-plan-build.ts, because the tutor can be
  * asked for a plan in the chat and must do exactly the same thing.
+ *
+ * It returns its failures rather than throwing them. An action that throws
+ * takes the whole page down with it — the School page, which is to say the
+ * chat, the exams and the homework list, replaced by "This page didn't
+ * load" because a button did not work. Reported exactly that way, and
+ * reproduced: an expired session is enough to do it, and a phone left open
+ * overnight is an expired session.
  */
 export async function createExamPlan(examId: string, brief?: string): Promise<CreatePlanResult> {
-  const userId = await requireUserId();
-  const result = await buildExamPlan(userId, { examId, brief });
-  if (!result.ok) return { error: result.error };
+  try {
+    const userId = await requireUserId();
+    const result = await buildExamPlan(userId, { examId, brief });
+    if (!result.ok) return { error: result.error };
 
-  revalidatePath("/school");
-  revalidatePath("/school/planner");
-  return { planId: result.plan.planId };
+    revalidatePath("/school");
+    revalidatePath("/school/planner");
+    return { planId: result.plan.planId };
+  } catch (err) {
+    return { error: serverFailureMessage(err, "The plan") };
+  }
 }
 
 export async function toggleExamPlanDay(planId: string, dayId: string): Promise<void> {

@@ -22,6 +22,7 @@ import { useVoiceConversation } from "@/lib/hooks/use-voice-conversation";
 import { speakAloud } from "@/lib/ai/voice/speak";
 import { editSchoolAIMessage } from "@/lib/school/school-ai-actions";
 import { MAX_EDIT_CHARS } from "@/lib/school/school-ai";
+import { clientFailureMessage } from "@/lib/utils/action-error";
 import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
 import { DICTATION_LANGS, mismatchedLang } from "@/lib/ai/voice/dictation-lang";
 import { isDocumentPath, MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
@@ -223,10 +224,30 @@ export function SchoolAIPanel({
      */
     const sentTo = activeChatId;
     startTransition(async () => {
-      setMessages(await sendSchoolAIMessage(trimmed, photos, spoken, sentTo ?? undefined));
-      // The list orders by recent activity, and this conversation just had
-      // some — and may have just earned its name from this very question.
-      setChats(await listSchoolAIChats());
+      /*
+       * Nothing thrown in here may escape.
+       *
+       * The answer itself is safe — an AI that is down comes back as a
+       * reply saying so. What is not safe is everything around it: an
+       * expired session, the server restarting under the send, a phone
+       * that lost signal mid-question. Thrown inside a transition, any of
+       * those reaches the error boundary and the School page becomes
+       * "This page didn't load", taking the conversation with it.
+       *
+       * Here the question goes back in the box instead, so it can be sent
+       * again without being typed again.
+       */
+      try {
+        setMessages(await sendSchoolAIMessage(trimmed, photos, spoken, sentTo ?? undefined));
+        // The list orders by recent activity, and this conversation just had
+        // some — and may have just earned its name from this very question.
+        setChats(await listSchoolAIChats());
+      } catch {
+        setMessages((prev) => prev.filter((m) => !m.id.startsWith("pending-")));
+        setInput(trimmed);
+        setStaged(photos);
+        setNotice(clientFailureMessage("That question"));
+      }
     });
   }
 
