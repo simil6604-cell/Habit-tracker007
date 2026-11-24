@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createExamPlan, type PlannableExam } from "@/lib/school/exam-plan-actions";
+import { clientFailureMessage } from "@/lib/utils/action-error";
 
 /**
  * Turning "I have so much to do" into a plan with dates on it.
@@ -80,12 +81,28 @@ export function ExamPlanBuilder({ exams }: { exams: PlannableExam[] }) {
           onClick={() => {
             setError(null);
             startTransition(async () => {
-              const result = await createExamPlan(examId, brief);
-              if (result.error) {
-                setError(result.error);
-                return;
+              /*
+               * Nothing thrown in here may escape.
+               *
+               * An unhandled rejection inside a transition is not an error
+               * message — it reaches the error boundary, and the whole
+               * School page becomes "This page didn't load". One button
+               * that did not work took the chat, the exams and the
+               * homework list with it. Reported, and reproduced.
+               */
+              try {
+                const result = await createExamPlan(examId, brief);
+                if (result.error) {
+                  setError(result.error);
+                  return;
+                }
+                if (result.planId) router.push(`/school/plan/${result.planId}`);
+              } catch {
+                // The call never came back. In a production build the real
+                // reason stays on the server, so saying what it was would
+                // be inventing it.
+                setError(clientFailureMessage("The plan"));
               }
-              if (result.planId) router.push(`/school/plan/${result.planId}`);
             });
           }}
         >

@@ -12,6 +12,7 @@ import {
   type ProviderTool,
 } from "@/lib/ai/tool-use";
 import { schoolAITools } from "@/lib/school/ai-tools";
+import { SCHOOL_AI_STYLE_PROMPT } from "@/lib/school/school-ai";
 
 function tool(overrides: Partial<ProviderTool> = {}): ProviderTool {
   return {
@@ -123,15 +124,20 @@ describe("the school tutor's tools", () => {
   const { tools } = schoolAITools("user-1");
   const definitions = toolDefinitions(tools);
 
-  it("are the six the prompt tells it about", () => {
-    expect(definitions.map((d) => d.name).sort()).toEqual([
+  it("are the ones the prompt tells it about, and nothing else", () => {
+    // The prompt names them one by one, so a tool added here and not there
+    // is a tool that exists and is never reached for.
+    const names = definitions.map((d) => d.name).sort();
+    expect(names).toEqual([
       "add_exam",
       "add_homework",
       "log_confusion",
       "make_flashcards",
       "make_podcast",
+      "make_study_plan",
       "rate_topic",
     ]);
+    for (const name of names) expect(SCHOOL_AI_STYLE_PROMPT, name).toContain(name);
   });
 
   it("every one of them describes itself and every argument", () => {
