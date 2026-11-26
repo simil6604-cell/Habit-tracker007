@@ -105,7 +105,16 @@ export function planPrompt(
   examDate: Date,
   dates: Date[],
   topics: WeakTopic[],
-  brief: string | null
+  brief: string | null,
+  /**
+   * When in the school week they are actually free, one line per day.
+   *
+   * Without it a plan says "45 minutes on Tuesday" to someone who is in
+   * lessons until four and at football until seven. With it the day can
+   * say where the time comes from, which is the difference between a plan
+   * you follow and a plan you read once.
+   */
+  freePeriods: string[] = []
 ): string {
   const topicLines = topics.length
     ? topics.map((t) => `- ${t.name} (self-rated ${t.progressPct}%)`).join("\n")
@@ -119,6 +128,14 @@ export function planPrompt(
     `Exam date: ${format(examDate, "EEEE d MMMM yyyy")}`,
     brief ? `In the student's own words: ${brief}` : "",
     ``,
+    ...(freePeriods.length > 0
+      ? [
+          `When they are free during the school day — these repeat every week:`,
+          ...freePeriods,
+          `Where a day's work can be done in one of those, say which one in the detail, e.g. "in your Tuesday free after break". Otherwise write it as evening work. Never put work in a period they are in a lesson.`,
+          ``,
+        ]
+      : []),
     `Their topics, weakest first:`,
     topicLines,
     ``,

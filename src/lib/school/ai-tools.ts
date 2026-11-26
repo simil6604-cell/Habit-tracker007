@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db/prisma";
 import { EPISODE_LENGTHS, writeEpisode } from "./podcast-episode";
 import { formatLength, NEW_EPISODE_STYLE } from "./podcast";
-import { buildExamPlan } from "./exam-plan-build";
+import { archiveExamPlans, buildExamPlan } from "./exam-plan-build";
 import {
   objectSchema,
   optionalString,
   readDay,
+  readBoolean,
   readObjects,
   readString,
   requiredString,
@@ -104,6 +105,56 @@ function byStem(subjects: { id: string; name: string }[], wanted: string): { id:
     return shared >= 4 && shared >= Math.min(stem(s.name).length, target.length) * 0.6;
   });
   return close.length === 1 ? close[0] : null;
+}
+
+type UpcomingExam = { id: string; title: string; date: Date; subject: { name: string } | null };
+
+/**
+ * Which exam they meant, out of the ones still ahead.
+ *
+ * Shared by the two plan tools, because "the Bio one" has to resolve to the
+ * same exam whether the student is asking for a plan or asking for it to be
+ * replaced — and a second copy of this matching would be the thing that
+ * drifts.
+ *
+ * Past exams are never candidates: a plan is the days between now and the
+ * paper, and a sat exam has none left.
+ */
+async function findUpcomingExam(
+  userId: string,
+  named: string | null,
+  subject: { id: string; name: string } | null
+): Promise<{ exam: UpcomingExam } | { failure: string }> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const exams = await prisma.exam.findMany({
+    where: { userId, date: { gt: today }, ...(subject ? { subjectId: subject.id } : {}) },
+    orderBy: { date: "asc" },
+    take: 20,
+    select: { id: true, title: true, date: true, subject: { select: { name: true } } },
+  });
+  if (exams.length === 0) {
+    return {
+      failure: subject
+        ? `No exam coming up in ${subject.name}. Add it with add_exam first — a plan is the days between now and the paper, so it needs the date.`
+        : "No exams coming up at all. Add the one they mean with add_exam first — a plan is the days between now and the paper, so it needs the date.",
+    };
+  }
+
+  // Named or not: a name narrows, and the soonest wins otherwise, which is
+  // almost always the one they are worried about.
+  if (!named) return { exam: exams[0] };
+
+  const wanted = named.toLowerCase();
+  const match =
+    exams.find((e) => e.title.toLowerCase() === wanted) ??
+    exams.find((e) => e.title.toLowerCase().includes(wanted) || wanted.includes(e.title.toLowerCase())) ??
+    exams.find((e) => (e.subject?.name ?? "").toLowerCase().includes(wanted)) ??
+    null;
+  if (match) return { exam: match };
+
+  const list = exams.map((e) => `${e.title} (${dayLabel(e.date)})`).join(", ");
+  return { failure: `No exam called "${named}" coming up. They have: ${list}. Use one of those names, or add it with add_exam.` };
 }
 
 function subjectList(subjects: { name: string }[]): string {
@@ -350,11 +401,16 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
     {
       name: "make_study_plan",
       description:
-        "Build the day-by-day run-up to one of the student's exams and put it in their app, where each day can be ticked off and how ready they feel can be tracked. Use it whenever they ask for a study plan, a revision plan, a Lernplan, or help working out what to do between now and a test. It plans from their own topics, weakest first, with rest days and a review-only last day. The exam has to be on their list first: if the one they mean is not there, call add_exam and then this. One plan per exam — asked again for the same one, it hands back the plan they already have rather than a second.",
+        "Build the day-by-day run-up to one of the student's exams and put it in their app, where each day can be ticked off and how ready they feel can be tracked. Use it whenever they ask for a study plan, a revision plan, a Lernplan, or help working out what to do between now and a test. It plans from their own topics, weakest first, with rest days and a review-only last day. The exam has to be on their list first: if the one they mean is not there, call add_exam and then this. One plan per exam: asked again for the same exam you get the existing plan back, unless you set replace.",
       schema: objectSchema({
         exam: optionalString("Which exam, as the student calls it, e.g. 'Biology Paper 2' or 'the maths mock'. Null to use the soonest one coming up, or the soonest in the subject below."),
         subject: optionalString("The subject, as the student calls it. Narrows which exam is meant, and on its own picks the soonest exam in that subject. Null if they did not say."),
         brief: optionalString("What they said about it in their own words — what they are weakest at, how much time they have in the evenings, what the teacher said it covers. This is what makes the plan theirs rather than generic, so pass it through whenever they gave you anything. Null if they said nothing."),
+        replace: {
+          type: "boolean",
+          description:
+            "True to throw away the plan this exam already has and build a fresh one; the old one is archived, not deleted, and the days they ticked off stay on it. Set it whenever they ask for the plan to be redone, rebuilt, changed, made longer, made in German, or built around something new — never make them archive anything by hand. False to leave an existing plan alone and simply hand it back.",
+        },
       }),
       async run(input) {
         const named = readString(input, "subject", 80);
@@ -363,43 +419,15 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
           return failed(`No subject called "${named}". This student takes: ${subjectList(subjects)}. Try one of those, or send null.`);
         }
 
-        // Only exams still ahead: a plan is the days between now and the
-        // paper, and there are none for one that has been sat.
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const exams = await prisma.exam.findMany({
-          where: { userId, date: { gt: today }, ...(subject ? { subjectId: subject.id } : {}) },
-          orderBy: { date: "asc" },
-          take: 20,
-          select: { id: true, title: true, date: true, subject: { select: { name: true } } },
+        const found = await findUpcomingExam(userId, readString(input, "exam", 120), subject);
+        if ("failure" in found) return failed(found.failure);
+
+        const replace = readBoolean(input, "replace");
+        const result = await buildExamPlan(userId, {
+          examId: found.exam.id,
+          brief: readString(input, "brief", 500),
+          replace,
         });
-        if (exams.length === 0) {
-          return failed(
-            subject
-              ? `No exam coming up in ${subject.name}. Add it with add_exam first — a plan is the days between now and the paper, so it needs the date.`
-              : "No exams coming up at all. Add the one they mean with add_exam first — a plan is the days between now and the paper, so it needs the date."
-          );
-        }
-
-        // Named or not: a name narrows, and the soonest wins otherwise,
-        // which is almost always the one they are worried about.
-        const wantedName = readString(input, "exam", 120);
-        let exam = exams[0];
-        if (wantedName) {
-          const wanted = wantedName.toLowerCase();
-          const match =
-            exams.find((e) => e.title.toLowerCase() === wanted) ??
-            exams.find((e) => e.title.toLowerCase().includes(wanted) || wanted.includes(e.title.toLowerCase())) ??
-            exams.find((e) => (e.subject?.name ?? "").toLowerCase().includes(wanted)) ??
-            null;
-          if (!match) {
-            const list = exams.map((e) => `${e.title} (${dayLabel(e.date)})`).join(", ");
-            return failed(`No exam called "${wantedName}" coming up. They have: ${list}. Use one of those names, or add it with add_exam.`);
-          }
-          exam = match;
-        }
-
-        const result = await buildExamPlan(userId, { examId: exam.id, brief: readString(input, "brief", 500) });
         if (!result.ok) return failed(result.error);
 
         const { plan } = result;
@@ -407,15 +435,58 @@ export function schoolAITools(userId: string): { tools: ProviderTool[]; done: st
         // A link, not directions: the plan is a page with a day to tick off
         // on it, and a plan nobody opens is a plan nobody follows.
         record(
-          `[📅 ${plan.alreadyExisted ? "Your plan" : "New plan"}: ${plan.title} — ${plan.dayCount} day${plan.dayCount === 1 ? "" : "s"} to ${dayLabel(plan.examDate)}](/school/plan/${plan.planId})`
+          `[📅 ${plan.alreadyExisted ? "Your plan" : replace ? "Rebuilt plan" : "New plan"}: ${plan.title} — ${plan.dayCount} day${plan.dayCount === 1 ? "" : "s"} to ${dayLabel(plan.examDate)}](/school/plan/${plan.planId})`
         );
-        return plan.alreadyExisted
-          ? ok(
-              `There was already a plan for "${plan.title}"${where} — ${plan.dayCount} days up to ${dayLabel(plan.examDate)} — so that one is unchanged and the link under your reply opens it. Tell them it is already there; if they want a different one they can archive it on that page first.`
-            )
-          : ok(
-              `Built. "${plan.title}"${where} now has a ${plan.dayCount}-day run-up to ${dayLabel(plan.examDate)}, weakest topics first, with rest days and a review-only last day. The link under your reply opens it. Tell them it is ready and say what the first day or two is; do not write the whole plan out in the chat.`
-            );
+        if (plan.alreadyExisted) {
+          return ok(
+            `There was already a plan for "${plan.title}"${where} — ${plan.dayCount} days up to ${dayLabel(plan.examDate)} — and replace was not set, so it is unchanged and the link under your reply opens it. If they wanted it redone, call this again with replace true; do not ask them to archive it themselves.`
+          );
+        }
+        return ok(
+          `${replace ? "Rebuilt" : "Built"}. "${plan.title}"${where} now has a ${plan.dayCount}-day run-up to ${dayLabel(plan.examDate)}, weakest topics first, with rest days and a review-only last day${replace ? ", and the one it replaced is archived" : ""}. The link under your reply opens it. Tell them it is ready and say what the first day or two is; do not write the whole plan out in the chat.`
+        );
+      },
+    },
+    {
+      name: "archive_study_plan",
+      description:
+        "Put a study plan away: it leaves their list of live plans, and the days they ticked off stay on it. Use it when they say they are done with a plan, that it is wrong, or that they want it gone — and when they want several cleared at once. Nothing is deleted. To redo a plan, you do not need this: call make_study_plan with replace instead, which archives the old one and builds the new one in a single step.",
+      schema: objectSchema({
+        exam: optionalString("Which exam's plan to put away, as the student calls it. Null together with all=false means the plan for the soonest exam coming up."),
+        subject: optionalString("The subject, as the student calls it, to pick out which exam is meant. Null if they did not say."),
+        all: {
+          type: "boolean",
+          description:
+            "True to put away every live plan at once — use it when they say to clear them all, or to start their planning over. False for just the one named above.",
+        },
+      }),
+      async run(input) {
+        if (readBoolean(input, "all")) {
+          const { titles } = await archiveExamPlans(userId, { all: true });
+          if (titles.length === 0) return ok("There were no live plans to put away, so nothing changed.");
+          for (const title of titles) record(`Archived the plan for ${title}`);
+          return ok(
+            `Put away ${titles.length} plan${titles.length === 1 ? "" : "s"}: ${titles.join(", ")}. Nothing was deleted — the days they had ticked off are still on them. They can build new ones whenever they want.`
+          );
+        }
+
+        const named = readString(input, "subject", 80);
+        const { subject, subjects } = await findSubject(userId, named);
+        if (named && !subject) {
+          return failed(`No subject called "${named}". This student takes: ${subjectList(subjects)}. Try one of those, or send null.`);
+        }
+
+        const found = await findUpcomingExam(userId, readString(input, "exam", 120), subject);
+        if ("failure" in found) return failed(found.failure);
+
+        const { titles } = await archiveExamPlans(userId, { examId: found.exam.id });
+        if (titles.length === 0) {
+          return failed(`There is no live plan for "${found.exam.title}", so there was nothing to put away.`);
+        }
+        for (const title of titles) record(`Archived the plan for ${title}`);
+        return ok(
+          `Put away the plan for "${found.exam.title}". Nothing was deleted — the days they had ticked off are still on it — and a new plan for that exam can be built now.`
+        );
       },
     },
     {

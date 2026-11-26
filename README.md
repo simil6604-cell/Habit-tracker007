@@ -105,8 +105,14 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   it, the last day review only, each day there to tick off, with your own
   words about what you are weak at and how much time you have as the brief.
   It is the same plan the button on the School page builds, so there is one
-  of them per exam and asking twice hands back the one you have. All of it
-  through seven
+  of them per exam. Ask for it to be **redone** — longer, in German, around
+  something new — and it archives the old one and builds the new one itself;
+  it never sends you off to tap Archive first, and it can clear the lot in
+  one go when you want to start your planning over. It also **sees your
+  timetable**: which lessons you have when, and which periods you are free,
+  so study time lands in a free period or the evening rather than in the
+  middle of a double Chemistry — and the plan says which period it means.
+  All of it through eight
   tools it is given
   (`src/lib/school/ai-tools.ts`), each one scoped to your own account with
   no argument through which it could reach anyone else's, and each one

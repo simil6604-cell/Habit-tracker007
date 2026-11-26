@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { fallbackPlan, parsePlan, planDates, planPrompt, type PlanDay, type WeakTopic } from "./exam-plan";
+import { freePeriodLines } from "./timetable-context";
 
 /**
  * Building the run-up to one exam, away from the form that used to own it.
@@ -31,6 +32,40 @@ export type BuiltPlan = {
 export type BuildPlanResult = { ok: true; plan: BuiltPlan } | { ok: false; error: string };
 
 /**
+ * Puts live plans away, so a new one can be built.
+ *
+ * Archiving rather than deleting: a plan is a record of what was done as
+ * well as what to do, and the days ticked off on it are the student's own
+ * work. It leaves the list and nothing is lost.
+ *
+ * Here rather than only in the server action because the tutor has to be
+ * able to do it. The student asked for exactly that, after the tutor told
+ * them: "Archivieren: Pläne löschen oder archivieren kann ich nicht. Das
+ * Archivieren musst also du machen." Making someone tap through six plans
+ * by hand so the assistant can do its half is not an assistant.
+ */
+export async function archiveExamPlans(
+  userId: string,
+  which: { examId?: string | null; all?: boolean }
+): Promise<{ titles: string[] }> {
+  const plans = await prisma.examPlan.findMany({
+    where: {
+      userId,
+      archivedAt: null,
+      ...(which.all ? {} : { examId: which.examId ?? "__none__" }),
+    },
+    select: { id: true, title: true },
+  });
+  if (plans.length === 0) return { titles: [] };
+
+  await prisma.examPlan.updateMany({
+    where: { userId, id: { in: plans.map((plan) => plan.id) } },
+    data: { archivedAt: new Date() },
+  });
+  return { titles: plans.map((plan) => plan.title) };
+}
+
+/**
  * Builds the run-up to one exam and stores it.
  *
  * The AI writes the days when a key is configured; without one, the
@@ -40,7 +75,7 @@ export type BuildPlanResult = { ok: true; plan: BuiltPlan } | { ok: false; error
  */
 export async function buildExamPlan(
   userId: string,
-  options: { examId: string; brief?: string | null }
+  options: { examId: string; brief?: string | null; replace?: boolean }
 ): Promise<BuildPlanResult> {
   // Scoped to the account here, at the call site, where it can be read —
   // an exam id on its own reaches nothing.
@@ -56,6 +91,10 @@ export async function buildExamPlan(
   }
 
   const subjectName = exam.subject?.name ?? null;
+
+  // Asked to replace it, the old one goes away first and the build below
+  // runs as though there had never been one.
+  if (options.replace) await archiveExamPlans(userId, { examId: exam.id });
 
   const existing = await prisma.examPlan.findFirst({
     where: { userId, examId: exam.id, archivedAt: null },
@@ -87,9 +126,36 @@ export async function buildExamPlan(
   if (isRealAIConfigured) {
     try {
       const school = await prisma.school.findUnique({ where: { userId } });
+      // The timetable, so the plan lands in time they actually have. A plan
+      // that books Tuesday afternoon for someone who is in a double lesson
+      // then is a plan they stop following on Tuesday.
+      const slots = await prisma.timetableSlot.findMany({
+        where: { userId },
+        orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+        select: {
+          dayOfWeek: true,
+          startTime: true,
+          endTime: true,
+          periodName: true,
+          periodType: true,
+          label: true,
+          subject: { select: { name: true } },
+        },
+      });
+      const free = freePeriodLines(
+        slots.map((slot) => ({
+          dayOfWeek: slot.dayOfWeek,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          periodName: slot.periodName,
+          periodType: slot.periodType,
+          label: slot.label,
+          subjectName: slot.subject?.name ?? null,
+        }))
+      );
       const system = buildAcademicSystemPrompt(school?.educationSystem, exam.subject);
       const reply = await getAIProvider().generate(
-        planPrompt(subjectName ?? "This subject", exam.title, exam.date, dates, topics, trimmedBrief),
+        planPrompt(subjectName ?? "This subject", exam.title, exam.date, dates, topics, trimmedBrief, free),
         { system, maxTokens: 4000 }
       );
       days = parsePlan(reply, dates, base);
