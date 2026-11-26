@@ -2,7 +2,15 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider } from "./provider";
 import { recordAIFailure, recordAISuccess } from "./health";
 import { describeKeyShape, inspectApiKey } from "./api-key";
-import { anthropicEffort, anthropicModel, DEFAULT_MAX_TOKENS, type Effort } from "./model-config";
+import {
+  anthropicEffort,
+  anthropicModel,
+  DEFAULT_MAX_TOKENS,
+  MAX_OUTPUT_TOKENS,
+  STRETCH_FACTOR,
+  TOOL_CALL_FLOOR,
+  type Effort,
+} from "./model-config";
 import {
   collectTools,
   MAX_TOOL_ROUNDS,
@@ -271,7 +279,20 @@ export class AnthropicProvider implements AIProvider {
       ? [{ type: "text", text: systemText, cache_control: { type: "ephemeral" } }]
       : undefined;
 
-    let message = await this.send(conversation, system, maxTokens, definitions);
+    /*
+     * The room this turn has, which is not the same as the length of the
+     * answer. Thinking is charged against max_tokens, and so is every tool
+     * call written on the way — so a request carrying tools is given a
+     * floor whatever the caller asked for. TOOL_CALL_FLOOR says why.
+     */
+    let budget = Math.min(
+      MAX_OUTPUT_TOKENS,
+      definitions.length > 0 ? Math.max(maxTokens, TOOL_CALL_FLOOR) : maxTokens
+    );
+    let message = await this.send(conversation, system, budget, definitions);
+    /** Whether the one retry with more room has been spent. */
+    let stretched = false;
+    let rounds = 0;
 
     /*
      * The tool loop.
@@ -281,7 +302,7 @@ export class AnthropicProvider implements AIProvider {
      * that exam for me" one sentence rather than a sentence and then four
      * taps on a form. The loop is bounded; MAX_TOOL_ROUNDS says why.
      */
-    let rounds = 0;
+    for (;;) {
     while (definitions.length > 0 && message.stop_reason === "tool_use") {
       const calls = message.content.filter(
         (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
@@ -319,7 +340,7 @@ export class AnthropicProvider implements AIProvider {
       }
       conversation.push({ role: "user", content: results });
 
-      message = await this.send(conversation, system, maxTokens, definitions);
+      message = await this.send(conversation, system, budget, definitions);
       rounds += 1;
       if (exhausted) break;
     }
@@ -332,25 +353,41 @@ export class AnthropicProvider implements AIProvider {
       .join("")
       .trim();
 
-    if (!text) {
-      // No text at all usually means the reply was cut off before any was
-      // produced — worth saying, because the fix is a bigger max_tokens, not
-      // a retry. Naming the limit makes that diagnosable from the message.
-      if (message.stop_reason === "max_tokens") {
-        // A truncated reply means the connection is fine, so it isn't recorded
-        // as an outage — the fix is a bigger limit, not a key.
-        throw new Error(
-          `The AI's reply was cut off before it produced any text (max_tokens ${maxTokens}). Ask for something shorter, or raise the limit for this feature.`
-        );
-      }
-      if (message.stop_reason === "tool_use") {
-        throw new Error(
-          "The AI kept asking to do more things and never got to an answer. Ask again, one thing at a time."
-        );
-      }
-      throw new Error(`The AI service returned no text (stop reason: ${message.stop_reason ?? "unknown"}).`);
+    if (text) {
+      recordAISuccess();
+      return text;
     }
-    recordAISuccess();
-    return text;
+
+    /*
+     * Cut off before it said anything.
+     *
+     * Reported from the live app as "couldn't reach the AI service right
+     * now", which it could: the request was fine and the ceiling was not.
+     * Telling a student to "ask for something shorter" when they asked a
+     * perfectly ordinary question is both unhelpful and untrue, so it asks
+     * again with more room first — the same conversation, so nothing is
+     * asked twice and no tool runs twice.
+     */
+    if (message.stop_reason === "max_tokens" && !stretched) {
+      stretched = true;
+      budget = Math.min(MAX_OUTPUT_TOKENS, budget * STRETCH_FACTOR);
+      message = await this.send(conversation, system, budget, definitions);
+      continue;
+    }
+
+    if (message.stop_reason === "max_tokens") {
+      // Twice over, so the limit is not the problem. A truncated reply means
+      // the connection is fine, so it isn't recorded as an outage either.
+      throw new Error(
+        `The AI's reply was cut off before it produced any text, twice, the second time with room for ${budget} tokens. Ask for one thing at a time.`
+      );
+    }
+    if (message.stop_reason === "tool_use") {
+      throw new Error(
+        "The AI kept asking to do more things and never got to an answer. Ask again, one thing at a time."
+      );
+    }
+    throw new Error(`The AI service returned no text (stop reason: ${message.stop_reason ?? "unknown"}).`);
+    }
   }
 }
