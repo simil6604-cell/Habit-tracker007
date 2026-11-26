@@ -296,10 +296,20 @@ async function answerInChat(
       reply = await getAIProvider().generate(prompt, {
         system,
         turns: conversation,
-        // Room for the answer AND the tool calls on the way to it: a reply
-        // cut off mid tool call is a question that got nothing done and no
-        // text either.
-        maxTokens: spoken ? 4000 : 3000,
+        /*
+         * Room for the answer, the thinking, AND every tool call on the way.
+         *
+         * All three come out of this one number. 3,000 was chosen when the
+         * tutor had six tools and a short prompt; with eight tools, the
+         * timetable and the live plans in front of it, a question like
+         * "rebuild all my plans" spent the lot before writing a word and
+         * the student was told the AI service could not be reached.
+         *
+         * Only what is produced is charged, so the headroom is free on an
+         * ordinary question. The provider clamps this to what can be sent
+         * without streaming and stretches it once if even this runs out.
+         */
+        maxTokens: spoken ? 16_000 : 12_000,
         images,
         documents,
         tools,

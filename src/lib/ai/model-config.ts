@@ -49,6 +49,47 @@ export const DEFAULT_EFFORT: Effort = "medium";
  */
 export const DEFAULT_MAX_TOKENS = 4_000;
 
+/**
+ * The least room a request that can call tools is given.
+ *
+ * max_tokens is not "how long may the answer be". Thinking is counted
+ * against it too, and so is every tool call the model writes on the way to
+ * the answer — so a ceiling chosen by eye for the size of a reply can be
+ * spent entirely before a single word is written. That is not a theory: the
+ * school chat asked for 3,000, which was fine when it had six tools and a
+ * short prompt, and started coming back as "couldn't reach the AI service"
+ * the week it was given the timetable, the plans and two more tools.
+ *
+ * Only what is produced is charged, so a floor costs nothing on a short
+ * answer. A caller's own number still wins when it is larger.
+ */
+export const TOOL_CALL_FLOOR = 8_000;
+
+/**
+ * How far a cut-off reply is stretched before giving up. One retry only:
+ * twice in a row is not a limit slightly too low, it is a question this is
+ * not going to answer, and a third paid attempt helps nobody.
+ */
+export const STRETCH_FACTOR = 3;
+
+/**
+ * The most this app may ask for in one non-streamed reply.
+ *
+ * Not a preference — a hard edge. The SDK refuses to send a non-streaming
+ * request whose max_tokens implies more than ten minutes of generation, at
+ * 128,000 tokens an hour: anything over 21,333 throws "Streaming is
+ * required for operations that may take longer than 10 minutes" before a
+ * byte leaves the machine, which surfaces in the app as the AI being
+ * unreachable. Found by raising a ceiling and watching the retry fail that
+ * way rather than on the wire.
+ *
+ * So every ceiling is clamped here, and the number sits below the edge
+ * rather than on it. The longest thing this app asks for is a twenty-minute
+ * podcast at 18,000, which fits. A caller that genuinely needs more would
+ * need the provider to stream instead, which is a different change.
+ */
+export const MAX_OUTPUT_TOKENS = 20_000;
+
 export function anthropicModel(env: Record<string, string | undefined> = process.env): string {
   return env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
 }

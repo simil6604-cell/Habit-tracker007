@@ -112,6 +112,13 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   timetable**: which lessons you have when, and which periods you are free,
   so study time lands in a free period or the evening rather than in the
   middle of a double Chemistry — and the plan says which period it means.
+  **The plan page is yours to change**: every day can be rewritten (what it
+  is for, what to actually do, how many minutes) or taken off the plan, and
+  the plan itself can be archived — which keeps what you ticked off — or
+  deleted outright, both asking twice first. Nothing on that page was
+  editable before, which meant living with the plan exactly as it was first
+  written. The one thing it does not do yet is add a day back, so a run-up
+  you have cut into is rebuilt rather than patched.
   All of it through eight
   tools it is given
   (`src/lib/school/ai-tools.ts`), each one scoped to your own account with

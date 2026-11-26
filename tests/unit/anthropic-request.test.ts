@@ -68,6 +68,25 @@ function toolReply(name: string, input: Record<string, unknown>): Record<string,
   };
 }
 
+/**
+ * A reply that spent its whole budget thinking and never got to the words.
+ *
+ * This is what a real one looks like when max_tokens is too small for the
+ * question: thinking blocks, no text, and stop_reason "max_tokens". Nothing
+ * about it is an error — the request was fine, the ceiling was not.
+ */
+function cutOffReply(): Record<string, unknown> {
+  return {
+    id: "msg_stub_cut",
+    type: "message",
+    role: "assistant",
+    model: "stub",
+    content: [{ type: "thinking", thinking: "Let me work through their whole week…", signature: "sig-cut" }],
+    stop_reason: "max_tokens",
+    usage: { input_tokens: 10, output_tokens: 3_000 },
+  };
+}
+
 beforeAll(async () => {
   server = createServer((req, res) => {
     let raw = "";
@@ -415,5 +434,78 @@ describe("a PDF sent with the question", () => {
   it("drops a malformed document rather than sending half a block", async () => {
     const { request } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, { documents: [{ title: "no data" }, null, "x"] });
     expect(request.body.messages).toEqual([{ role: "user", content: "Was macht der Zellkern?" }]);
+  });
+});
+
+describe("a reply that ran out of room before it said anything", () => {
+  /**
+   * Reported from the live app, word for word: "couldn't reach the AI
+   * service right now (The AI's reply was cut off before it produced any
+   * text (max_tokens 3000))".
+   *
+   * Nothing was unreachable. Thinking is counted against the same ceiling as
+   * the answer, so a hard question with eight tools and a long prompt can
+   * spend the lot before writing a word — and the student, who asked for
+   * their plans to be rebuilt, got an error about a service being down.
+   */
+  it("asks again with more room rather than handing back an error", async () => {
+    const { text, requests } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, { maxTokens: 3_000 }, [
+      cutOffReply(),
+      textReply("Hier ist dein Plan."),
+    ]);
+
+    expect(text).toBe("Hier ist dein Plan.");
+    expect(requests).toHaveLength(2);
+    // The second attempt is the same conversation with a bigger ceiling —
+    // not a different question, and not the tools run twice.
+    expect(requests[1].body.max_tokens as number).toBeGreaterThan(requests[0].body.max_tokens as number);
+    expect(JSON.stringify(requests[1].body.messages)).toBe(JSON.stringify(requests[0].body.messages));
+  });
+
+  it("never asks for more than the SDK will send without streaming", async () => {
+    /*
+     * The edge that found itself: the SDK refuses a non-streaming request
+     * whose max_tokens implies over ten minutes of generation — anything
+     * above 21,333 — and throws before anything leaves the machine, which
+     * reaches the app as "couldn't reach the AI service". A caller asking
+     * for a number past it is clamped rather than refused.
+     */
+    const { text, request } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, { maxTokens: 60_000 });
+    expect(text).toBeTruthy();
+    expect(request.body.max_tokens as number).toBeLessThanOrEqual(21_333);
+  });
+
+  it("gives up after one more go, and says what the limit was", async () => {
+    // Twice in a row is not a ceiling that is slightly too low; it is a
+    // question this is not going to answer, and a third paid attempt helps
+    // nobody.
+    await expect(
+      ask({ ANTHROPIC_API_KEY: FAKE_KEY }, { maxTokens: 3_000 }, [cutOffReply(), cutOffReply()])
+    ).rejects.toThrow(/cut off/i);
+  });
+
+  it("carries the bigger ceiling through the tool loop", async () => {
+    // The cut-off can land on any round, including after a tool has already
+    // run. Retrying must continue that conversation rather than start the
+    // turn again, or the tool runs twice.
+    const { text, requests } = await ask(
+      { ANTHROPIC_API_KEY: FAKE_KEY },
+      {
+        maxTokens: 3_000,
+        tools: [
+          {
+            name: "add_exam",
+            description: "Adds an exam to the student's app so the countdown and the plan can read it.",
+            schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+            run: async () => ({ ok: true, message: "Added." }),
+          },
+        ],
+      },
+      [toolReply("add_exam", {}), cutOffReply(), textReply("Eingetragen.")]
+    );
+
+    expect(text).toBe("Eingetragen.");
+    expect(requests).toHaveLength(3);
+    expect(requests[2].body.max_tokens as number).toBeGreaterThan(requests[0].body.max_tokens as number);
   });
 });
