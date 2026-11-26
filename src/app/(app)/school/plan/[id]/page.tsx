@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { daysUntil, daysUntilLabel } from "@/lib/planner/days-until";
 import { planProgress, readinessSeries } from "@/lib/school/exam-plan";
-import { archiveExamPlan } from "@/lib/school/exam-plan-actions";
+import { ExamPlanActionsBar } from "@/components/school/exam-plan-actions-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExamPlanDays } from "@/components/school/exam-plan-days";
@@ -53,13 +53,9 @@ export default async function ExamPlanPage({ params }: { params: Promise<{ id: s
             {format(plan.examDate, "EEEE d MMMM")} — {daysUntilLabel(plan.examDate, today)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           <Link href="/school"><Button variant="outline" size="sm">Back to School</Button></Link>
-          {!plan.archivedAt && (
-            <form action={archiveExamPlan.bind(null, plan.id)}>
-              <Button type="submit" variant="outline" size="sm">Archive</Button>
-            </form>
-          )}
+          <ExamPlanActionsBar planId={plan.id} archived={Boolean(plan.archivedAt)} />
         </div>
       </div>
 
