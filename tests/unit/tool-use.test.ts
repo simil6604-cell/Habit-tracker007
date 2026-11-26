@@ -7,6 +7,7 @@ import {
   parseToolInput,
   readDay,
   readObjects,
+  readBoolean,
   readString,
   toolDefinitions,
   type ProviderTool,
@@ -114,6 +115,21 @@ describe("reading what the model sent", () => {
     expect(readDay({}, "date")).toBeNull();
   });
 
+  it("reads a flag, and treats anything unclear as off", () => {
+    // Every flag that uses this guards the more destructive of two
+    // behaviours — replacing a plan rather than keeping it — so a value it
+    // cannot read has to mean no.
+    expect(readBoolean({ replace: true }, "replace")).toBe(true);
+    // A model asked for a boolean does sometimes send the word.
+    expect(readBoolean({ replace: "true" }, "replace")).toBe(true);
+    expect(readBoolean({ replace: "TRUE" }, "replace")).toBe(true);
+    expect(readBoolean({ replace: false }, "replace")).toBe(false);
+    expect(readBoolean({ replace: "false" }, "replace")).toBe(false);
+    expect(readBoolean({ replace: "yes" }, "replace")).toBe(false);
+    expect(readBoolean({ replace: 1 }, "replace")).toBe(false);
+    expect(readBoolean({}, "replace")).toBe(false);
+  });
+
   it("reads a list of objects, capped, with the junk dropped", () => {
     const cards = readObjects({ cards: [{ front: "a" }, null, "b", [1], { front: "c" }] }, "cards", 2);
     expect(cards).toEqual([{ front: "a" }, { front: "c" }]);
@@ -131,6 +147,7 @@ describe("the school tutor's tools", () => {
     expect(names).toEqual([
       "add_exam",
       "add_homework",
+      "archive_study_plan",
       "log_confusion",
       "make_flashcards",
       "make_podcast",

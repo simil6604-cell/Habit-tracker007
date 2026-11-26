@@ -77,10 +77,17 @@ let planResult: unknown = {
   },
 };
 
+const archived: { userId: string; which: Record<string, unknown> }[] = [];
+let archivedTitles: string[] = ["Biology Paper 2"];
+
 vi.mock("@/lib/school/exam-plan-build", () => ({
   buildExamPlan: vi.fn(async (userId: string, options: Record<string, unknown>) => {
     planned.push({ userId, options });
     return planResult;
+  }),
+  archiveExamPlans: vi.fn(async (userId: string, which: Record<string, unknown>) => {
+    archived.push({ userId, which });
+    return { titles: archivedTitles };
   }),
 }));
 
@@ -506,6 +513,107 @@ describe("building a study plan", () => {
     const outcome = await byName("make_study_plan").run({ exam: null, subject: null, brief: null });
     expect(outcome.ok).toBe(false);
     expect(done).toEqual([]);
+  });
+});
+
+describe("redoing and putting away a plan", () => {
+  const soon = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);
+
+  beforeEach(() => {
+    planned.length = 0;
+    archived.length = 0;
+    archivedTitles = ["Biology Paper 2"];
+    planResult = {
+      ok: true,
+      plan: {
+        planId: "plan-1",
+        title: "Biology Paper 2",
+        examDate: soon,
+        dayCount: 9,
+        subjectName: "Biology",
+        alreadyExisted: false,
+      },
+    };
+    subjects = [{ id: "sub-bio", name: "Biology" }];
+    exams = [
+      { id: "ex-bio", title: "Biology Paper 2", date: soon, subjectId: "sub-bio", subject: { name: "Biology" } },
+    ];
+  });
+
+  it("passes the replace flag through, so the old plan is thrown away first", async () => {
+    const { byName } = toolSet();
+    await byName("make_study_plan").run({ exam: null, subject: null, brief: null, replace: true });
+    expect(planned[0].options.replace).toBe(true);
+  });
+
+  it("leaves an existing plan alone when replace was not asked for", async () => {
+    const { byName } = toolSet();
+    await byName("make_study_plan").run({ exam: null, subject: null, brief: null, replace: false });
+    expect(planned[0].options.replace).toBe(false);
+  });
+
+  it("tells the model to replace it rather than telling the student to archive it", async () => {
+    planResult = {
+      ok: true,
+      plan: {
+        planId: "plan-1",
+        title: "Biology Paper 2",
+        examDate: soon,
+        dayCount: 9,
+        subjectName: "Biology",
+        alreadyExisted: true,
+      },
+    };
+    const { byName } = toolSet();
+    const outcome = await byName("make_study_plan").run({ exam: null, subject: null, brief: null, replace: false });
+    expect(outcome.message).toContain("replace true");
+    expect(outcome.message).toMatch(/do not ask them to archive it themselves/i);
+  });
+
+  it("puts one plan away, scoped to the exam they meant", async () => {
+    const { byName, done } = toolSet();
+    const outcome = await byName("archive_study_plan").run({ exam: "Biology", subject: null, all: false });
+
+    expect(outcome.ok).toBe(true);
+    expect(archived).toHaveLength(1);
+    expect(archived[0].userId).toBe("user-1");
+    expect(archived[0].which).toMatchObject({ examId: "ex-bio" });
+    expect(done[0]).toContain("Biology Paper 2");
+    // Archived, not deleted — and the reply has to say so, because "gone"
+    // and "put away" are different promises about their ticked-off days.
+    expect(outcome.message).toMatch(/nothing was deleted/i);
+  });
+
+  it("clears the lot when they ask for the lot", async () => {
+    archivedTitles = ["Biology Paper 2", "Economics Paper 2", "Maths Paper 1"];
+    const { byName, done } = toolSet();
+    const outcome = await byName("archive_study_plan").run({ exam: null, subject: null, all: true });
+
+    expect(outcome.ok).toBe(true);
+    expect(archived[0].which).toMatchObject({ all: true });
+    expect(outcome.message).toContain("3 plans");
+    expect(done).toHaveLength(3);
+  });
+
+  it("says so plainly when there was nothing to put away", async () => {
+    archivedTitles = [];
+    const { byName, done } = toolSet();
+
+    const none = await byName("archive_study_plan").run({ exam: null, subject: null, all: true });
+    expect(none.ok).toBe(true);
+    expect(none.message).toMatch(/no live plans/i);
+    expect(done).toEqual([]);
+
+    const one = await byName("archive_study_plan").run({ exam: null, subject: null, all: false });
+    expect(one.ok).toBe(false);
+    expect(one.message).toMatch(/no live plan/i);
+  });
+
+  it("archives nothing when it cannot tell which exam is meant", async () => {
+    const { byName } = toolSet();
+    const outcome = await byName("archive_study_plan").run({ exam: "Astrophysics", subject: null, all: false });
+    expect(outcome.ok).toBe(false);
+    expect(archived).toHaveLength(0);
   });
 });
 

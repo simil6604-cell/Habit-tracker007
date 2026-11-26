@@ -188,6 +188,22 @@ export function readDay(input: Record<string, unknown>, key: string): Date | nul
 }
 
 /** A list argument, with non-objects dropped. */
+/**
+ * A yes/no argument.
+ *
+ * Tolerant of the string, because a model asked for a boolean will now and
+ * then send "true" — and a flag that silently reads as false is a tool that
+ * quietly does the opposite of what was asked. Anything else is false:
+ * these flags all guard the more destructive of two behaviours, so the
+ * uncertain case has to be the safe one.
+ */
+export function readBoolean(input: Record<string, unknown>, key: string): boolean {
+  const value = input[key];
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value.trim().toLowerCase() === "true";
+  return false;
+}
+
 export function readObjects(input: Record<string, unknown>, key: string, max: number): Record<string, unknown>[] {
   const value = input[key];
   if (!Array.isArray(value)) return [];
