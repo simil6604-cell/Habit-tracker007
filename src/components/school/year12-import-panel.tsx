@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { importYear12Timetable } from "@/lib/school/timetable-import-actions";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button";
  */
 export function Year12ImportPanel({ hasSlots }: { hasSlots: boolean }) {
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useSafeTransition();
 
   function run() {
     setStatus(null);

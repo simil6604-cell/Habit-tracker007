@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useActionState, useRef, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
 import { Trash2 } from "lucide-react";
@@ -31,7 +32,7 @@ export function ProductScannerPanel({ history }: { history: ScannedProduct[] }) 
   // from whether a particular barcode is in them, and the one people
   // actually mean when they say the scanner does not work.
   const [check, setCheck] = useState<{ ok: boolean; detail: string } | null>(null);
-  const [checking, startCheck] = useTransition();
+  const [checking, startCheck] = useSafeTransition();
   const barcodeRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 

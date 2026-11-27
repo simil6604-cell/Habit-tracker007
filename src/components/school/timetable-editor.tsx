@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ const SUBJECT_DATALIST_ID = "timetable-subject-options";
 
 export function TimetableEditor({ initialRows, subjects }: { initialRows: GridPeriodRow[]; subjects: Subject[] }) {
   const [rows, setRows] = useState<GridPeriodRow[]>(initialRows.length ? initialRows : [emptyRow()]);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const [saved, setSaved] = useState(false);
   const router = useRouter();
 

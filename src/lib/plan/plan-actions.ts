@@ -2,15 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { startOfDay } from "date-fns";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { isPlanStatus, MAX_PLAN_NOTE, MAX_PLAN_TIME, parseDay, type PlanStatus } from "./plan";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 /** "homework:abc123" — the shape this app writes, and nothing else. */
 function splitSourceKey(raw: string): { table: string; id: string } | null {

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { parseRevisionUrl } from "@/lib/utils/revision-url";
 import { generateIndividualTraining } from "./training-generator";
@@ -15,12 +15,6 @@ import {
 } from "./standings-import";
 import { cleanLine, cleanNote, parseMatchDate, MAX_LOCATION } from "./match-details";
 import type { FootballPosition } from "@/lib/data/football";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 /**
  * The league table is read on both football pages.

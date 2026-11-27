@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useRef, useState } from "react";
 import { Camera, Check, X } from "lucide-react";
 import { readStandingsPhoto, saveCheckedStandings } from "@/lib/football/actions";
 import type { ImportedStanding } from "@/lib/football/standings-import";
@@ -36,7 +37,7 @@ type NumericKey = (typeof COLUMNS)[number]["key"];
 export function StandingsPhotoPanel() {
   const [rows, setRows] = useState<ImportedStanding[] | null>(null);
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useSafeTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
   function read(formData: FormData) {

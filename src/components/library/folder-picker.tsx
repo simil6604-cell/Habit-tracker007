@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { Fragment } from "react";
 import { moveLibraryItem } from "@/lib/library/library-actions";
 
 export type PickerFolder = { id: string; name: string; sections: { id: string; name: string }[] };
@@ -42,7 +43,7 @@ export function FolderPicker({
   sectionId: string | null;
   folders: PickerFolder[];
 }) {
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   if (folders.length === 0) return null;
 

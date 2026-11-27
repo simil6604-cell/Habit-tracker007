@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { AIProse } from "@/components/shared/ai-message";
 import { Button } from "@/components/ui/button";
 import { generateSubjectQuiz, gradeSubjectQuiz } from "@/lib/school/subject-quiz-actions";
@@ -10,7 +11,7 @@ export function SubjectExamQuiz({ subjectId }: { subjectId: string }) {
   const [answers, setAnswers] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   function start() {
     setFeedback(null);

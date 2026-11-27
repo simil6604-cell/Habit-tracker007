@@ -5,6 +5,7 @@ import { countLibrary } from "@/lib/library/library-data";
 import { AIStatusBanner } from "@/components/layout/ai-status-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { ActionFailureStrip } from "@/components/layout/action-failure-strip";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -38,6 +39,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="min-w-0 flex-1 pb-24 lg:pb-8">{children}</main>
       </div>
       <BottomNav />
+      {/* One line when a button did not get through, instead of the page dying. */}
+      <ActionFailureStrip />
     </div>
   );
 }

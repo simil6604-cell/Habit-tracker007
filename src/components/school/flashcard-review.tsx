@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { reviewFlashcard } from "@/lib/school/flashcard-actions";
 import { Button } from "@/components/ui/button";
 
@@ -9,7 +10,7 @@ type Card = { id: string; front: string; back: string; topic: string | null };
 export function FlashcardReview({ cards }: { cards: Card[] }) {
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   if (cards.length === 0) {
     return <p className="py-6 text-center text-sm text-muted">Nothing due right now. Great job staying on top of reviews 🎉</p>;

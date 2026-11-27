@@ -1,16 +1,10 @@
 "use server";
 
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { aiFailureMessage } from "@/lib/ai/api-key";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 const NO_AI_QUIZ_MESSAGE =
   "A real AI connection is needed to generate a genuine quiz — set ANTHROPIC_API_KEY (see Settings). This app never invents fake quiz questions or answers without one.";

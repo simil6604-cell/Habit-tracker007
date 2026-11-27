@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { importStandingsFromLink, importStandingsFromPaste } from "@/lib/football/actions";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ export function StandingsSyncPanel({
   const [showPaste, setShowPaste] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [syncedAt, setSyncedAt] = useState(lastSyncedAt);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useSafeTransition();
 
   /**
    * Both routes end in the same rows, so they share the reporting.

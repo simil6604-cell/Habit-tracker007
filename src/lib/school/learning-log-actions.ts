@@ -1,13 +1,7 @@
 "use server";
 
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type LogEntryType = "UNDERSTOOD" | "CONFUSED" | "QUESTION";
 export type LogEntry = { id: string; type: LogEntryType; content: string; createdAt: Date };

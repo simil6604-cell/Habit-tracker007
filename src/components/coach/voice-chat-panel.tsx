@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { AudioLines, Mic, MicOff, Send, Trash2, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,11 +46,11 @@ export function VoiceChatPanel({
   const [input, setInput] = useState("");
   const [speakReplies, setSpeakReplies] = useState(false);
   const [canSpeak, setCanSpeak] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   // Editing one of your own messages: which one, and what it now says.
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [editPending, startEdit] = useTransition();
+  const [editPending, startEdit] = useSafeTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
   // Which reply we've already read out, so a re-render doesn't repeat it.
   const spokenRef = useRef<string | null>(null);

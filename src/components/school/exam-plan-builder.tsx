@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ export function ExamPlanBuilder({ exams }: { exams: PlannableExam[] }) {
   const [examId, setExamId] = useState(exams.find((e) => !e.hasPlan)?.id ?? exams[0]?.id ?? "");
   const [brief, setBrief] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   if (exams.length === 0) {
     return (

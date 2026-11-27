@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import {
   checkProductDatabase,
@@ -11,12 +11,6 @@ import {
   type ProductSource,
 } from "./off-lookup";
 import { computeHealthScore, type ScoreBreakdown } from "./health-score";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type ScanState =
   | {

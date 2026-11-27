@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { analyseMarkedPaper } from "@/lib/school/marked-paper-actions";
@@ -24,7 +25,7 @@ export function AnalysePaperButton({
   analysedAt: Date | null;
 }) {
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useSafeTransition();
   const router = useRouter();
 
   function run() {

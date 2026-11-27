@@ -1,6 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
+
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
 import { levelsForSystems } from "@/lib/data/cambridge";
 import { updateSubjectLevel } from "@/lib/school/actions";
 
@@ -13,7 +14,7 @@ export function SubjectLevelPicker({
   level: string | null;
   systems: string[];
 }) {
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const levels = levelsForSystems(systems);
 
   return (

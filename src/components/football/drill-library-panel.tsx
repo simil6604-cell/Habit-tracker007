@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,7 +30,7 @@ export function DrillLibraryPanel({
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   const suggested = suggestedDrillVideos(selected);
   const mine = videos.filter((v) => v.skill === selected);

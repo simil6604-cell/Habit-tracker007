@@ -1,18 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { listCourses, listCourseWork, listSubmissions } from "./classroom";
 import { accessTokenFor, disconnectGoogle, recordSyncResult } from "./connection";
 import { IMPORT_SOURCE, planImport, type ExistingHomework } from "./import-plan";
 import { GoogleError, GOOGLE_FAILURE_MESSAGE } from "./oauth";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type SyncResult = {
   ok: boolean;

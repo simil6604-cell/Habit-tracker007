@@ -1,6 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
+
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
 import Link from "next/link";
 import { respondToRecommendation } from "@/lib/ai/coach-actions";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ type Recommendation = {
 };
 
 export function RecommendationCard({ rec }: { rec: Recommendation }) {
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   let reasons: string[] = [];
   try {
     reasons = JSON.parse(rec.reasoning);

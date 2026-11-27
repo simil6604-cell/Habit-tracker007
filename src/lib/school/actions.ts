@@ -2,17 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { parseRevisionUrl } from "@/lib/utils/revision-url";
 import { SUBJECT_COLORS } from "@/lib/data/cambridge";
 import { FIXED_PERIOD_TYPES, inferCellPeriodType, type PeriodType } from "./timetable-grid";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export async function createSubject(formData: FormData) {
   const userId = await requireUserId();

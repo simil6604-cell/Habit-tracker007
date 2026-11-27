@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { generateFlashcardsFromConfusions } from "@/lib/school/flashcard-actions";
@@ -12,7 +13,7 @@ import { generateFlashcardsFromConfusions } from "@/lib/school/flashcard-actions
  */
 export function GenerateFromConfusionsButton() {
   const [result, setResult] = useState<{ created: number; message: string } | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   return (
     <div className="flex flex-col gap-1">

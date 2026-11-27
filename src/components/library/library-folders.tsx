@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { Folder, FolderOpen, Plus, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -167,7 +168,7 @@ export function LibraryFolders({
  * for a folder that was made by hand and has no sections yet.
  */
 function SetUpSubjects() {
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const [done, setDone] = useState<string | null>(null);
 
   return (

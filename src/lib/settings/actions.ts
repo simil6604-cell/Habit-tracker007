@@ -1,20 +1,15 @@
 "use server";
 
+import { requireUserId } from "@/lib/auth/require-user";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { auth, signOut } from "@/lib/auth/auth";
+import { signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 
 import { DEFAULT_EXPRESSION, isExpressionId } from "@/lib/ai/expression";
 
 const VALID_MAIN_FOCUS = ["school", "gym", "football", "balanced"];
 const VALID_EDUCATION_SYSTEMS = ["IGCSE", "AS_LEVEL", "A_LEVEL", "OTHER"];
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export async function updateProfileName(formData: FormData) {
   const userId = await requireUserId();

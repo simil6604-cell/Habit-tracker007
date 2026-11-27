@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { Check } from "lucide-react";
 import { EXPRESSIONS, type ExpressionId } from "@/lib/ai/expression";
 import { updateAIExpression } from "@/lib/settings/actions";
@@ -19,7 +20,7 @@ import { updateAIExpression } from "@/lib/settings/actions";
  */
 export function ExpressionPicker({ current }: { current: string }) {
   const [chosen, setChosen] = useState<string>(current);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   function choose(id: ExpressionId) {
     if (id === chosen) return;
