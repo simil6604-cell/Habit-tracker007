@@ -54,6 +54,21 @@ export type SchoolAIMessageEntry = {
 const MAX_IMAGE_BYTES = 18 * 1024 * 1024;
 
 /**
+ * And the budget for any single one of them.
+ *
+ * The API refuses an image over its own per-image limit with a 400, and
+ * that is measured on the base64, which is four bytes for every three. A
+ * photo that slipped under the total above could still be refused on its
+ * own — which is exactly what happened, and what the student saw was "the
+ * AI service returned an error (400)".
+ *
+ * Photos from this app's own chat are shrunk in the browser before they
+ * are ever uploaded, so they arrive far under this. This is for the ones
+ * that got in before that existed, and for any path that forgets to.
+ */
+const MAX_ONE_IMAGE_BYTES = 3_500_000;
+
+/**
  * The pages a tool can change under the student's feet.
  *
  * Homework and exams show on /school, cards on the flashcards page, and the
@@ -214,7 +229,10 @@ async function loadAttachments(
       continue;
     }
     const buffer = await readUploadedImage(path);
-    if (!buffer || bytes + buffer.byteLength > MAX_IMAGE_BYTES) {
+    // Too big on its own, or too big alongside the others. Skipped rather
+    // than sent: one oversized photo would have the API refuse the whole
+    // question, and then none of the twelve gets looked at.
+    if (!buffer || buffer.byteLength > MAX_ONE_IMAGE_BYTES || bytes + buffer.byteLength > MAX_IMAGE_BYTES) {
       skipped += 1;
       continue;
     }

@@ -119,6 +119,16 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   editable before, which meant living with the plan exactly as it was first
   written. The one thing it does not do yet is add a day back, so a run-up
   you have cut into is rebuilt rather than patched.
+  **A photo is shrunk in your browser before it is uploaded.** A 12-megapixel
+  phone photo is three to five megabytes, base64 adds a third again on the
+  way to the AI, and the API refuses an image that size outright — which
+  arrived as "the AI service returned an error (400)" for someone who had
+  simply photographed a question. Nothing is lost by shrinking it: the model
+  reads at 2576 pixels on the long edge and scales anything bigger down
+  itself. The upload is a fraction of the size over a phone connection as
+  well. And when the API does refuse something, its own explanation is now
+  in the message rather than only the number.
+
   **A photo and a microphone sit in the row you type in**, either side of
   the box, the way every messenger has them — attaching a past paper and
   speaking a question are things you do to a message, and they used to live

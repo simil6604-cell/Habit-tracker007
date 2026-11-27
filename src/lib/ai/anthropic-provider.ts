@@ -20,6 +20,24 @@ import {
   type ProviderTool,
 } from "./tool-use";
 
+/**
+ * What the API said, in its own words, trimmed to a line.
+ *
+ * The SDK puts the server's JSON on `error`, and its own prefixed copy on
+ * `message`. Either will do; the point is that something names the actual
+ * problem rather than its number.
+ */
+function apiReason(err: InstanceType<typeof Anthropic.APIError>): string {
+  const body = err.error as { error?: { message?: unknown } } | undefined;
+  const fromBody = typeof body?.error?.message === "string" ? body.error.message : "";
+  const raw = (fromBody || err.message || "").trim();
+  if (!raw) return "";
+  // The SDK prefixes its own message with the status; saying it twice reads
+  // like a stutter in a sentence someone is already unhappy to be reading.
+  const cleaned = raw.replace(/^\d{3}\s+/, "").trim();
+  return cleaned ? `: ${cleaned.slice(0, 300)}` : "";
+}
+
 function friendlyAnthropicError(err: unknown): string {
   if (err instanceof Anthropic.APIError) {
     // Wording stays host-agnostic: this message is shown to someone whose app
@@ -32,7 +50,18 @@ function friendlyAnthropicError(err: unknown): string {
     if (err.status === 403) return "the API key was refused (403) — it may be disabled, or restricted to a different workspace";
     if (err.status === 429) return "the AI service is rate-limited or out of credit right now — check your Anthropic account's usage and billing";
     if (err.status && err.status >= 500) return "the AI service is temporarily unavailable — this one is at their end, try again shortly";
-    return `the AI service returned an error (${err.status ?? "unknown"})`;
+    /*
+     * Everything else, with what the API actually said.
+     *
+     * This used to stop at the number. "the AI service returned an error
+     * (400)" was reported by a student who had attached a photo, and it
+     * says nothing: a 400 is the API refusing something specific about the
+     * request, and it always comes with a sentence naming it — which image,
+     * which field, what was wrong with it. Throwing that away meant the one
+     * person who could act on it never saw it, and neither could anyone
+     * reading the report.
+     */
+    return `the AI service returned an error (${err.status ?? "unknown"})${apiReason(err)}`;
   }
   return err instanceof Error ? err.message : "the AI service could not be reached";
 }

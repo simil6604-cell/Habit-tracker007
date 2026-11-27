@@ -25,6 +25,7 @@ import { editSchoolAIMessage } from "@/lib/school/school-ai-actions";
 import { MAX_EDIT_CHARS } from "@/lib/school/school-ai";
 import { clientFailureMessage } from "@/lib/utils/action-error";
 import { ThinkingTimer } from "@/components/shared/thinking-timer";
+import { shrinkPhoto } from "@/lib/school/shrink-photo";
 import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
 import { DICTATION_LANGS, mismatchedLang } from "@/lib/ai/voice/dictation-lang";
 import { isDocumentPath, MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
@@ -279,7 +280,16 @@ export function SchoolAIPanel({
     for (const [index, file] of chosen.entries()) {
       if (chosen.length > 1) setNotice(`Uploading ${index + 1} of ${chosen.length}…`);
       const formData = new FormData();
-      formData.append("photos", file);
+      /*
+       * Shrunk here, in the browser, before it goes anywhere.
+       *
+       * A photo off a phone is three to five megabytes and the API refuses
+       * an image that size outright — a 400, reported as the AI being
+       * unreachable. It also makes the upload itself slow on a phone
+       * connection. Nothing is lost: the model reads at 2576 pixels on the
+       * long edge and scales anything larger down itself.
+       */
+      formData.append("photos", await shrinkPhoto(file));
       try {
         const result = await uploadSchoolAIPhotos(formData);
         if (result.paths.length > 0) setStaged((prev) => [...prev, ...result.paths]);

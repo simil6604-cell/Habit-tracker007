@@ -87,6 +87,11 @@ function cutOffReply(): Record<string, unknown> {
   };
 }
 
+/** The API refusing the request, the way it really does. */
+function refusal(status: number, message: string): Record<string, unknown> {
+  return { __status: status, __body: { type: "error", error: { type: "invalid_request_error", message } } };
+}
+
 beforeAll(async () => {
   server = createServer((req, res) => {
     let raw = "";
@@ -97,8 +102,17 @@ beforeAll(async () => {
         headers: req.headers as Record<string, string>,
         body: raw ? JSON.parse(raw) : {},
       });
+      const next = replies.shift();
+      // A queued reply may be a refusal: the API says no with a status and
+      // a sentence, and what this app does with that sentence is the whole
+      // point of some of the tests below.
+      if (next && typeof next.__status === "number") {
+        res.writeHead(next.__status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(next.__body));
+        return;
+      }
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(replies.shift() ?? textReply("Der Zellkern steuert die Zelle.")));
+      res.end(JSON.stringify(next ?? textReply("Der Zellkern steuert die Zelle.")));
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -552,5 +566,48 @@ describe("how hard it is asked to think", () => {
     );
     expect(requests).toHaveLength(3);
     for (const request of requests) expect(request.body.output_config).toEqual({ effort: "low" });
+  });
+});
+
+describe("when the API refuses the request", () => {
+  /**
+   * Reported, word for word: "Couldn't reach the AI service right now (the
+   * AI service returned an error (400))", sent with a photo attached.
+   *
+   * The service was reachable. A 400 is the API naming something specific
+   * about the request — which image, which field, what is wrong with it —
+   * and the app was printing the number and dropping the sentence. The one
+   * person who could act on it never saw it.
+   */
+  it("says what the API said, not just the number", async () => {
+    await expect(
+      ask({ ANTHROPIC_API_KEY: FAKE_KEY }, {}, [
+        refusal(400, "messages.0.content.1.image.source.base64: image exceeds 5 MB maximum"),
+      ])
+    ).rejects.toThrow(/image exceeds 5 MB maximum/);
+  });
+
+  it("still leads with the number, so the kind of failure is obvious", async () => {
+    await expect(
+      ask({ ANTHROPIC_API_KEY: FAKE_KEY }, {}, [refusal(400, "some detail")])
+    ).rejects.toThrow(/\(400\)/);
+  });
+
+  it("does not repeat the status inside its own sentence", async () => {
+    // The SDK prefixes the body's message with the status, so printing both
+    // gives "(400): 400 some detail".
+    const error = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, {}, [refusal(400, "some detail")]).catch(
+      (err: Error) => err.message
+    );
+    expect(error).not.toMatch(/400\D+400/);
+  });
+
+  it("keeps the advice it already had for the statuses it knows", async () => {
+    // A key problem is not made clearer by the server's wording of it, and
+    // the app's own sentence says what to do about it.
+    const error = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, {}, [
+      refusal(401, "invalid x-api-key"),
+    ]).catch((err: Error) => err.message);
+    expect(error).toMatch(/Re-paste ANTHROPIC_API_KEY/);
   });
 });
