@@ -33,7 +33,8 @@ export function LearningLogAndQuiz({ topicId }: { topicId: string }) {
 
   useEffect(() => {
     startTransition(async () => setEntries(await getLearningLog(topicId)));
-  }, [topicId]);
+    // Stable across renders — see the note in school-ai-panel.
+  }, [topicId, startTransition]);
 
   function addEntry(type: LogEntryType) {
     const content = drafts[type];

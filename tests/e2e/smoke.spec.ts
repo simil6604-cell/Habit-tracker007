@@ -2425,7 +2425,10 @@ test.describe.serial("full app walkthrough", () => {
     // below was an answer to the old wording, and the turns after it were a
     // conversation about that answer.
     await page.goto("/school#school-ai");
-    const box = page.locator('input[placeholder*="Ask anything about a subject"]').first();
+    // By name, not by placeholder: the placeholder is copy, and copy
+    // changes — it did, the day the attach and microphone buttons moved
+    // into this row and the box got narrower.
+    const box = page.locator('form input[name="message"]').first();
     await box.waitFor({ timeout: 15000 });
 
     // A new chat, so this test owns the whole conversation it checks.

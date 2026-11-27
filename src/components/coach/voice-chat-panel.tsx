@@ -220,17 +220,6 @@ export function VoiceChatPanel({
             <AudioLines size={14} />
             {voice.active ? "End voice chat" : "Voice chat"}
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={mic.listening ? "secondary" : "outline"}
-            onClick={toggleMic}
-            disabled={!mic.supported || pending}
-            title={mic.supported ? "Dictate a message" : "This browser has no speech recognition"}
-          >
-            {mic.listening ? <MicOff size={14} /> : <Mic size={14} />}
-            {mic.listening ? "Stop & send" : "Dictate"}
-          </Button>
           <select
             aria-label="Microphone language"
             value={dictationLang}
@@ -408,15 +397,36 @@ export function VoiceChatPanel({
         }}
         className="mt-3 flex gap-2 border-t border-border pt-3"
       >
+        {/* Beside the box, as in the school chat: speaking a message is
+            something you do to this message, not a mode you switch on. */}
+        <Button
+          type="button"
+          size="md"
+          variant={mic.listening ? "secondary" : "outline"}
+          onClick={toggleMic}
+          disabled={!mic.supported || pending}
+          data-testid="coach-dictate"
+          aria-label={mic.listening ? "Stop & send" : "Dictate"}
+          title={mic.supported ? "Speak your message instead of typing it" : "This browser has no speech recognition"}
+          className="w-10 shrink-0 px-0"
+        >
+          {mic.listening ? <MicOff size={16} /> : <Mic size={16} />}
+        </Button>
         <input
           name="message"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about exams, training, or your whole week…"
+          placeholder={mic.listening ? "Listening — just talk…" : "Ask about exams, training, or your whole week…"}
           disabled={pending}
-          className="flex-1 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
+          className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
         />
-        <Button type="submit" size="md" disabled={pending || !input.trim()}>
+        <Button
+          type="submit"
+          size="md"
+          aria-label="Send"
+          disabled={pending || !input.trim()}
+          className="w-10 shrink-0 px-0"
+        >
           <Send size={16} />
         </Button>
       </form>
