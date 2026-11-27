@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
+import { makeNoisyPng } from "./big-image";
 import { E2E_INVITE_CODE } from "./invite-code";
 
 /**
@@ -84,4 +85,85 @@ test("the coach has its microphone in the same place", async ({ page }) => {
   await expect(row).toBeVisible();
   await expect(row.getByTestId("coach-dictate")).toBeVisible();
   await expect(row.getByRole("button", { name: "Send" })).toBeVisible();
+});
+
+/** What the server kept, in bytes — the thing the AI will be handed. */
+async function storedBytes(page: Page, src: string): Promise<number> {
+  const stored = await page.request.get(src);
+  expect(stored.status()).toBe(200);
+  // Measured on the bytes: the route that serves an upload does not
+  // promise a content-length header, and a missing one reads as zero.
+  return (await stored.body()).byteLength;
+}
+
+/** The API's per-image limit is on the base64, which is four bytes per three. */
+const SAFE_ON_THE_WIRE = 3_500_000;
+
+test("a photo with a phone's dimensions is shrunk before it is uploaded", async ({ page }) => {
+  /*
+   * Reported as "Couldn't reach the AI service right now (the AI service
+   * returned an error (400))" with a photo attached. The service was fine:
+   * 4032x3024 is what a phone camera produces, the API reads at 2576 on the
+   * long edge, and an image over its per-image limit is refused outright.
+   */
+  await register(page);
+  await page.goto("/school#school-ai");
+
+  const big = makeNoisyPng(4032, 3024);
+  await page.getByTestId("school-ai-photo-input").setInputFiles({
+    name: "IMG_1330.png",
+    mimeType: "image/png",
+    buffer: big,
+  });
+
+  const staged = page.getByTestId("school-ai-staged");
+  await expect(staged).toBeVisible({ timeout: 45_000 });
+  const src = await staged.locator("img").getAttribute("src");
+  const length = await storedBytes(page, src!);
+
+  expect(length).toBeLessThan(SAFE_ON_THE_WIRE);
+  expect(length).toBeLessThan(big.byteLength / 4);
+});
+
+test("a photo small enough in pixels but too heavy in bytes is re-encoded", async ({ page }) => {
+  // The other half of the rule. This one is well inside the long edge the
+  // model reads at, so only its weight is wrong — and it would upload
+  // perfectly well and then be refused by the API.
+  await register(page);
+  await page.goto("/school#school-ai");
+
+  const heavy = makeNoisyPng(1300, 1000);
+  expect(heavy.byteLength).toBeGreaterThan(SAFE_ON_THE_WIRE);
+
+  await page.getByTestId("school-ai-photo-input").setInputFiles({
+    name: "scan.png",
+    mimeType: "image/png",
+    buffer: heavy,
+  });
+
+  const staged = page.getByTestId("school-ai-staged");
+  await expect(staged).toBeVisible({ timeout: 45_000 });
+  const length = await storedBytes(page, (await staged.locator("img").getAttribute("src"))!);
+  expect(length).toBeLessThan(SAFE_ON_THE_WIRE);
+});
+
+test("a photo that is already fine is left exactly as it is", async ({ page }) => {
+  // Re-encoding a small clean PNG would cost quality and buy nothing.
+  await register(page);
+  await page.goto("/school#school-ai");
+
+  const small = makeNoisyPng(600, 400);
+  expect(small.byteLength).toBeLessThan(SAFE_ON_THE_WIRE);
+
+  await page.getByTestId("school-ai-photo-input").setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: small,
+  });
+
+  const staged = page.getByTestId("school-ai-staged");
+  await expect(staged).toBeVisible({ timeout: 30_000 });
+  const src = (await staged.locator("img").getAttribute("src"))!;
+  expect(src.endsWith(".png"), src).toBe(true);
+  expect(await storedBytes(page, src)).toBe(small.byteLength);
 });
