@@ -4,7 +4,7 @@ import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { AudioLines, FileText, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, FileText, ImagePlus, Loader2, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { MessageActions } from "@/components/shared/message-actions";
 import { Button } from "@/components/ui/button";
 import { AIMessageContent } from "@/components/shared/ai-message";
@@ -393,24 +393,6 @@ export function SchoolAIPanel({
             <AudioLines size={14} />
             {voice.active ? "End voice chat" : "Voice chat"}
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={mic.listening ? "secondary" : "outline"}
-            onClick={toggleMic}
-            disabled={!mic.supported || pending || lessonRecording}
-            data-testid="dictate"
-            title={
-              lessonRecording
-                ? "A lesson is being recorded — stop that first, or it will record nothing"
-                : mic.supported
-                  ? "Dictate a question"
-                  : "This browser has no speech recognition"
-            }
-          >
-            {mic.listening ? <MicOff size={14} /> : <Mic size={14} />}
-            {mic.listening ? "Stop & send" : "Dictate"}
-          </Button>
           {/* Beside the button rather than buried in settings: which
               language it is listening in is the single thing that decides
               whether dictation works, and it changes between a German
@@ -438,17 +420,6 @@ export function SchoolAIPanel({
           >
             {speakReplies ? <Volume2 size={14} /> : <VolumeX size={14} />}
             {speakReplies ? "Speaking" : "Speak answers"}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading || pending}
-            title="Photograph a question, your notes or your own working — or attach a PDF past paper or mark scheme"
-          >
-            <ImagePlus size={14} />
-            {uploading ? "Uploading…" : "Photos / PDF"}
           </Button>
           <input
             ref={fileRef}
@@ -762,15 +733,61 @@ export function SchoolAIPanel({
         }}
         className="mt-3 flex gap-2 border-t border-border pt-3"
       >
+        {/*
+          Beside the box you type in, not in the row of modes above it.
+          Attaching a photo and speaking a question are things you do TO a
+          message, the way every messenger has them — a camera and a
+          microphone either side of where the words go. They sat in the
+          toolbar with the settings, which is where you look for how the
+          chat behaves, not for how to send this one thing.
+        */}
+        <Button
+          type="button"
+          size="md"
+          variant="outline"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading || pending}
+          aria-label={uploading ? "Uploading…" : "Photos / PDF"}
+          data-testid="attach"
+          title="Photograph a question, your notes or your own working — or attach a PDF past paper or mark scheme"
+          className="w-10 shrink-0 px-0"
+        >
+          {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+        </Button>
+        <Button
+          type="button"
+          size="md"
+          variant={mic.listening ? "secondary" : "outline"}
+          onClick={toggleMic}
+          disabled={!mic.supported || pending || lessonRecording}
+          data-testid="dictate"
+          aria-label={mic.listening ? "Stop & send" : "Dictate"}
+          title={
+            lessonRecording
+              ? "A lesson is being recorded — stop that first, or it will record nothing"
+              : mic.supported
+                ? "Speak your question instead of typing it"
+                : "This browser has no speech recognition"
+          }
+          className="w-10 shrink-0 px-0"
+        >
+          {mic.listening ? <MicOff size={16} /> : <Mic size={16} />}
+        </Button>
         <input
           name="message"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask anything about a subject, a past paper, or your revision…"
+          placeholder={mic.listening ? "Listening — just talk…" : "Ask anything, or attach a photo…"}
           disabled={pending}
-          className="flex-1 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
+          className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
         />
-        <Button type="submit" size="md" disabled={pending || uploading || (!input.trim() && staged.length === 0)}>
+        <Button
+          type="submit"
+          size="md"
+          aria-label="Send"
+          disabled={pending || uploading || (!input.trim() && staged.length === 0)}
+          className="w-10 shrink-0 px-0"
+        >
           <Send size={16} />
         </Button>
       </form>

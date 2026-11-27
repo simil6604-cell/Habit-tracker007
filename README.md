@@ -119,6 +119,14 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   editable before, which meant living with the plan exactly as it was first
   written. The one thing it does not do yet is add a day back, so a run-up
   you have cut into is rebuilt rather than patched.
+  **A photo and a microphone sit in the row you type in**, either side of
+  the box, the way every messenger has them — attaching a past paper and
+  speaking a question are things you do to a message, and they used to live
+  in the toolbar above with the settings. The microphone writes what you say
+  into the box and sends it: speech, not an audio file, because what reads
+  it is a model that reads text. The AI Coach has the same microphone in the
+  same place; it takes no photos, having nothing to look at them with yet.
+
   **A button that fails can no longer take its page with it.** Every action
   in the app runs through one hook that catches a failure and puts a line at
   the bottom of the screen, instead of letting the rejection reach the error

@@ -37,7 +37,8 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
 
   useEffect(() => {
     startTransition(async () => setRecordings(await getClassRecordings(topicId)));
-  }, [topicId]);
+    // Stable across renders — see the note in school-ai-panel.
+  }, [topicId, startTransition]);
 
   function save() {
     setSaveError(null);
