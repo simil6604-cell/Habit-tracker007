@@ -909,6 +909,12 @@ model SchoolAIMessage {
   // The /uploads paths of any photos sent with this message, as JSON. A
   // question about three pages of a past paper is one message, not three.
   imagePaths String?
+  // True when this is the app reporting that it could not get an answer —
+  // an out-of-credit account, a rejected key — rather than the tutor
+  // answering. It stays on screen, because the student has to be told why
+  // nothing came back, and it is kept out of the context sent on the next
+  // question, because it is not something the tutor said.
+  failed     Boolean       @default(false)
   createdAt  DateTime      @default(now())
 
   @@index([userId, createdAt])

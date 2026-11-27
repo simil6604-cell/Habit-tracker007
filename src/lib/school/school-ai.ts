@@ -4,6 +4,7 @@ import { MAX_REVISION_LINKS, revisionLinksPrompt } from "./revision-links";
 import { linksForPrompt, setupPrompt, subjectSetup } from "./revision-setup";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
 import { daysAgoLabel, daysUntilLabel, dueLabel } from "@/lib/planner/days-until";
+import { parseImagePaths } from "./school-ai-photos";
 
 /**
  * The school-only assistant.
@@ -371,8 +372,65 @@ export type SchoolAITurn = { role: "USER" | "ASSISTANT"; content: string; photoC
  */
 export { MAX_EDIT_CHARS } from "@/lib/ai/chat-limits";
 
-export function buildSchoolAITurns(history: SchoolAITurn[]): { role: "user" | "assistant"; content: string }[] {
+/**
+ * The app's own voice, recognised in a message already stored.
+ *
+ * The flag is the real answer, but it only exists from the deploy that added
+ * the column onwards: every failure written before that is on record as an
+ * ordinary reply, and the conversation most full of them is the one being
+ * had when this shipped. So the wording is recognised too — these are
+ * sentences this app writes, in api-key.ts and above, never ones a tutor
+ * produces, and only ever stored under the ASSISTANT role, which nothing but
+ * this app writes.
+ *
+ * Checked with `includes` rather than from the front, because a note about a
+ * photo that would not fit is prepended to the reply before it is stored.
+ */
+const APP_FAILURE_WORDING = [
+  "The AI could not answer:",
+  "Couldn't reach the AI service right now",
+  NO_REAL_AI_MESSAGE,
+];
+
+function isAppFailureNotice(message: StoredChatMessage): boolean {
+  if (message.role !== "ASSISTANT") return false;
+  if (message.failed) return true;
+  return (
+    APP_FAILURE_WORDING.some((wording) => message.content.includes(wording)) ||
+    message.content.trimStart().startsWith("The AI key ")
+  );
+}
+
+/** One stored chat message, as the database hands it back. */
+export type StoredChatMessage = { role: string; content: string; imagePaths: string | null; failed: boolean };
+
+/**
+ * The conversation as the tutor should see it.
+ *
+ * Everything the student asked and everything the tutor answered — and
+ * nothing the app said on its own behalf. When a call fails, the reason goes
+ * into the chat as a message, because a question that produces silence is
+ * worse than one that produces "the account has run out of credit". But it is
+ * the app talking, not the tutor, and sent back as context it becomes a tutor
+ * who announced it cannot help: still on record as its last word once the
+ * credit is back, and apologising for an account the student has already
+ * topped up.
+ *
+ * The student's own question stays, because they did ask it, and the gap
+ * where the answer should be is handled where the turns are built.
+ */
+export function chatContextTurns(history: StoredChatMessage[]): SchoolAITurn[] {
   return history
+    .filter((message) => !isAppFailureNotice(message))
+    .map((message) => ({
+      role: message.role as "USER" | "ASSISTANT",
+      content: message.content,
+      photoCount: parseImagePaths(message.imagePaths).length,
+    }));
+}
+
+export function buildSchoolAITurns(history: SchoolAITurn[]): { role: "user" | "assistant"; content: string }[] {
+  const turns = history
     .slice(-HISTORY_TURNS)
     .map((turn) => {
       const photos =
@@ -385,6 +443,28 @@ export function buildSchoolAITurns(history: SchoolAITurn[]): { role: "user" | "a
       };
     })
     .filter((turn) => turn.content !== "");
+
+  /*
+   * Two turns of the same role in a row, joined into one.
+   *
+   * The API refuses the whole request if the roles do not alternate — a flat
+   * 400, "roles must alternate between user and assistant" — and the student
+   * would see their next question fail for a reason that has nothing to do
+   * with it. Two things here can leave a run of two: a turn dropped above for
+   * carrying no text at all, and an answer left out because it was the app
+   * reporting a failure rather than the tutor answering. Both are gaps in the
+   * middle of a real conversation, so the questions either side of one are
+   * joined rather than one of them being thrown away.
+   */
+  return turns.reduce<{ role: "user" | "assistant"; content: string }[]>((kept, turn) => {
+    const previous = kept[kept.length - 1];
+    if (previous && previous.role === turn.role) {
+      previous.content = `${previous.content}\n\n${turn.content}`;
+      return kept;
+    }
+    kept.push({ ...turn });
+    return kept;
+  }, []);
 }
 
 /**
