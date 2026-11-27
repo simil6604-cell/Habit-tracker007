@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useEffect, useState } from "react";
 import { AIProse } from "@/components/shared/ai-message";
 import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import { format } from "date-fns";
@@ -26,13 +27,13 @@ export function ClassRecorderPanel({ topicId }: { topicId: string }) {
 
   const [recordings, setRecordings] = useState<ClassRecordingEntry[] | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   const [quiz, setQuiz] = useState<string[] | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<string[]>([]);
   const [quizFeedback, setQuizFeedback] = useState<string | null>(null);
   const [quizError, setQuizError] = useState<string | null>(null);
-  const [quizPending, startQuizTransition] = useTransition();
+  const [quizPending, startQuizTransition] = useSafeTransition();
 
   useEffect(() => {
     startTransition(async () => setRecordings(await getClassRecordings(topicId)));

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { runAIDiagnostics, type AIDiagnosis } from "@/lib/ai/diagnostics";
 
 export function AIConnectionTest() {
   const [result, setResult] = useState<AIDiagnosis | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   return (
     <div className="mt-3 border-t border-border pt-3">

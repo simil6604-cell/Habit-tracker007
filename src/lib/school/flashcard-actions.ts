@@ -1,17 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { schedule, type ReviewResult } from "./srs";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export async function createFlashcard(formData: FormData) {
   const userId = await requireUserId();

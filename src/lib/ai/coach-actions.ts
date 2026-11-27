@@ -1,17 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { generateCoachReply } from "./chat-engine";
 import { MAX_EDIT_CHARS } from "./chat-limits";
 import { runWeeklyBalanceCheck, acceptRecommendation, declineRecommendation } from "./balance-engine";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type CoachMessage = { id: string; role: "USER" | "ASSISTANT"; content: string; createdAt: Date };
 

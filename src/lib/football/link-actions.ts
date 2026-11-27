@@ -1,16 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { parseLink } from "./links";
 import { schemaErrorMessage } from "@/lib/config/schema-check";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 function revalidateFootball() {
   revalidatePath("/football");

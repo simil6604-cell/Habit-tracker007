@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { ChevronDown, Flag, Mic, Square, Trash2 } from "lucide-react";
 import { AIProse } from "@/components/shared/ai-message";
@@ -87,7 +88,7 @@ export function LessonRecorder({
   const [seconds, setSeconds] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
   const [recovered, setRecovered] = useState<Draft | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const mic = useSpeechRecognition({

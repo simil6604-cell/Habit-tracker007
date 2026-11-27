@@ -2,15 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { addDays, startOfDay } from "date-fns";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { generateDayPlan } from "./schedule-generator";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 /**
  * Write the generated study blocks for one day into the real calendar.

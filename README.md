@@ -119,6 +119,16 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   editable before, which meant living with the plan exactly as it was first
   written. The one thing it does not do yet is add a day back, so a run-up
   you have cut into is rebuilt rather than patched.
+  **A button that fails can no longer take its page with it.** Every action
+  in the app runs through one hook that catches a failure and puts a line at
+  the bottom of the screen, instead of letting the rejection reach the error
+  boundary and replace the whole route with "This page didn't load" — which
+  is how it used to surface, twice. And a session that has quietly expired
+  now sends you to the login page from anywhere, rather than throwing
+  "Unauthorized" at a page you were in the middle of using; that one line
+  existed in thirty-five copies and was the single most common way this app
+  fell over. Both are pinned by a test that walks the source.
+
   **It answers at the fast end of the thinking dial**, because a
   conversation is a dozen short exchanges and a tutor that takes a minute to
   say "yes, but check the units" is one you stop talking to; the one-shot

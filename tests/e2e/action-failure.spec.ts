@@ -19,7 +19,7 @@ import { E2E_INVITE_CODE } from "./invite-code";
 
 /** Kills the next server-action POST and nothing else: navigation still works. */
 async function breakTheNextAction(page: Page) {
-  await page.route("**/school**", async (route) => {
+  await page.route("**/*", async (route) => {
     const request = route.request();
     const isAction = request.method() === "POST" && request.headers()["next-action"] !== undefined;
     if (!isAction) return route.fallback();
@@ -106,4 +106,34 @@ test("a question that cannot be sent goes back in the box, instead of killing th
   // And the question that never arrived is not left sitting in the thread
   // looking as though it did.
   await expect(page.getByText("Baue mir einen Lernplan für Biologie", { exact: true })).toHaveCount(0);
+});
+
+test("a button that fails anywhere says so at the bottom, and the page lives", async ({ page }) => {
+  /*
+   * The one that was reported as "Website gecrashed". It is not one page's
+   * problem: nearly every button in this app ran a server action inside a
+   * transition, and a rejection in there reaches the error boundary and
+   * takes the whole route with it. Tested here on a page that has nothing
+   * to do with the chat or the plan, because the fix had to be the kind
+   * that covers the pages nobody has reported yet.
+   */
+  await register(page);
+  await page.goto("/gym");
+
+  // A glass of water: about the smallest button in the app, on a page with
+  // nothing to do with anything that has been reported.
+  const glass = page.getByTitle("Add a glass (250ml)").first();
+  await expect(glass).toBeVisible({ timeout: 15_000 });
+
+  await breakTheNextAction(page);
+  await glass.click();
+
+  // The line at the bottom of the app, and the page still underneath it.
+  await expect(page.getByTestId("action-failure")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(DEAD_PAGE)).toHaveCount(0);
+  await expect(page.getByText("Goal:")).toBeVisible();
+
+  // And it can be put away without reloading anything.
+  await page.getByTestId("action-failure").getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByTestId("action-failure")).toHaveCount(0);
 });

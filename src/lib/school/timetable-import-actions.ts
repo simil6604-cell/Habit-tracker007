@@ -1,17 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { SUBJECT_COLORS } from "@/lib/data/cambridge";
 import { YEAR12_SUBJECTS, YEAR12_TIMETABLE } from "./year12-timetable";
 import { schemaErrorMessage } from "@/lib/config/schema-check";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type ImportResult = { ok: true; slots: number; createdSubjects: string[] } | { ok: false; error: string };
 

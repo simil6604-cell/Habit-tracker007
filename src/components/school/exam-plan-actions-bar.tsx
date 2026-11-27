@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ export function ExamPlanActionsBar({ planId, archived }: { planId: string; archi
   const router = useRouter();
   const [armed, setArmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   const run = (work: () => Promise<{ error?: string }>, done: () => void) =>
     startTransition(async () => {

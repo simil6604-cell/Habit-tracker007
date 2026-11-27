@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
 import { buildAcademicSystemPrompt } from "@/lib/ai/academic-prompt";
@@ -21,12 +21,6 @@ import {
   type QuestionInput,
 } from "./marked-paper";
 import { buildAnalysisPrompt, parseAnalysisReply } from "./paper-analysis";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type PaperFormState = { ok: boolean; error?: string; id?: string } | null;
 

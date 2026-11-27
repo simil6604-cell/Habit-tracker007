@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { format, isSameDay, isBefore, startOfDay } from "date-fns";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,7 @@ export function ExamPlanDays({ planId, days }: { planId: string; days: PlanDayRo
   const today = startOfDay(new Date());
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   /** Runs one of the day actions and never lets a failure reach the page. */
   const run = (work: () => Promise<{ error?: string }>, done?: () => void) =>

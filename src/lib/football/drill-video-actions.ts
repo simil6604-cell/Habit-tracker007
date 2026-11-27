@@ -1,16 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { FOOTBALL_SKILLS, drillVideoRejection } from "@/lib/data/football";
 import { parseRevisionUrl } from "@/lib/utils/revision-url";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type SavedDrillVideo = { id: string; skill: string; url: string; label: string | null };
 

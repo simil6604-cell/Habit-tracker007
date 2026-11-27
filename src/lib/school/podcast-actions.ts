@@ -1,17 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { isRealAIConfigured } from "@/lib/ai/provider";
 import { writeEpisode, episodeLength, episodeStyle } from "./podcast-episode";
 import { type PodcastSource } from "./podcast";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type PodcastState = { error?: string; ok?: boolean } | undefined;
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useEffect, useRef, useState } from "react";
 import { AIProse } from "@/components/shared/ai-message";
 import Image from "next/image";
 import { format } from "date-fns";
@@ -17,7 +18,7 @@ import {
 export function NotePhotoPanel({ topicId }: { topicId: string }) {
   const [photos, setPhotos] = useState<NotePhotoEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,7 +26,8 @@ export function NotePhotoPanel({ topicId }: { topicId: string }) {
 
   useEffect(() => {
     startTransition(async () => setPhotos(await getNotePhotos(topicId)));
-  }, [topicId]);
+    // Stable across renders — see the note in school-ai-panel.
+  }, [topicId, startTransition]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

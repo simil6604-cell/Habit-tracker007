@@ -1,12 +1,13 @@
 "use client";
 
-import { useTransition } from "react";
+
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
 import { logWater, undoLastWater } from "@/lib/gym/water-actions";
 
 const GLASS_ML = 250;
 
 export function WaterTrackerCard({ waterTodayMl, dailyWaterGoalMl }: { waterTodayMl: number; dailyWaterGoalMl: number }) {
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const totalGlasses = Math.max(1, Math.round(dailyWaterGoalMl / GLASS_ML));
   const filledGlasses = Math.min(totalGlasses, Math.floor(waterTodayMl / GLASS_ML));
   const liters = (waterTodayMl / 1000).toFixed(2).replace(".", ",");

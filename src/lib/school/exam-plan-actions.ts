@@ -1,18 +1,13 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { format, startOfDay } from "date-fns";
-import { auth } from "@/lib/auth/auth";
+import { requireUserId } from "@/lib/auth/require-user";
 import { prisma } from "@/lib/db/prisma";
 import { serverFailureMessage } from "@/lib/utils/action-error";
 import { buildExamPlan } from "./exam-plan-build";
 import { clampMinutes } from "./exam-plan";
-
-async function requireUserId() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
-}
 
 export type CreatePlanResult = { planId?: string; error?: string };
 
@@ -46,6 +41,10 @@ export async function createExamPlan(examId: string, brief?: string): Promise<Cr
     revalidatePath("/school/planner");
     return { planId: result.plan.planId };
   } catch (err) {
+    // A redirect works by throwing; swallowing it here would turn
+    // "you are signed out, go to the login page" into a message about
+    // something going wrong, on a page nobody can use anyway.
+    unstable_rethrow(err);
     return { error: serverFailureMessage(err, "The plan") };
   }
 }
@@ -59,6 +58,10 @@ export async function toggleExamPlanDay(planId: string, dayId: string): Promise<
     revalidatePath(`/school/plan/${planId}`);
     return {};
   } catch (err) {
+    // A redirect works by throwing; swallowing it here would turn
+    // "you are signed out, go to the login page" into a message about
+    // something going wrong, on a page nobody can use anyway.
+    unstable_rethrow(err);
     return { error: serverFailureMessage(err, "Ticking that day off") };
   }
 }
@@ -130,6 +133,10 @@ export async function updateExamPlanDay(
     revalidatePath(`/school/plan/${planId}`);
     return {};
   } catch (err) {
+    // A redirect works by throwing; swallowing it here would turn
+    // "you are signed out, go to the login page" into a message about
+    // something going wrong, on a page nobody can use anyway.
+    unstable_rethrow(err);
     return { error: serverFailureMessage(err, "That change") };
   }
 }
@@ -147,6 +154,10 @@ export async function deleteExamPlanDay(planId: string, dayId: string): Promise<
     revalidatePath(`/school/plan/${planId}`);
     return {};
   } catch (err) {
+    // A redirect works by throwing; swallowing it here would turn
+    // "you are signed out, go to the login page" into a message about
+    // something going wrong, on a page nobody can use anyway.
+    unstable_rethrow(err);
     return { error: serverFailureMessage(err, "Removing that day") };
   }
 }
@@ -170,6 +181,10 @@ export async function deleteExamPlan(planId: string): Promise<ActionResult> {
     revalidatePath("/school/planner");
     return {};
   } catch (err) {
+    // A redirect works by throwing; swallowing it here would turn
+    // "you are signed out, go to the login page" into a message about
+    // something going wrong, on a page nobody can use anyway.
+    unstable_rethrow(err);
     return { error: serverFailureMessage(err, "Deleting the plan") };
   }
 }
@@ -191,6 +206,10 @@ export async function archiveExamPlan(planId: string): Promise<ActionResult> {
     revalidatePath(`/school/plan/${planId}`);
     return {};
   } catch (err) {
+    // A redirect works by throwing; swallowing it here would turn
+    // "you are signed out, go to the login page" into a message about
+    // something going wrong, on a page nobody can use anyway.
+    unstable_rethrow(err);
     return { error: serverFailureMessage(err, "Archiving the plan") };
   }
 }

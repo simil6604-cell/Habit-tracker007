@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { disconnectClassroom, syncClassroom, type SyncResult } from "@/lib/google/actions";
 import { GOOGLE_FAILURE_MESSAGE, type GoogleFailure } from "@/lib/google/oauth";
@@ -62,7 +63,7 @@ export function GoogleClassroomCard({
   callbackCode: string | null;
 }) {
   const [result, setResult] = useState<SyncResult | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const [disconnected, setDisconnected] = useState(false);
 
   const callbackMessage = messageFor(callbackCode);

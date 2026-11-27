@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
 import { AudioLines, FileText, ImagePlus, Mic, MicOff, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
@@ -100,7 +101,7 @@ export function SchoolAIPanel({
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [lessons, setLessons] = useState<LessonEntry[] | null>(null);
   const [focusLessonId, setFocusLessonId] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const spokenRef = useRef<string | null>(null);
@@ -111,7 +112,7 @@ export function SchoolAIPanel({
   // Editing one of your own questions: which one, and what it now says.
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [editPending, startEdit] = useTransition();
+  const [editPending, startEdit] = useSafeTransition();
 
   const [dictationLang, setDictationLang] = useDictationLang();
   const mic = useSpeechRecognition({ lang: dictationLang });
@@ -143,7 +144,9 @@ export function SchoolAIPanel({
       setActiveChatId(current);
       setLessons(recorded);
     });
-  }, []);
+    // startTransition here is useSafeTransition's, which is stable across
+    // renders; the linter cannot know that the way it knows React's own.
+  }, [startTransition]);
 
   function openChat(id: string) {
     startTransition(async () => {

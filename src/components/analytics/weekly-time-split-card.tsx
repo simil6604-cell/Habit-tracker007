@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchWeeklyTimeSplit } from "@/lib/analytics/actions";
 import { WeeklyTimeSplitChart } from "@/components/charts/weekly-time-split-chart-client";
@@ -19,7 +20,7 @@ export function WeeklyTimeSplitCard({
   const [weekOffset, setWeekOffset] = useState(initialWeekOffset);
   const [weekLabel, setWeekLabel] = useState(initialWeekLabel);
   const [data, setData] = useState(initialData);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useSafeTransition();
 
   function go(delta: number) {
     const next = weekOffset + delta;

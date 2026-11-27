@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { Fragment, useState } from "react";
 import { AIProse } from "@/components/shared/ai-message";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Badge } from "@/components/ui/badge";
@@ -91,7 +92,7 @@ function TopicAssistant({
 }) {
   const [response, setResponse] = useState<string | null>(null);
   const [mistake, setMistake] = useState("");
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-surface-muted p-4">
@@ -151,7 +152,7 @@ export function TopicsTable({
   topics: Topic[];
   revisionUrl?: string | null;
 }) {
-  const [, startTransition] = useTransition();
+  const [, startTransition] = useSafeTransition();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (

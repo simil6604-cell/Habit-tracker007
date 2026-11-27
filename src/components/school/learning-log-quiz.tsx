@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useEffect, useState } from "react";
 import { AIProse } from "@/components/shared/ai-message";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,13 +23,13 @@ const SECTIONS: { type: LogEntryType; label: string; placeholder: string }[] = [
 export function LearningLogAndQuiz({ topicId }: { topicId: string }) {
   const [entries, setEntries] = useState<LogEntry[] | null>(null);
   const [drafts, setDrafts] = useState<Record<LogEntryType, string>>({ UNDERSTOOD: "", CONFUSED: "", QUESTION: "" });
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   const [quiz, setQuiz] = useState<string[] | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<string[]>([]);
   const [quizFeedback, setQuizFeedback] = useState<string | null>(null);
   const [quizError, setQuizError] = useState<string | null>(null);
-  const [quizPending, startQuizTransition] = useTransition();
+  const [quizPending, startQuizTransition] = useSafeTransition();
 
   useEffect(() => {
     startTransition(async () => setEntries(await getLearningLog(topicId)));

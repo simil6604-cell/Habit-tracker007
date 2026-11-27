@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Sparkles, Trash2, HelpCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
   // The questions already marked "didn't get this", so the flag survives a
   // reload instead of living only in this component's memory.
   const [notUnderstood, setNotUnderstood] = useState<string[]>([]);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,7 +33,8 @@ export function TutorChatPanel({ topicId }: { topicId: string }) {
       setMessages(msgs);
       setNotUnderstood(flagged);
     });
-  }, [topicId]);
+    // Stable across renders — see the note in school-ai-panel.
+  }, [topicId, startTransition]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

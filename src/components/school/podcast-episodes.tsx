@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { format } from "date-fns";
 import { ListMusic, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ export type Episode = {
 export function PodcastEpisodes({ episodes, playId }: { episodes: Episode[]; playId?: string }) {
   /** Which episode the queue is on, or null when nothing is queued. */
   const [queueAt, setQueueAt] = useState<number | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   const total = episodes.reduce((sum, episode) => sum + episode.seconds, 0);
 

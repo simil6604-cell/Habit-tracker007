@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
+import { useState } from "react";
 import { recordReadiness } from "@/lib/school/exam-plan-actions";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,7 @@ const SCALE = [
  */
 export function ReadinessCheckIn({ planId, current }: { planId: string; current: number | null }) {
   const [value, setValue] = useState<number | null>(current);
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   return (
     <div className="flex flex-col gap-2" data-testid="readiness-check-in">

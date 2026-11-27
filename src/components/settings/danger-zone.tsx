@@ -1,11 +1,12 @@
 "use client";
 
-import { useTransition } from "react";
+
+import { useSafeTransition } from "@/lib/hooks/use-safe-transition";
 import { deleteAccount } from "@/lib/settings/actions";
 import { Button } from "@/components/ui/button";
 
 export function DeleteAccountButton() {
-  const [pending, startTransition] = useTransition();
+  const [pending, startTransition] = useSafeTransition();
 
   return (
     <Button
