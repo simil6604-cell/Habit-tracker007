@@ -20,6 +20,7 @@ import {
   MAX_EDIT_CHARS,
   buildSchoolAIMessage,
   buildSchoolAISystemPrompt,
+  chatContextTurns,
   type SchoolAITurn,
 } from "./school-ai";
 import {
@@ -254,20 +255,28 @@ async function loadAttachments(
 async function answerInChat(
   userId: string,
   chatId: string,
-  history: { role: string; content: string; imagePaths: string | null }[],
+  history: { role: string; content: string; imagePaths: string | null; failed: boolean }[],
   question: string,
   photos: string[],
   spoken: boolean
 ): Promise<void> {
   let reply: string;
+  /*
+   * Whether what we are about to store is an answer or an apology.
+   *
+   * It decides one thing: whether the next question is asked in the light of
+   * it. "The account has run out of credit" is true, belongs on screen, and
+   * is not something the tutor said — sent back as context it becomes a
+   * tutor who announced it cannot help, which is then the last thing it is
+   * on record as saying when the credit is back.
+   */
+  let failed = false;
   if (!isRealAIConfigured) {
     reply = NO_REAL_AI_MESSAGE;
+    failed = true;
   } else {
-    const turns: SchoolAITurn[] = history.map((m) => ({
-      role: m.role as "USER" | "ASSISTANT",
-      content: m.content,
-      photoCount: parseImagePaths(m.imagePaths).length,
-    }));
+    // Kept on screen, left out of the conversation — see `failed` above.
+    const turns: SchoolAITurn[] = chatContextTurns(history);
 
     const { images, documents, skipped } = await loadAttachments(photos);
     // Appended rather than replacing: which syllabus they are on and what is
@@ -337,6 +346,7 @@ async function answerInChat(
       });
     } catch (err) {
       reply = aiFailureMessage(err);
+      failed = true;
     }
 
     /*
@@ -357,7 +367,7 @@ async function answerInChat(
     }
   }
 
-  await prisma.schoolAIMessage.create({ data: { userId, chatId, role: "ASSISTANT", content: reply } });
+  await prisma.schoolAIMessage.create({ data: { userId, chatId, role: "ASSISTANT", content: reply, failed } });
   // Moves it to the top of the list, which is what "recent" means there.
   await prisma.schoolAIChat.updateMany({ where: { id: chatId, userId }, data: { updatedAt: new Date() } });
 }
