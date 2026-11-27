@@ -147,10 +147,29 @@ export function inspectApiKey(raw: string | undefined | null): KeyProblem | null
  * that. A problem the person has to fix says so instead, and drops the
  * invitation to retry.
  */
+/**
+ * The failures that waiting does not mend: money and credentials.
+ *
+ * Matched on the wording this app itself produces for them, in
+ * anthropic-provider.ts — not on the API's, which is free to change.
+ */
+const WILL_NOT_FIX_ITSELF = /run out of credit|key was rejected|key was refused|no key is set/i;
+
 export function aiFailureMessage(err: unknown, apiKey = process.env.ANTHROPIC_API_KEY): string {
   const keyProblem = inspectApiKey(apiKey);
   if (keyProblem) return `${keyProblem.problem} ${keyProblem.fix}`;
   const detail = err instanceof Error ? err.message : "unknown error";
+  /*
+   * "Try again in a moment" has to be earned.
+   *
+   * Some failures are a blip and trying again is exactly right. Others —
+   * an account out of credit, a key that is refused — will say the same
+   * thing in a minute, in an hour and tomorrow, and telling someone to
+   * retry sends them round a loop instead of to the one place they can
+   * fix it. Reported that way: an out-of-credit account, wrapped in an
+   * invitation to try again.
+   */
+  if (WILL_NOT_FIX_ITSELF.test(detail)) return `The AI could not answer: ${detail}.`;
   return `Couldn't reach the AI service right now (${detail}) — try again in a moment.`;
 }
 

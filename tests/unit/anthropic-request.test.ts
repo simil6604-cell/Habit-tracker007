@@ -602,6 +602,28 @@ describe("when the API refuses the request", () => {
     expect(error).not.toMatch(/400\D+400/);
   });
 
+  it("names an account out of credit, and says trying again will not help", async () => {
+    /*
+     * Reported in full, once the sentence above started coming through:
+     * "the AI service returned an error (400): Your credit balance is too
+     * low to access the Anthropic API."
+     *
+     * It arrives as a 400, so it reads like a malformed request and was
+     * being wrapped in "try again in a moment" — advice that can never
+     * work. Nothing in this app can fix it, so it says where it is fixed.
+     */
+    const error = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, {}, [
+      refusal(
+        400,
+        "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."
+      ),
+    ]).catch((err: Error) => err.message);
+
+    expect(error).toMatch(/run out of credit/i);
+    expect(error).toMatch(/console\.anthropic\.com/);
+    expect(error).toMatch(/will not help/i);
+  });
+
   it("keeps the advice it already had for the statuses it knows", async () => {
     // A key problem is not made clearer by the server's wording of it, and
     // the app's own sentence says what to do about it.
