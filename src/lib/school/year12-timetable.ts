@@ -10,14 +10,25 @@
  *   - Economics / Media Studies / Biology              -> Economics
  *   - Physics / History / Psychology                   -> none, so free
  *
- * German, EPQ, PE, PSHE, Community & Integration and the registrations are the
+ * German, PE, PSHE, Community & Integration and the registrations are the
  * same for everyone in the year.
  *
- * Maths is deliberately not placed. You take it with the Year 11 group, which
- * runs on a different sheet, so the Year 12 maths periods are free time for
- * you — labelled, so you can drop the real times in when you have them. The
- * subject itself is still created: homework, flashcards and exams all hang off
- * it whether or not a slot on this sheet does.
+ * FOUR THINGS ARE NOT ON THIS SHEET, and were added from what the student
+ * said afterwards. Every one of them is a period the sheet shows as
+ * something they are not in, so the sheet alone had them down as free:
+ *
+ *   - Biology, twice: Monday after PE (P4) and Friday P5. Biology shares an
+ *     option block with Economics on the sheet, so it cannot be read off it
+ *     — theirs runs with another group.
+ *   - Maths, Wednesday P2, in the period the sheet gives to EPQ.
+ *   - The Tuesday after-school club is maths club.
+ *
+ * EPQ therefore has no period of its own any more. It stays a subject,
+ * because the work and the deadline are real; it just is not timetabled.
+ *
+ * Maths is otherwise not placed. The rest of it runs with the Year 11 group
+ * on a different sheet, so the Year 12 maths periods are free time for you
+ * — labelled, so you can drop the real times in when you have them.
  *
  * Teacher names are not in here on purpose. This file is source code in a git
  * repository, and the people it would name did not put them there; add them on
@@ -42,7 +53,7 @@ export type Year12Slot = {
  * The subjects this timetable needs, created on import if missing.
  * Maths is in the list but in none of the slots — see the note above.
  */
-export const YEAR12_SUBJECTS = ["German", "English", "Economics", "EPQ", "Maths"] as const;
+export const YEAR12_SUBJECTS = ["German", "English", "Economics", "EPQ", "Maths", "Biology"] as const;
 
 const DAYS = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4 } as const;
 
@@ -92,7 +103,8 @@ export const YEAR12_TIMETABLE: Year12Slot[] = [
   slot(DAYS.MON, "P1", { periodType: "LESSON", subject: "German", room: "S5-German Native" }),
   slot(DAYS.MON, "P2", { periodType: "LESSON", subject: "German", room: "S5-German Native" }),
   slot(DAYS.MON, "P3", { periodType: "LESSON", label: "PE", room: "ISCS Gym" }),
-  slot(DAYS.MON, "P4", { periodType: "FREE", label: FREE }),
+  // Straight after PE, in a block the sheet has them down as free for.
+  slot(DAYS.MON, "P4", { periodType: "LESSON", subject: "Biology" }),
   slot(DAYS.MON, "P5", { periodType: "LESSON", subject: "English", room: "S2-English" }),
   slot(DAYS.MON, "P6", { periodType: "LESSON", subject: "Economics", room: "S11-Economics" }),
 
@@ -103,11 +115,13 @@ export const YEAR12_TIMETABLE: Year12Slot[] = [
   slot(DAYS.TUE, "P4", { periodType: "LESSON", subject: "English", room: "S2-English" }),
   slot(DAYS.TUE, "P5", { periodType: "FREE", label: FREE }),
   slot(DAYS.TUE, "P6", { periodType: "FREE", label: FREE }),
-  slot(DAYS.TUE, "AFTER", { periodType: "CLUB", label: "After-school clubs" }),
+  slot(DAYS.TUE, "AFTER", { periodType: "CLUB", label: "Maths club" }),
 
   // Wednesday
   slot(DAYS.WED, "P1", { periodType: "LESSON", subject: "German", room: "S5-German Native" }),
-  slot(DAYS.WED, "P2", { periodType: "LESSON", subject: "EPQ", room: "S12-Media Room" }),
+  // The sheet gives this to EPQ for the year group; theirs is the maths
+  // lesson, which is on no sheet here.
+  slot(DAYS.WED, "P2", { periodType: "LESSON", subject: "Maths" }),
   slot(DAYS.WED, "P3", { periodType: "LESSON", subject: "English", room: "S2-English" }),
   slot(DAYS.WED, "P4", { periodType: "LESSON", subject: "Economics", room: "S11-Economics" }),
   slot(DAYS.WED, "P5", { periodType: "LESSON", label: "PE", room: "ISCS Gym" }),
@@ -127,7 +141,7 @@ export const YEAR12_TIMETABLE: Year12Slot[] = [
   slot(DAYS.FRI, "P2", { periodType: "LESSON", subject: "English", room: "S2-English" }),
   slot(DAYS.FRI, "P3", { periodType: "LESSON", subject: "Economics", room: "S11-Economics" }),
   slot(DAYS.FRI, "P4", { periodType: "FREE", label: MATHS_ELSEWHERE }),
-  slot(DAYS.FRI, "P5", { periodType: "FREE", label: FREE }),
+  slot(DAYS.FRI, "P5", { periodType: "LESSON", subject: "Biology" }),
   slot(DAYS.FRI, "P6", { periodType: "FREE", label: FREE }),
 ];
 

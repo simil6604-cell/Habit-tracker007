@@ -21,19 +21,44 @@ describe("the Year 12 week", () => {
     expect(counts.Economics).toBe(5);
   });
 
-  it("holds EPQ once, on Wednesday", () => {
-    expect(counts.EPQ).toBe(1);
-    const epq = YEAR12_TIMETABLE.filter((s) => s.subject === "EPQ");
-    expect(epq).toHaveLength(1);
-    expect(epq[0].dayOfWeek).toBe(2);
+  it("holds Biology twice: after PE on Monday, and Friday fifth", () => {
+    // Not readable from the sheet at all — Biology shares an option block
+    // with Economics there, so theirs runs with another group and the two
+    // periods it really falls in show as free. Said afterwards, in words:
+    // "Biology nach PE lesson am Montag … und Freitag 5. Lektion".
+    expect(counts.Biology).toBe(2);
+    const biology = YEAR12_TIMETABLE.filter((s) => s.subject === "Biology");
+    expect(biology.map((s) => [s.dayOfWeek, s.periodName])).toEqual([
+      [0, "P4"],
+      [4, "P5"],
+    ]);
+
+    // Monday's is the period straight after PE, which is what was said.
+    const monday = YEAR12_TIMETABLE.filter((s) => s.dayOfWeek === 0).sort((a, b) =>
+      a.startTime.localeCompare(b.startTime)
+    );
+    const afterPE = monday[monday.findIndex((s) => s.label === "PE") + 1];
+    expect(afterPE.subject).toBe("Biology");
   });
 
-  it("never places Maths, because it runs with Year 11", () => {
-    expect(YEAR12_TIMETABLE.some((s) => s.subject === "Maths")).toBe(false);
-    const labelled = YEAR12_TIMETABLE.filter((s) => s.label?.includes("Maths"));
-    expect(labelled.length).toBeGreaterThan(0);
-    // and every one of them is free time, not a lesson
-    for (const slot of labelled) expect(slot.periodType).toBe("FREE");
+  it("holds the one maths lesson that is on no sheet, in the EPQ period", () => {
+    const maths = YEAR12_TIMETABLE.filter((s) => s.subject === "Maths");
+    expect(maths.map((s) => [s.dayOfWeek, s.periodName])).toEqual([[2, "P2"]]);
+  });
+
+  it("leaves EPQ with no period, and still asks for it as a subject", () => {
+    // The work and the deadline are real; the lesson is not. Dropping the
+    // subject would take the homework and the exam entry with it.
+    expect(counts.EPQ).toBeUndefined();
+    expect(YEAR12_SUBJECTS).toContain("EPQ");
+  });
+
+  it("keeps the rest of maths as free time, because it runs with Year 11", () => {
+    // The ones labelled as maths-elsewhere, not the maths club, which is a
+    // real thing to be at on a Tuesday afternoon.
+    const elsewhere = YEAR12_TIMETABLE.filter((s) => s.label?.includes("Maths with Year 11"));
+    expect(elsewhere.length).toBeGreaterThan(0);
+    for (const slot of elsewhere) expect(slot.periodType).toBe("FREE");
   });
 
   it("still asks for Maths as a subject, so work can hang off it", () => {
@@ -62,9 +87,12 @@ describe("the Year 12 week", () => {
     }
   });
 
-  it("runs the after-school clubs on Tuesday and Thursday only", () => {
+  it("runs the after-school clubs on Tuesday and Thursday only, and names Tuesday's", () => {
     const clubs = YEAR12_TIMETABLE.filter((s) => s.periodType === "CLUB");
     expect(clubs.map((s) => s.dayOfWeek).sort()).toEqual([1, 3]);
+    // Tuesday's is maths club. "Clubs" on its own told the planner nothing
+    // and told the student less.
+    expect(clubs.find((s) => s.dayOfWeek === 1)?.label).toBe("Maths club");
   });
 
   it("names something in every slot, so nothing shows up blank", () => {
