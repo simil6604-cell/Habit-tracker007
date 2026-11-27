@@ -49,6 +49,21 @@ function friendlyAnthropicError(err: unknown): string {
     }
     if (err.status === 403) return "the API key was refused (403) — it may be disabled, or restricted to a different workspace";
     if (err.status === 429) return "the AI service is rate-limited or out of credit right now — check your Anthropic account's usage and billing";
+    /*
+     * Out of credit.
+     *
+     * It arrives as a 400 rather than a 402, so it reads like a malformed
+     * request — and the app wrapped it in "try again in a moment", which is
+     * advice that can never work. Reported exactly that way, with a photo
+     * attached, and for a while it looked like the photo's fault.
+     *
+     * Matched on the API's own words because there is no code for it. Said
+     * plainly, with the one place it can be fixed, because nothing in this
+     * app can fix it.
+     */
+    if (err.status === 400 && /credit balance is too low/i.test(apiReason(err))) {
+      return "the Anthropic account has run out of credit, so every AI feature is refused until it is topped up — add credit at console.anthropic.com under Plans & Billing. Trying again will not help until then";
+    }
     if (err.status && err.status >= 500) return "the AI service is temporarily unavailable — this one is at their end, try again shortly";
     /*
      * Everything else, with what the API actually said.
