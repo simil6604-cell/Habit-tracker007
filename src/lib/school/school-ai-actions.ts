@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getAIProvider, isRealAIConfigured } from "@/lib/ai/provider";
+import { CHAT_EFFORT } from "@/lib/ai/model-config";
 import { SPOKEN_BOARD_STYLE } from "@/lib/ai/spoken-mode";
 import { speechDirection, writingDirection } from "@/lib/ai/expression";
 import type { ProviderImage } from "@/lib/ai/anthropic-provider";
@@ -310,6 +311,14 @@ async function answerInChat(
          * without streaming and stretches it once if even this runs out.
          */
         maxTokens: spoken ? 16_000 : 12_000,
+        /*
+         * The fast end of the thinking dial, because this is a
+         * conversation. Asked for in one line: it must not sit there
+         * thinking for half a minute before it says anything. The jobs
+         * worth waiting for — marking a past paper, writing a plan,
+         * writing a podcast — are other call sites and keep the default.
+         */
+        effort: CHAT_EFFORT,
         images,
         documents,
         tools,

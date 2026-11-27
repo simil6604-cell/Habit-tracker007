@@ -119,6 +119,14 @@ See `tests/e2e/smoke.spec.ts` and `playwright.config.ts`.
   editable before, which meant living with the plan exactly as it was first
   written. The one thing it does not do yet is add a day back, so a run-up
   you have cut into is rebuilt rather than patched.
+  **It answers at the fast end of the thinking dial**, because a
+  conversation is a dozen short exchanges and a tutor that takes a minute to
+  say "yes, but check the units" is one you stop talking to; the one-shot
+  jobs that are worth waiting for — marking a photographed paper, writing a
+  plan, writing a podcast — keep the thorough setting, and `ANTHROPIC_EFFORT`
+  still moves everything that does not ask for its own. While it is working
+  the wait is counted in seconds on screen, so a slow answer and a stuck app
+  no longer look the same.
   All of it through eight
   tools it is given
   (`src/lib/school/ai-tools.ts`), each one scoped to your own account with
