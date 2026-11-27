@@ -509,3 +509,48 @@ describe("a reply that ran out of room before it said anything", () => {
     expect(requests[2].body.max_tokens as number).toBeGreaterThan(requests[0].body.max_tokens as number);
   });
 });
+
+describe("how hard it is asked to think", () => {
+  /**
+   * Reported as: "es darf nicht länger als 30 Sekunden nachdenken, es muss
+   * schnell und präzise antworten". There is no thirty-second switch in
+   * the API — effort is the dial — so the thing to pin is that a chat turn
+   * asks for the fast end of it and a piece of work does not.
+   */
+  it("sends the effort the call site asked for", async () => {
+    const { request } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, { effort: "low" });
+    expect(request.body.output_config).toEqual({ effort: "low" });
+  });
+
+  it("falls back to the deployment's own setting when a call site says nothing", async () => {
+    const { request } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY, ANTHROPIC_EFFORT: "high" }, {});
+    expect(request.body.output_config).toEqual({ effort: "high" });
+  });
+
+  it("ignores a level the API would refuse rather than sending it", async () => {
+    // A 400 about output_config takes every AI feature down at once and
+    // names none of this.
+    const { request } = await ask({ ANTHROPIC_API_KEY: FAKE_KEY }, { effort: "turbo" });
+    expect(request.body.output_config).toEqual({ effort: "medium" });
+  });
+
+  it("keeps the same effort through the tool loop and the stretch", async () => {
+    const { requests } = await ask(
+      { ANTHROPIC_API_KEY: FAKE_KEY },
+      {
+        effort: "low",
+        tools: [
+          {
+            name: "add_exam",
+            description: "Adds an exam to the student's app so the countdown and the plan can read it.",
+            schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+            run: async () => ({ ok: true, message: "Added." }),
+          },
+        ],
+      },
+      [toolReply("add_exam", {}), cutOffReply(), textReply("Eingetragen.")]
+    );
+    expect(requests).toHaveLength(3);
+    for (const request of requests) expect(request.body.output_config).toEqual({ effort: "low" });
+  });
+});

@@ -5,6 +5,7 @@ import { describeKeyShape, inspectApiKey } from "./api-key";
 import {
   anthropicEffort,
   anthropicModel,
+  readEffort,
   DEFAULT_MAX_TOKENS,
   MAX_OUTPUT_TOKENS,
   STRETCH_FACTOR,
@@ -179,7 +180,8 @@ export class AnthropicProvider implements AIProvider {
     messages: Anthropic.MessageParam[],
     system: Anthropic.MessageCreateParams["system"],
     maxTokens: number,
-    tools: ReturnType<typeof toolDefinitions>
+    tools: ReturnType<typeof toolDefinitions>,
+    effort: Effort
   ): Promise<Anthropic.Message> {
     try {
       return await this.client.messages.create({
@@ -188,7 +190,7 @@ export class AnthropicProvider implements AIProvider {
         // Thinking is always on and cannot be switched off on this model;
         // effort is the dial, and it is set rather than left to a default
         // that moves when the model does.
-        output_config: { effort: this.effort },
+        output_config: { effort },
         system,
         // Omitted rather than sent empty: an empty list is a different
         // request from one with no tools at all.
@@ -228,6 +230,16 @@ export class AnthropicProvider implements AIProvider {
     // What this app can let Claude actually do, this turn. Empty for every
     // call site that has not been given any, which is most of them.
     const tools = collectTools(context);
+    /*
+     * How hard to think, this call.
+     *
+     * A chat turn asks for CHAT_EFFORT and a piece of work does not, which
+     * is the difference between a conversation and a job: in a
+     * back-and-forth the waiting is the whole cost, and marking a past
+     * paper is worth a minute. ANTHROPIC_EFFORT still sets the default for
+     * everything that does not ask.
+     */
+    const effort = readEffort(context.effort) ?? this.effort;
     const definitions = toolDefinitions(tools);
 
     /*
@@ -289,7 +301,7 @@ export class AnthropicProvider implements AIProvider {
       MAX_OUTPUT_TOKENS,
       definitions.length > 0 ? Math.max(maxTokens, TOOL_CALL_FLOOR) : maxTokens
     );
-    let message = await this.send(conversation, system, budget, definitions);
+    let message = await this.send(conversation, system, budget, definitions, effort);
     /** Whether the one retry with more room has been spent. */
     let stretched = false;
     let rounds = 0;
@@ -340,7 +352,7 @@ export class AnthropicProvider implements AIProvider {
       }
       conversation.push({ role: "user", content: results });
 
-      message = await this.send(conversation, system, budget, definitions);
+      message = await this.send(conversation, system, budget, definitions, effort);
       rounds += 1;
       if (exhausted) break;
     }
@@ -371,7 +383,7 @@ export class AnthropicProvider implements AIProvider {
     if (message.stop_reason === "max_tokens" && !stretched) {
       stretched = true;
       budget = Math.min(MAX_OUTPUT_TOKENS, budget * STRETCH_FACTOR);
-      message = await this.send(conversation, system, budget, definitions);
+      message = await this.send(conversation, system, budget, definitions, effort);
       continue;
     }
 

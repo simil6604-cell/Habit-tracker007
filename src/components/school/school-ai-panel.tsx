@@ -23,6 +23,7 @@ import { speakAloud } from "@/lib/ai/voice/speak";
 import { editSchoolAIMessage } from "@/lib/school/school-ai-actions";
 import { MAX_EDIT_CHARS } from "@/lib/school/school-ai";
 import { clientFailureMessage } from "@/lib/utils/action-error";
+import { ThinkingTimer } from "@/components/shared/thinking-timer";
 import { useDictationLang } from "@/lib/ai/voice/use-dictation-lang";
 import { DICTATION_LANGS, mismatchedLang } from "@/lib/ai/voice/dictation-lang";
 import { isDocumentPath, MAX_PHOTOS_PER_MESSAGE, PHOTO_ACCEPT } from "@/lib/school/school-ai-photos";
@@ -714,7 +715,7 @@ export function SchoolAIPanel({
             </div>
           ))}
           {(pending || editPending) && (
-            <p className="text-xs text-muted">{editPending ? "Asking again…" : "Reading and thinking…"}</p>
+            <ThinkingTimer label={editPending ? "Asking again…" : "Reading and thinking…"} />
           )}
         </div>
       )}

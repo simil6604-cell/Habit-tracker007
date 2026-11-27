@@ -100,6 +100,29 @@ export function anthropicModel(env: Record<string, string | undefined> = process
  * environment variable would take every AI feature in the app down at once
  * with an error that names none of this.
  */
+/**
+ * How hard to think about a chat message, as opposed to a piece of work.
+ *
+ * Asked for in one line: "es darf nicht länger als 30 Sekunden nachdenken,
+ * es muss schnell und präzise antworten". There is no "think for at most
+ * thirty seconds" in the API — effort is the dial, and this is the fast end
+ * of it.
+ *
+ * It is set for the back-and-forth only. A conversation is a dozen short
+ * exchanges where waiting is the whole cost, and a tutor that takes a
+ * minute to say "yes, that is right, but check the units" is a tutor you
+ * stop talking to. The one-shot jobs that take a while anyway and are worth
+ * waiting for — marking a photographed past paper, writing a revision plan,
+ * writing a podcast — keep the default and are untouched by this.
+ */
+export const CHAT_EFFORT: Effort = "low";
+
+/** The effort a call site asked for, if it asked for one this API accepts. */
+export function readEffort(value: unknown): Effort | null {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return EFFORTS.includes(raw as Effort) ? (raw as Effort) : null;
+}
+
 export function anthropicEffort(env: Record<string, string | undefined> = process.env): Effort {
   const raw = env.ANTHROPIC_EFFORT?.trim().toLowerCase();
   return EFFORTS.includes(raw as Effort) ? (raw as Effort) : DEFAULT_EFFORT;
